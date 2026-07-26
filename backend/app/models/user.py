@@ -44,6 +44,7 @@ class User(Base):
     first_name: Mapped[str] = mapped_column(String(100), nullable=False)
     last_name: Mapped[str] = mapped_column(String(100), nullable=False)
     middle_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    profile_picture_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     course: Mapped[str | None] = mapped_column(String(100), nullable=True)
     year_level: Mapped[str | None] = mapped_column(String(20), nullable=True)
     contact_number: Mapped[str | None] = mapped_column(String(20), nullable=True)

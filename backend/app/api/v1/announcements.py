@@ -6,12 +6,13 @@ Routes:
     POST   /announcements           — Create announcement (Admin / Director)
     PATCH  /announcements/{id}      — Update announcement (Admin / Director)
     DELETE /announcements/{id}      — Soft-delete announcement (Admin / Director)
+    POST   /announcements/{id}/image — Upload announcement image (Admin / Director)
 """
 import uuid
 from typing import Annotated
 
 import structlog
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +22,7 @@ from app.models.announcement import Announcement
 from app.models.user import UserRole
 from app.schemas.announcement import AnnouncementCreate, AnnouncementRead, AnnouncementUpdate
 from app.schemas.common import PaginatedResponse
+from app.services.storage_service import StorageService
 
 router = APIRouter()
 logger = structlog.get_logger(__name__)
@@ -143,3 +145,52 @@ async def delete_announcement(
     ann.is_active = False
     await db.commit()
     logger.info("announcement_deleted", announcement_id=str(announcement_id), admin_id=str(current_user.id))
+
+
+@router.post(
+    "/{announcement_id}/image",
+    response_model=AnnouncementRead,
+    summary="Upload announcement image (Admin / Director)",
+)
+async def upload_announcement_image(
+    announcement_id: uuid.UUID,
+    file: UploadFile = File(...),
+    current_user: CurrentUser = None,
+    db: Annotated[AsyncSession, Depends(get_db)] = None,
+) -> AnnouncementRead:
+    if current_user.role not in _EDITOR_ROLES:
+        raise ForbiddenError("Only admin and director may update announcements.")
+
+    ann = await db.get(Announcement, announcement_id)
+    if not ann or not ann.is_active:
+        raise NotFoundError("Announcement", str(announcement_id))
+
+    # Validate file type
+    allowed_types = {"image/jpeg", "image/png", "image/webp"}
+    if file.content_type not in allowed_types:
+        raise ForbiddenError("Only JPEG, PNG, and WebP images are allowed.")
+
+    # Validate file size (max 5 MB)
+    contents = await file.read()
+    if len(contents) > 5 * 1024 * 1024:
+        raise ForbiddenError("Image must be 5 MB or smaller.")
+
+    storage = StorageService()
+    ext = "jpg" if "jpeg" in (file.content_type or "") else "png"
+    key = f"announcements/{announcement_id}/image.{ext}"
+    await storage.upload_bytes(
+        bucket="osca-reports",
+        key=key,
+        data=contents,
+        content_type=file.content_type,
+    )
+
+    image_url = storage.get_presigned_url("osca-reports", key, expires_in=86400)
+    ann.image_url = image_url
+    await db.commit()
+    await db.refresh(ann)
+
+    r = AnnouncementRead.model_validate(ann)
+    creator = await db.get(type(ann).created_by.property.mapper.class_, ann.created_by_id)
+    r.created_by_name = creator.full_name if creator else ""
+    return r

@@ -80,6 +80,7 @@ class Settings(BaseSettings):
     MINIO_SECRET_KEY: str
     MINIO_BUCKET_FACES: str = "osca-faces"
     MINIO_BUCKET_REPORTS: str = "osca-reports"
+    MINIO_BUCKET_PROFILES: str = "osca-profile-pictures"
     MINIO_SECURE: bool = False
 
     # --- Facial Recognition ---

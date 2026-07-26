@@ -52,6 +52,7 @@ class UserSummary(OSCABaseModel):
     student_id: str | None
     is_active: bool
     is_face_enrolled: bool
+    profile_picture_url: str | None = None
 
 
 class UserRead(OSCABaseModel):
@@ -75,5 +76,6 @@ class UserRead(OSCABaseModel):
     is_face_enrolled: bool
     biometric_consent: bool
     biometric_consent_date: datetime | None
+    profile_picture_url: str | None = None
     created_at: datetime
     last_login_at: datetime | None

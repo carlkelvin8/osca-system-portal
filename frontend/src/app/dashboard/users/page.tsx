@@ -18,6 +18,7 @@ import { z } from "zod";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Webcam from "react-webcam";
 import { usersApi, attendanceApi } from "@/lib/api";
+import { useAuthStore } from "@/store/useAuthStore";
 import type { UserSummary, PaginatedResponse, UserRole } from "@/types";
 import {
   Search,
@@ -33,6 +34,7 @@ import {
   Loader2,
   ShieldCheck,
 } from "lucide-react";
+import { Avatar } from "@/components/ui/Avatar";
 
 // ── Shared style tokens ───────────────────────────────────────────────────────
 
@@ -89,11 +91,35 @@ const createUserSchema = z
     course: z.string().optional(),
     year_level: z.string().optional(),
     sport_or_art: z.string().optional(),
+    assigned_sport: z.string().optional(),
   })
   .refine((d) => d.password === d.confirmPassword, {
     message: "Passwords do not match",
     path: ["confirmPassword"],
-  });
+  })
+  .refine(
+    (d) => {
+      if (d.role === "coach" || d.role === "pe_instructor") {
+        return !!d.assigned_sport && d.assigned_sport.length > 0;
+      }
+      return true;
+    },
+    { message: "Sport / Art is required for Coach and PE Instructor roles", path: ["assigned_sport"] }
+  );
+
+const SPORT_OPTIONS = [
+  "Arnis",
+  "Badminton",
+  "Basketball",
+  "Sepak Takraw",
+  "Table Tennis",
+  "Taekwondo",
+  "Volleyball Men",
+  "Volleyball Women",
+  "Hataw Himpapawid Dance Group",
+  "Himig Himpapawid Chorale",
+  "Musikang Himpapawid Live Band",
+];
 
 type CreateUserForm = z.infer<typeof createUserSchema>;
 
@@ -157,12 +183,29 @@ function Modal({
   );
 }
 
+// ── Roles each creator role may assign ────────────────────────────────────────
+
+const CREATOR_ROLE_LIMITS: Record<UserRole, UserRole[]> = {
+  admin: ["admin", "director", "coach", "pe_instructor", "student", "staff"],
+  director: ["coach", "pe_instructor", "student"],
+  staff: ["coach", "pe_instructor", "student"],
+  coach: [],
+  pe_instructor: [],
+  student: [],
+};
+
 // ── Create User Modal ─────────────────────────────────────────────────────────
 
 function CreateUserModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
+  const { user: currentUser } = useAuthStore();
   const [apiError, setApiError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  // Filter roles based on who is creating
+  const allowedRoles = currentUser
+    ? CREATOR_ROLE_LIMITS[currentUser.role] ?? []
+    : [];
 
   const {
     register,
@@ -171,7 +214,7 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
     formState: { errors, isSubmitting },
   } = useForm<CreateUserForm>({
     resolver: zodResolver(createUserSchema),
-    defaultValues: { role: "student" },
+    defaultValues: { role: (allowedRoles[0] as CreateUserForm["role"]) ?? "student" },
   });
 
   const selectedRole = watch("role");
@@ -190,6 +233,9 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
         ...(data.course ? { course: data.course } : {}),
         ...(data.year_level ? { year_level: data.year_level } : {}),
         ...(data.sport_or_art ? { sport_or_art: data.sport_or_art } : {}),
+        ...((data.role === "coach" || data.role === "pe_instructor") && data.assigned_sport
+          ? { assigned_sport: data.assigned_sport }
+          : {}),
       });
       qc.invalidateQueries({ queryKey: ["users"] });
       setSuccess(true);
@@ -250,7 +296,7 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
         {/* Role */}
         <Field label="Role" error={errors.role?.message} required>
           <select {...register("role")} className={inputCls}>
-            {ALL_ROLES.map((r) => (
+            {allowedRoles.map((r) => (
               <option key={r} value={r}>
                 {roleLabel[r]}
               </option>
@@ -291,6 +337,23 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
                 className={inputCls}
                 placeholder="e.g. Basketball"
               />
+            </Field>
+          </div>
+        )}
+
+        {/* Coach / PE Instructor sport assignment */}
+        {(selectedRole === "coach" || selectedRole === "pe_instructor") && (
+          <div className="bg-[#f8fafc] border border-[#e5e7eb] rounded-xl p-4 space-y-3">
+            <p className="text-xs font-semibold text-[#6b7280] uppercase tracking-wide">
+              {selectedRole === "coach" ? "Coach" : "PE Instructor"} Assignment
+            </p>
+            <Field label="Sport / Art" error={errors.assigned_sport?.message} required>
+              <select {...register("assigned_sport")} className={inputCls}>
+                <option value="">Select sport…</option>
+                {SPORT_OPTIONS.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
             </Field>
           </div>
         )}
@@ -504,9 +567,12 @@ function UserRow({
     <tr className="hover:bg-[#f9fafb] transition-colors">
       <td className="px-4 py-3">
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-full bg-[#eff6ff] flex items-center justify-center text-[#2563eb] text-xs font-semibold shrink-0">
-            {user.full_name[0]?.toUpperCase() ?? "?"}
-          </div>
+          <Avatar
+            src={user.profile_picture_url}
+            name={user.full_name}
+            size="sm"
+            className="bg-[#eff6ff] text-[#2563eb]"
+          />
           <span className="text-sm font-medium text-[#111827]">{user.full_name}</span>
         </div>
       </td>
@@ -574,11 +640,14 @@ type Tab = "all" | "pending";
 
 export default function UsersPage() {
   const qc = useQueryClient();
+  const { user: currentUser } = useAuthStore();
   const [tab, setTab] = useState<Tab>("all");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [showCreate, setShowCreate] = useState(false);
   const [enrollUser, setEnrollUser] = useState<UserSummary | null>(null);
+
+  const canCreateUsers = currentUser && (CREATOR_ROLE_LIMITS[currentUser.role]?.length ?? 0) > 0;
 
   // ── Data fetching ───────────────────────────────────────────────────────────
 
@@ -633,10 +702,12 @@ export default function UsersPage() {
             Manage OSCA system accounts, roles, and approvals
           </p>
         </div>
-        <button onClick={() => setShowCreate(true)} className={btnPrimary}>
-          <UserPlus size={15} />
-          Create User
-        </button>
+        {canCreateUsers && (
+          <button onClick={() => setShowCreate(true)} className={btnPrimary}>
+            <UserPlus size={15} />
+            Create User
+          </button>
+        )}
       </div>
 
       {/* Tabs + Search */}

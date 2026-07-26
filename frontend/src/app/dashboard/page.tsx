@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { reportsApi, announcementsApi, usersApi } from "@/lib/api";
-import { Users, CheckCircle, Package, AlertTriangle, Plus, Pencil, Trash2, Calendar, X, Loader2, Clock } from "lucide-react";
+import { Users, CheckCircle, Package, AlertTriangle, Plus, Pencil, Trash2, Calendar, X, Loader2, Clock, ImagePlus } from "lucide-react";
 import type { UserSummary } from "@/types";
 import type { DashboardSummary, Announcement, PaginatedResponse } from "@/types";
 import { useAuthStore } from "@/store/useAuthStore";
@@ -27,6 +27,7 @@ interface AnnouncementFormProps {
 
 function AnnouncementFormModal({ existing, onClose }: AnnouncementFormProps) {
   const queryClient = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState(existing?.title ?? "");
   const [content, setContent] = useState(existing?.content ?? "");
   const [eventDate, setEventDate] = useState(
@@ -34,18 +35,29 @@ function AnnouncementFormModal({ existing, onClose }: AnnouncementFormProps) {
       ? format(new Date(existing.event_date), "yyyy-MM-dd'T'HH:mm")
       : ""
   );
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(existing?.image_url ?? null);
   const [error, setError] = useState<string | null>(null);
 
-  const { mutate, isPending } = useMutation({
-    mutationFn: () => {
+  const { mutate: saveAnnouncement, isPending } = useMutation({
+    mutationFn: async () => {
       const payload: Record<string, unknown> = {
         title,
         content,
         event_date: eventDate ? new Date(eventDate).toISOString() : null,
       };
-      return existing
-        ? announcementsApi.update(existing.id, payload)
-        : announcementsApi.create(payload);
+      if (existing) {
+        await announcementsApi.update(existing.id, payload);
+        if (imageFile) {
+          await announcementsApi.uploadImage(existing.id, imageFile);
+        }
+      } else {
+        const res = await announcementsApi.create(payload);
+        const newId = res.data.id as string;
+        if (imageFile) {
+          await announcementsApi.uploadImage(newId, imageFile);
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["announcements"] });
@@ -59,12 +71,24 @@ function AnnouncementFormModal({ existing, onClose }: AnnouncementFormProps) {
     },
   });
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      setError("Image must be 5 MB or smaller.");
+      return;
+    }
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+    setError(null);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     if (!title.trim()) { setError("Title is required."); return; }
     if (!content.trim()) { setError("Content is required."); return; }
-    mutate();
+    saveAnnouncement();
   };
 
   return (
@@ -108,7 +132,7 @@ function AnnouncementFormModal({ existing, onClose }: AnnouncementFormProps) {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Event Date <span className="text-gray-400 font-normal">(optional — leave blank for general notice)</span>
+              Event Date <span className="text-gray-400 font-normal">(optional)</span>
             </label>
             <input
               type="datetime-local"
@@ -116,6 +140,42 @@ function AnnouncementFormModal({ existing, onClose }: AnnouncementFormProps) {
               onChange={(e) => setEventDate(e.target.value)}
               className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]/30 focus:border-[#1E3A5F]"
             />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Image <span className="text-gray-400 font-normal">(optional — max 5 MB)</span>
+            </label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={handleImageChange}
+              className="hidden"
+            />
+            {imagePreview ? (
+              <div className="relative inline-block w-full">
+                <img
+                  src={imagePreview}
+                  alt="Preview"
+                  className="w-full max-h-40 object-cover rounded-lg border border-gray-200"
+                />
+                <button
+                  type="button"
+                  onClick={() => { setImageFile(null); setImagePreview(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}
+                  className="absolute top-2 right-2 p-1 bg-white/80 rounded-full text-gray-500 hover:text-red-500 hover:bg-white transition"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-500 border border-dashed border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition w-full justify-center"
+              >
+                <ImagePlus size={16} /> Choose image
+              </button>
+            )}
           </div>
           {error && (
             <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>
@@ -353,6 +413,13 @@ export default function DashboardPage() {
               <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
                 {announcements.map((ann) => (
                   <div key={ann.id} className="group p-3 bg-gray-50 rounded-xl border border-gray-100">
+                    {ann.image_url && (
+                      <img
+                        src={ann.image_url}
+                        alt={ann.title}
+                        className="w-full h-32 object-cover rounded-lg mb-2 border border-gray-200"
+                      />
+                    )}
                     <div className="flex items-start justify-between gap-2">
                       <p className="text-sm font-semibold text-gray-900 leading-tight">{ann.title}</p>
                       {isEditor && (

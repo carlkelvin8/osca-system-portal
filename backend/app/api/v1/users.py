@@ -6,17 +6,18 @@ import uuid
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import AdminOnly, CurrentUser, get_db
+from app.core.dependencies import AdminOnly, CurrentUser, OptionalUser, get_db
 from app.core.exceptions import ConflictError, NotFoundError
 from app.core.security import hash_password
 from app.models.audit import AuditLog
 from app.models.user import User, UserRole
 from app.schemas.common import MessageResponse, PaginatedResponse
 from app.schemas.user import UserCreate, UserRead, UserSummary, UserUpdate
+from app.services.storage_service import StorageService
 
 router = APIRouter()
 
@@ -25,12 +26,44 @@ router = APIRouter()
     "/register",
     response_model=UserRead,
     status_code=status.HTTP_201_CREATED,
-    summary="Self-register (students) or admin-create any role",
+    summary="Self-register (students) or admin/director-create any role",
 )
 async def create_user(
     body: UserCreate,
     db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: OptionalUser = None,
 ) -> UserRead:
+    # ── Role-based access control ─────────────────────────────────────────
+    # No token  → self-registration: only students allowed
+    # Admin      → can create any role
+    # Director   → can create coach, pe_instructor, student only
+    # Staff      → can create coach, pe_instructor, student only
+    # Others     → cannot create users
+
+    if current_user is None:
+        # Self-registration — force student role regardless of what was sent
+        if body.role != UserRole.STUDENT:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Self-registration is only available for students.",
+            )
+        body.role = UserRole.STUDENT
+    else:
+        # Authenticated caller — check what roles they may assign
+        if current_user.role == UserRole.ADMIN:
+            pass  # Admin can create any role
+        elif current_user.role in (UserRole.DIRECTOR, UserRole.STAFF):
+            allowed = {UserRole.STUDENT, UserRole.COACH, UserRole.PE_INSTRUCTOR}
+            if body.role not in allowed:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"You can only create accounts for: Student, Coach, PE Instructor.",
+                )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have permission to create users.",
+            )
     # Check email uniqueness
     existing = await db.execute(select(User).where(User.email == body.email))
     if existing.scalar_one_or_none():
@@ -173,3 +206,66 @@ async def deactivate_user(
     ))
     await db.commit()
     return MessageResponse(message=f"User {user.full_name} deactivated")
+
+
+@router.put(
+    "/{user_id}/profile-picture",
+    response_model=UserRead,
+    summary="Upload profile picture",
+)
+async def upload_profile_picture(
+    user_id: uuid.UUID,
+    file: UploadFile = File(...),
+    current_user: CurrentUser = None,
+    db: Annotated[AsyncSession, Depends(get_db)] = None,
+) -> UserRead:
+    # Students can only update their own picture; admins can update anyone
+    if current_user.role == UserRole.STUDENT and current_user.id != user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    # Validate file type
+    allowed_types = {"image/jpeg", "image/png", "image/webp"}
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only JPEG, PNG, and WebP images are allowed.",
+        )
+
+    # Validate file size (max 5 MB)
+    contents = await file.read()
+    if len(contents) > 5 * 1024 * 1024:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Image must be 5 MB or smaller.",
+        )
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise NotFoundError("User", str(user_id))
+
+    storage = StorageService()
+    key = await storage.upload_profile_picture(
+        user_id=str(user_id),
+        image_bytes=contents,
+        content_type=file.content_type,
+    )
+
+    # Build presigned URL for the response
+    profile_url = storage.get_presigned_url(
+        bucket="osca-profile-pictures",
+        key=key,
+        expires_in=3600,
+    )
+
+    user.profile_picture_url = profile_url
+    db.add(AuditLog(
+        user_id=current_user.id,
+        action="PROFILE_PICTURE_UPDATED",
+        resource_type="User",
+        resource_id=str(user_id),
+        status="success",
+    ))
+    await db.commit()
+    await db.refresh(user)
+    return UserRead.model_validate(user)

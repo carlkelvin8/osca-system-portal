@@ -31,8 +31,9 @@ async def lifespan(app: FastAPI):
         fr_model=settings.FR_MODEL,
     )
 
-    # Create DB tables (Alembic handles production migrations)
-    if settings.APP_ENV == "testing":
+    # Create DB tables automatically in dev & testing.
+    # Production should use ``alembic upgrade head`` explicitly.
+    if settings.APP_ENV != "production":
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
 

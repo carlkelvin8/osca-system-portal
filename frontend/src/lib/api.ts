@@ -125,6 +125,13 @@ export const usersApi = {
   update: (id: string, data: Record<string, unknown>) =>
     api.patch(`/users/${id}`, data),
   deactivate: (id: string) => api.delete(`/users/${id}`),
+  uploadProfilePicture: (userId: string, file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return api.put(`/users/${userId}/profile-picture`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
 };
 
 export const attendanceApi = {
@@ -206,6 +213,13 @@ export const announcementsApi = {
   update: (id: string, data: Record<string, unknown>) =>
     api.patch(`/announcements/${id}`, data),
   remove: (id: string) => api.delete(`/announcements/${id}`),
+  uploadImage: (id: string, file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return api.post(`/announcements/${id}/image`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
 };
 
 export const adminApi = {
@@ -262,6 +276,22 @@ export const sanctionsApi = {
     api.patch(`/sanctions/${id}`, data),
   acknowledge: (id: string) =>
     api.post(`/sanctions/${id}/acknowledge`),
+};
+
+// ── Offline Sync ──────────────────────────────────────────────────────────────
+
+export const auditLogsApi = {
+  list: (params?: Record<string, string | number | boolean>) =>
+    api.get("/audit-logs", { params }),
+  get: (id: string) => api.get(`/audit-logs/${id}`),
+  getModules: () => api.get("/audit-logs/filters/modules"),
+  getActions: () => api.get("/audit-logs/filters/actions"),
+  exportCsv: (params?: Record<string, string | number | boolean>) =>
+    api.get("/audit-logs/export/csv", { params, responseType: "blob" }),
+  exportXlsx: (params?: Record<string, string | number | boolean>) =>
+    api.get("/audit-logs/export/xlsx", { params, responseType: "blob" }),
+  exportPdf: (params?: Record<string, string | number | boolean>) =>
+    api.get("/audit-logs/export/pdf", { params, responseType: "blob" }),
 };
 
 // ── Offline Sync ──────────────────────────────────────────────────────────────

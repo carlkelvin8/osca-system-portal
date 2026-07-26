@@ -5,8 +5,9 @@ Run with: docker compose exec api python -m app.scripts.seed
 import asyncio
 
 from app.core.security import hash_password
-from app.database import AsyncSessionLocal
+from app.database import AsyncSessionLocal, Base, engine
 from app.models.user import User, UserRole
+from app.models import *  # noqa: F401, F403 — import all models so metadata is populated
 
 # ---------------------------------------------------------------------------
 # Seed users
@@ -70,6 +71,10 @@ SEED_USERS = [
 
 
 async def seed():
+    # Ensure tables exist before seeding
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
     async with AsyncSessionLocal() as db:
         from sqlalchemy import select
 

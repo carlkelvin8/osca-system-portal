@@ -2,7 +2,7 @@
 from fastapi import APIRouter
 
 from app.api.v1 import (
-    admin, announcements, attendance, auth, eligibility,
+    admin, announcements, audit_logs, attendance, auth, eligibility,
     facilities, incidents, inventory, offline_sync, reports,
     sanctions, users,
 )
@@ -21,3 +21,4 @@ api_router.include_router(offline_sync.router,  prefix="/sync",          tags=["
 api_router.include_router(reports.router,       prefix="/reports",       tags=["Reports"])
 api_router.include_router(admin.router,         prefix="/admin",         tags=["Admin"])
 api_router.include_router(announcements.router, prefix="/announcements", tags=["Announcements"])
+api_router.include_router(audit_logs.router,    prefix="/audit-logs",    tags=["Audit Logs"])

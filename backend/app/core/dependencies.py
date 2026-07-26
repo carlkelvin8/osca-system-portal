@@ -90,6 +90,42 @@ async def get_current_user(
 CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
+async def get_optional_user(
+    request: Request,
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    redis: Annotated[aioredis.Redis, Depends(get_redis)],
+) -> User | None:
+    """
+    Like get_current_user but returns None instead of raising 401.
+    Used for endpoints that behave differently for authenticated vs anonymous callers.
+    """
+    if not credentials:
+        return None
+    try:
+        token = credentials.credentials
+        blacklisted = await redis.get(f"blacklist:{token}")
+        if blacklisted:
+            return None
+        payload = decode_token(token)
+        if not is_token_type(payload, "access"):
+            return None
+        user_id_str: str | None = payload.get("sub")
+        if not user_id_str:
+            return None
+        user_id = uuid.UUID(user_id_str)
+        result = await db.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one_or_none()
+        if user is None or not user.is_active:
+            return None
+        return user
+    except JWTError:
+        return None
+
+
+OptionalUser = Annotated[User | None, Depends(get_optional_user)]
+
+
 # ── RBAC Role Checkers ────────────────────────────────────────────────────────
 
 def require_roles(*roles: UserRole):

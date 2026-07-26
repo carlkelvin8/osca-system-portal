@@ -19,6 +19,7 @@ class Announcement(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     event_date: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True,
         comment="Set when this is an upcoming event; None for general notices"

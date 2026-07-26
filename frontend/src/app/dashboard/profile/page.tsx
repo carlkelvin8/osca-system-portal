@@ -1,15 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState, useRef } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/store/useAuthStore";
-import { inventoryApi } from "@/lib/api";
-import { User as UserIcon, Mail, Shield, Calendar, Activity, QrCode } from "lucide-react";
+import { inventoryApi, usersApi } from "@/lib/api";
+import { User as UserIcon, Mail, Shield, Calendar, Activity, QrCode, Camera, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import QRCode from "qrcode";
+import { Avatar } from "@/components/ui/Avatar";
 
 export default function ProfilePage() {
   const { user } = useAuthStore();
+  const qc = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
   const hasBorrowingQR = user?.role === "coach" || user?.role === "pe_instructor";
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
 
@@ -31,6 +35,23 @@ export default function ProfilePage() {
     }
   }, [borrowingId?.qr_code]);
 
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    setUploading(true);
+    try {
+      const res = await usersApi.uploadProfilePicture(user.id, file);
+      // Update the auth store with the new profile picture URL
+      useAuthStore.setState({ user: { ...user, profile_picture_url: res.data.profile_picture_url } });
+      qc.invalidateQueries({ queryKey: ["users"] });
+    } catch {
+      // silently fail — user can retry
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
   if (!user) return null;
 
   const roleLabel: Record<string, string> = {
@@ -40,9 +61,6 @@ export default function ProfilePage() {
     pe_instructor: "PE Instructor",
     student: "Student",
   };
-
-  const initials =
-    (user.first_name?.[0] ?? "") + (user.last_name?.[0] ?? "");
 
   const infoRows: { label: string; value: string | null; icon: React.ElementType }[] = [
     { label: "Email", value: user.email, icon: Mail },
@@ -81,11 +99,33 @@ export default function ProfilePage() {
         <div className="h-24 bg-gradient-to-r from-[#1E3A5F] to-[#2563eb]" />
 
         <div className="px-6 pb-6">
-          {/* Avatar */}
-          <div className="-mt-12 mb-4">
-            <div className="w-24 h-24 rounded-full bg-[#1E3A5F] border-4 border-white flex items-center justify-center text-white text-2xl font-bold shadow-lg">
-              {initials.toUpperCase() || "?"}
-            </div>
+          {/* Avatar with upload */}
+          <div className="-mt-12 mb-4 relative inline-block">
+            <Avatar
+              src={user.profile_picture_url}
+              name={user.full_name}
+              size="xl"
+              className="border-4 border-white shadow-lg"
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="absolute bottom-0 right-0 w-8 h-8 bg-[#2563eb] hover:bg-[#1d4ed8] text-white rounded-full flex items-center justify-center shadow-lg transition disabled:opacity-60"
+              title="Change profile picture"
+            >
+              {uploading ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Camera size={14} />
+              )}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={handleUpload}
+              className="hidden"
+            />
           </div>
 
           <h2 className="text-xl font-bold text-gray-900">{user.full_name}</h2>

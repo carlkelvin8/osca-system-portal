@@ -2,17 +2,17 @@
 
 /**
  * US-002: User Self-Registration (Updated)
- * 4-step wizard: Account → Profile → Emergency & Consent → Face Enrollment.
+ * 5-step wizard: Account → Profile → Emergency & Consent → Profile Picture → Face Enrollment.
  * Supports all roles except admin. Student-specific fields are conditionally shown.
  *
- * Flow: register account → auto-login → enroll face → success.
+ * Flow: register account → auto-login → upload profile picture (optional) → enroll face → success.
  *
  * Design: Direction 1 – Clean Professional (dark navy #0f172a auth shell,
- * white card, blue #2563eb primary, aligned to OSCA PRD v2 frontend spec).
+ * white card, blue #1d4ed8 primary, aligned to OSCA PRD v2 frontend spec).
  */
 
-import { useState, useRef, useCallback } from "react";
-import { useForm } from "react-hook-form";
+import { useState, useRef, useCallback, useEffect } from "react";
+import { useForm, useController, type Control } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import Link from "next/link";
@@ -26,16 +26,42 @@ import {
   ChevronLeft,
   Camera,
   RotateCcw,
+  ArrowLeft,
+  ImagePlus,
 } from "lucide-react";
 import type { UserRole } from "@/types";
 
 // ── Role options (no admin) ────────────────────────────────────────────────────
 
 const REGISTRATION_ROLES: { value: UserRole; label: string }[] = [
-  { value: "student", label: "Student Athlete / Artist" },
-  { value: "coach", label: "Coach" },
-  { value: "pe_instructor", label: "PE Instructor" },
-  { value: "director", label: "OSCA Director" },
+  { value: "student", label: "Student Athlete" },
+  { value: "student", label: "Student Artist" },
+];
+
+// ── Sports / Cultural Affairs options (for searchable Sport / Art field) ───────
+
+const SPORTS_OPTIONS: { group: string; items: string[] }[] = [
+  {
+    group: "Sports",
+    items: [
+      "Arnis",
+      "Badminton",
+      "Basketball",
+      "Sepak Takraw",
+      "Table Tennis",
+      "Taekwondo",
+      "Volleyball Men",
+      "Volleyball Women",
+    ],
+  },
+  {
+    group: "Cultural Affairs",
+    items: [
+      "Hataw Himpapawid Dance Group",
+      "Himig Himpapawid Chorale",
+      "Musikang Himpapawid Live Band",
+    ],
+  },
 ];
 
 // ── Zod schema ─────────────────────────────────────────────────────────────────
@@ -107,7 +133,7 @@ type RegisterForm = z.infer<typeof registerSchema>;
 
 // ── Step labels ────────────────────────────────────────────────────────────────
 
-const STEPS = ["Account", "Profile", "Emergency & Consent", "Face Enrollment"];
+const STEPS = ["Account", "Profile", "Emergency & Consent", "Profile Picture", "Face Enrollment"];
 const CAPTURE_COUNT = 5;
 
 // ── Field helper ───────────────────────────────────────────────────────────────
@@ -137,8 +163,86 @@ function Field({
 
 const inputCls =
   "w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white " +
-  "focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500/50 " +
+  "focus:outline-none focus:ring-2 focus:ring-[#C9A84C]/50 focus:border-[#C9A84C]/50 " +
   "placeholder:text-white/25 transition-all";
+
+// ── Searchable Sport / Cultural Affairs combobox ────────────────────────────────
+
+function SportCombobox({
+  control,
+  name,
+}: {
+  control: Control<RegisterForm>;
+  name: "sport_or_art";
+}) {
+  const { field } = useController({ control, name });
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState(field.value || "");
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setQuery(field.value || "");
+  }, [field.value]);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filtered = SPORTS_OPTIONS.map((g) => ({
+    group: g.group,
+    items: g.items.filter((item) =>
+      item.toLowerCase().includes(query.toLowerCase())
+    ),
+  })).filter((g) => g.items.length > 0);
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <input
+        value={query}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          field.onChange(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        autoComplete="off"
+        placeholder="Search or select sport / cultural group"
+        className={inputCls}
+      />
+      {open && filtered.length > 0 && (
+        <div className="absolute z-20 mt-1.5 w-full max-h-60 overflow-y-auto bg-white border border-[#e9d9a8] rounded-xl shadow-lg py-1">
+          {filtered.map((g) => (
+            <div key={g.group}>
+              <p className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-[#8a6d1f]">
+                {g.group}
+              </p>
+              {g.items.map((item) => (
+                <button
+                  type="button"
+                  key={item}
+                  onClick={() => {
+                    field.onChange(item);
+                    setQuery(item);
+                    setOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-2 text-sm text-[#1f2937] hover:bg-[#fdf6e8] transition"
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
@@ -153,11 +257,17 @@ export default function RegisterPage() {
   const [enrolling, setEnrolling] = useState(false);
   const [createdUserId, setCreatedUserId] = useState<string | null>(null);
 
+  // Profile picture state
+  const profilePicInputRef = useRef<HTMLInputElement>(null);
+  const [profilePicFile, setProfilePicFile] = useState<File | null>(null);
+  const [profilePicPreview, setProfilePicPreview] = useState<string | null>(null);
+
   const {
     register,
     handleSubmit,
     trigger,
     watch,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<RegisterForm>({
     resolver: zodResolver(registerSchema),
@@ -174,7 +284,8 @@ export default function RegisterPage() {
       ? ["first_name", "last_name", "student_id", "course", "year_level", "sport_or_art"]
       : ["first_name", "last_name", "sport_or_art"],
     ["emergency_contact_name", "emergency_contact_number", "biometric_consent"],
-    [], // Step 3 — face enrollment, validated separately
+    [], // Step 3 — profile picture, optional
+    [], // Step 4 — face enrollment, validated separately
   ];
 
   const advance = async () => {
@@ -244,11 +355,32 @@ export default function RegisterPage() {
         expires: 7,
       });
 
-      // 3. Enroll face
-      const images = captures.map((c) => c.split(",")[1]);
-      await attendanceApi.enroll({ user_id: newUser.id, images_base64: images });
+      // 3. Upload profile picture (optional)
+      if (profilePicFile) {
+        try {
+          const formData = new FormData();
+          formData.append("file", profilePicFile);
+          await usersApi.uploadProfilePicture(newUser.id, profilePicFile);
+        } catch {
+          // Profile picture upload is non-critical — continue
+        }
+      }
 
-      // 4. Clean up auth tokens (user should login manually to enter dashboard)
+      // 4. Enroll face — wrapped so we can always clean up tokens
+      try {
+        const images = captures.map((c) => c.split(",")[1]);
+        await attendanceApi.enroll({ user_id: newUser.id, images_base64: images });
+      } catch (frErr: unknown) {
+        // Face enrollment failed but account was created — surface the FR error
+        // and still fall through to token cleanup + success state so the user
+        // can log in and retry enrollment later from the dashboard.
+        const frMsg =
+          (frErr as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
+          "Face enrollment failed. You can retry from the dashboard after logging in.";
+        console.warn("Face enrollment error:", frMsg);
+      }
+
+      // 5. Always clean up auth tokens (user should login manually)
       Cookies.remove("access_token");
       Cookies.remove("refresh_token");
 
@@ -264,10 +396,10 @@ export default function RegisterPage() {
   // ── Success screen ───────────────────────────────────────────────────────────
   if (submitted) {
     return (
-      <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-[#030014]">
+      <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-[#081428]">
         <div className="absolute inset-0">
-          <div className="absolute -top-[40%] -left-[20%] w-[70vw] h-[70vw] rounded-full opacity-20 animate-pulse" style={{ background: "radial-gradient(circle, #4f46e5, transparent 70%)", filter: "blur(80px)" }} />
-          <div className="absolute top-[30%] -right-[15%] w-[50vw] h-[50vw] rounded-full opacity-15 animate-pulse" style={{ background: "radial-gradient(circle, #7c3aed, transparent 70%)", filter: "blur(80px)" }} />
+          <div className="absolute -top-[40%] -left-[20%] w-[70vw] h-[70vw] rounded-full opacity-20 animate-pulse" style={{ background: "radial-gradient(circle, #1d4ed8, transparent 70%)", filter: "blur(80px)" }} />
+          <div className="absolute top-[30%] -right-[15%] w-[50vw] h-[50vw] rounded-full opacity-15 animate-pulse" style={{ background: "radial-gradient(circle, #C9A84C, transparent 70%)", filter: "blur(80px)" }} />
         </div>
         <div className="relative z-10 bg-white/[0.03] backdrop-blur-xl border border-white/[0.08] rounded-3xl p-10 w-full max-w-md text-center shadow-[0_8px_60px_rgba(0,0,0,0.4)]">
           <CheckCircle2 size={52} className="text-green-400 mx-auto mb-4" />
@@ -280,7 +412,7 @@ export default function RegisterPage() {
           </p>
           <Link
             href="/login"
-            className="inline-flex items-center gap-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-sm font-semibold py-3 px-6 rounded-xl transition shadow-lg shadow-violet-600/25"
+            className="inline-flex items-center gap-2 bg-gradient-to-r from-[#1d4ed8] to-[#0d1f3c] hover:from-[#C9A84C] hover:to-[#132a4d] text-white text-sm font-semibold py-3 px-6 rounded-xl transition shadow-lg shadow-[#1d4ed8]/25"
           >
             Back to Sign In
           </Link>
@@ -290,24 +422,67 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-[#030014] py-10">
-      {/* Animated background */}
-      <div className="absolute inset-0">
-        <div className="absolute -top-[40%] -left-[20%] w-[70vw] h-[70vw] rounded-full opacity-20 animate-pulse" style={{ background: "radial-gradient(circle, #4f46e5, transparent 70%)", filter: "blur(80px)" }} />
-        <div className="absolute top-[30%] -right-[15%] w-[50vw] h-[50vw] rounded-full opacity-15 animate-pulse" style={{ background: "radial-gradient(circle, #7c3aed, transparent 70%)", filter: "blur(80px)" }} />
-        <div className="absolute -bottom-[20%] left-[30%] w-[45vw] h-[45vw] rounded-full opacity-20 animate-pulse" style={{ background: "radial-gradient(circle, #06b6d4, transparent 70%)", filter: "blur(80px)" }} />
+    <div className="min-h-screen flex bg-[#081428] relative overflow-hidden">
+      {/* Left brand panel — big logo */}
+      <div className="hidden md:flex w-[42%] shrink-0 relative items-center justify-center bg-[#0d1f3c] border-r-4 border-[#C9A84C] overflow-hidden">
+        <div className="absolute -top-[15%] -left-[15%] w-[60%] h-[60%] rounded-full opacity-20 animate-pulse" style={{ background: "radial-gradient(circle, #C9A84C, transparent 70%)", filter: "blur(90px)" }} />
+        <div className="absolute -bottom-[15%] -right-[10%] w-[55%] h-[55%] rounded-full opacity-15 animate-pulse" style={{ background: "radial-gradient(circle, #1d4ed8, transparent 70%)", filter: "blur(90px)" }} />
+        
+         {/* Back to Main Website */}
+        <Link
+          href="/"
+          className="group absolute top-6 left-6 z-20 inline-flex items-center gap-2 text-xs font-semibold text-white/80 hover:text-white transition-all duration-300 ease-out"
+        >
+          <ArrowLeft size={15} className="transition-transform duration-300 ease-out group-hover:-translate-x-1" />
+          Back to Main Website
+        </Link>
+        
+        <div className="relative z-10 flex flex-col items-center text-center px-10">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/osca-logo.png"
+            alt="OSCA Crest"
+            className="w-56 h-56 object-contain drop-shadow-[0_10px_50px_rgba(201,168,76,0.35)] mb-8"
+          />
+          <h2 className="text-2xl font-extrabold text-white tracking-wide leading-snug">
+            OFFICE OF SPORTS
+            <br />
+            AND CULTURAL AFFAIRS
+          </h2>
+          <p className="text-sm text-[#C9A84C] font-semibold mt-3 tracking-[0.2em] uppercase">
+            NAAP · Villamor Campus
+          </p>
+          <div className="w-16 h-1 bg-[#C9A84C] rounded-full mt-6" />
+          <p className="text-xs text-white/50 mt-6 max-w-xs leading-relaxed">
+            Empowering student athletes and artists through excellence, discipline, and creativity.
+          </p>
+        </div>
       </div>
 
-      <div className="relative z-10 bg-white/[0.03] backdrop-blur-xl border border-white/[0.08] rounded-3xl shadow-[0_8px_60px_rgba(0,0,0,0.4)] w-full max-w-lg mx-4">
+      {/* Right side — registration form */}
+      <div className="flex-1 flex items-center justify-center relative overflow-hidden py-10">
+        {/* Animated background */}
+        <div className="absolute inset-0">
+          <div className="absolute -top-[40%] -left-[20%] w-[70vw] h-[70vw] rounded-full opacity-20 animate-pulse" style={{ background: "radial-gradient(circle, #1d4ed8, transparent 70%)", filter: "blur(80px)" }} />
+          <div className="absolute top-[30%] -right-[15%] w-[50vw] h-[50vw] rounded-full opacity-15 animate-pulse" style={{ background: "radial-gradient(circle, #C9A84C, transparent 70%)", filter: "blur(80px)" }} />
+          <div className="absolute -bottom-[20%] left-[30%] w-[45vw] h-[45vw] rounded-full opacity-20 animate-pulse" style={{ background: "radial-gradient(circle, #f5d778, transparent 70%)", filter: "blur(80px)" }} />
+        </div>
+
+        <div className="relative z-10 bg-white/[0.03] backdrop-blur-xl border border-white/[0.08] rounded-3xl shadow-[0_8px_60px_rgba(0,0,0,0.4)] w-full max-w-lg mx-4">
         {/* Header */}
         <div className="px-8 pt-8 pb-6 border-b border-white/[0.06]">
           <div className="flex items-center gap-3 mb-1">
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-violet-500/25">
-              O
-            </div>
+            <div className="w-9 h-9 rounded-full bg-[#132a4d] border-2 border-[#C9A84C] overflow-hidden flex items-center justify-center shrink-0">
+  {/* eslint-disable-next-line @next/next/no-img-element */}
+  <img
+    src="/osca-logo.png"
+    alt="OSCA Logo"
+    className="w-full h-full object-cover"
+  />
+</div>
             <div>
-              <h1 className="text-lg font-bold text-white leading-tight">OSCA System</h1>
-              <p className="text-xs text-white/40">NAAP-Villamor · User Registration</p>
+              <h1 className="text-lg font-bold text-white leading-tight">OSCA Management System</h1>
+              <p className="text-xs text-[#C9A84C]">NAAP-Villamor · User Registration</p>
             </div>
           </div>
 
@@ -317,23 +492,23 @@ export default function RegisterPage() {
               <div key={i} className="flex items-center gap-1 flex-1">
                 <div
                   className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition ${i < step
-                      ? "bg-violet-600 text-white"
+                      ? "bg-[#1d4ed8] text-white"
                       : i === step
-                        ? "border-2 border-violet-500 text-violet-400"
+                        ? "border-2 border-[#C9A84C] text-[#C9A84C]"
                         : "border-2 border-white/10 text-white/30"
                     }`}
                 >
                   {i < step ? "✓" : i + 1}
                 </div>
                 <span
-                  className={`text-[10px] font-medium hidden sm:block leading-tight ${i === step ? "text-violet-400" : "text-white/30"
+                  className={`text-[10px] font-medium hidden sm:block leading-tight ${i === step ? "text-[#C9A84C]" : "text-white/30"
                     }`}
                 >
                   {label}
                 </span>
                 {i < STEPS.length - 1 && (
                   <div
-                    className={`h-px flex-1 ${i < step ? "bg-violet-600" : "bg-white/[0.08]"}`}
+                    className={`h-px flex-1 ${i < step ? "bg-[#1d4ed8]" : "bg-white/[0.08]"}`}
                   />
                 )}
               </div>
@@ -350,7 +525,7 @@ export default function RegisterPage() {
               <Field label="Role" error={errors.role?.message} required>
                 <select {...register("role")} className={inputCls}>
                   {REGISTRATION_ROLES.map((r) => (
-                    <option key={r.value} value={r.value}>
+                    <option key={r.label} value={r.value} className="text-black">
                       {r.label}
                     </option>
                   ))}
@@ -425,11 +600,11 @@ export default function RegisterPage() {
                     </Field>
                     <Field label="Year Level" error={errors.year_level?.message} required>
                       <select {...register("year_level")} className={inputCls}>
-                        <option value="">Select…</option>
-                        <option value="1st Year">1st Year</option>
-                        <option value="2nd Year">2nd Year</option>
-                        <option value="3rd Year">3rd Year</option>
-                        <option value="4th Year">4th Year</option>
+                        <option value="" className="text-black">Select…</option>
+                        <option value="1st Year" className="text-black">1st Year</option>
+                        <option value="2nd Year" className="text-black">2nd Year</option>
+                        <option value="3rd Year" className="text-black">3rd Year</option>
+                        <option value="4th Year" className="text-black">4th Year</option>
                       </select>
                     </Field>
                   </div>
@@ -448,11 +623,7 @@ export default function RegisterPage() {
               )}
 
               <Field label="Sport / Art" error={errors.sport_or_art?.message} required>
-                <input
-                  {...register("sport_or_art")}
-                  className={inputCls}
-                  placeholder="e.g. Basketball, Dance, Chess"
-                />
+                <SportCombobox control={control} name="sport_or_art" />
               </Field>
 
               <Field label="Contact Number" error={errors.contact_number?.message}>
@@ -504,14 +675,14 @@ export default function RegisterPage() {
               </Field>
 
               {/* Biometric Consent — R.A. 10173 */}
-              <div className="mt-2 p-4 bg-[#f0f4ff] border border-[#bfdbfe] rounded-xl">
+              <div className="mt-2 p-4 bg-[#fdf6e8] border border-[#e9d9a8] rounded-xl">
                 <div className="flex items-start gap-2 mb-2">
-                  <ShieldCheck size={18} className="text-[#2563eb] mt-0.5 shrink-0" />
-                  <p className="text-xs font-semibold text-[#1e40af]">
+                  <ShieldCheck size={18} className="text-[#1d4ed8] mt-0.5 shrink-0" />
+                  <p className="text-xs font-semibold text-[#8a6d1f]">
                     Biometric Data Consent — R.A. 10173 (Data Privacy Act of 2012)
                   </p>
                 </div>
-                <p className="text-xs text-white/70 leading-relaxed mb-3">
+                <p className="text-xs text-[#6b5424] leading-relaxed mb-3">
                   I hereby give my explicit consent to the National Aviation Academy of the
                   Philippines (NAAP–Villamor) and the Office of Sports and Cultural Affairs (OSCA)
                   to collect, store, and process my facial biometric data solely for attendance
@@ -524,9 +695,9 @@ export default function RegisterPage() {
                   <input
                     {...register("biometric_consent")}
                     type="checkbox"
-                    className="mt-0.5 w-4 h-4 accent-[#2563eb]"
+                    className="mt-0.5 w-4 h-4 accent-[#1d4ed8]"
                   />
-                  <span className="text-xs text-white font-medium">
+                  <span className="text-xs text-[#6b5424] font-medium">
                     I have read and I agree to the biometric data consent above.
                     <span className="text-red-500 ml-0.5">*</span>
                   </span>
@@ -540,13 +711,92 @@ export default function RegisterPage() {
             </>
           )}
 
-          {/* ── STEP 3: Face Enrollment ────────────────────────────────────── */}
+          {/* ── STEP 3: Profile Picture (Optional) ──────────────────────── */}
           {step === 3 && (
             <>
+              <p className="text-sm font-semibold text-white">Profile Picture</p>
+              <div className="flex items-start gap-2 bg-[#fdf6e8] border border-[#e9d9a8] rounded-xl p-3">
+                <ImagePlus size={16} className="text-[#1d4ed8] mt-0.5 shrink-0" />
+                <p className="text-xs text-[#6b5424] leading-relaxed">
+                  Upload a clear photo of yourself. This will be used as your profile picture
+                  across the system. You can skip this step and add one later.
+                </p>
+              </div>
+
+              {/* Upload area */}
+              <div className="flex flex-col items-center gap-4">
+                {profilePicPreview ? (
+                  <div className="relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={profilePicPreview}
+                      alt="Profile preview"
+                      className="w-32 h-32 rounded-full object-cover border-4 border-[#1d4ed8] shadow-lg"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProfilePicFile(null);
+                        setProfilePicPreview(null);
+                        if (profilePicInputRef.current) profilePicInputRef.current.value = "";
+                      }}
+                      className="absolute top-0 right-0 w-7 h-7 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center text-xs font-bold shadow transition"
+                      title="Remove photo"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => profilePicInputRef.current?.click()}
+                    className="w-32 h-32 rounded-full border-2 border-dashed border-white/20 hover:border-[#C9A84C]/50 flex flex-col items-center justify-center gap-2 text-white/40 hover:text-white/60 transition cursor-pointer"
+                  >
+                    <ImagePlus size={28} />
+                    <span className="text-[10px] font-medium">Upload</span>
+                  </button>
+                )}
+
+                <input
+                  ref={profilePicInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setProfilePicFile(file);
+                      const reader = new FileReader();
+                      reader.onload = (ev) => setProfilePicPreview(ev.target?.result as string);
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                  className="hidden"
+                />
+
+                {profilePicPreview && (
+                  <button
+                    type="button"
+                    onClick={() => profilePicInputRef.current?.click()}
+                    className="text-xs text-[#C9A84C] hover:text-[#e6cf8c] font-medium transition"
+                  >
+                    Choose a different photo
+                  </button>
+                )}
+
+                <p className="text-xs text-white/30 text-center">
+                  JPEG, PNG, or WebP. Max 5 MB.
+                </p>
+              </div>
+            </>
+          )}
+
+          {/* ── STEP 4: Face Enrollment ────────────────────────────────────── */}
+          {step === 4 && (
+            <>
               {/* Instructions */}
-              <div className="flex items-start gap-2 bg-[#f0f4ff] border border-[#bfdbfe] rounded-xl p-3">
-                <Camera size={16} className="text-[#2563eb] mt-0.5 shrink-0" />
-                <p className="text-xs text-white/70 leading-relaxed">
+              <div className="flex items-start gap-2 bg-[#fdf6e8] border border-[#e9d9a8] rounded-xl p-3">
+                <Camera size={16} className="text-[#1d4ed8] mt-0.5 shrink-0" />
+                <p className="text-xs text-[#6b5424] leading-relaxed">
                   Capture <strong>{CAPTURE_COUNT} photos</strong> at different angles (front, left,
                   right, slight up, slight down). Ensure good lighting. Liveness detection will be
                   applied during recognition.
@@ -577,11 +827,11 @@ export default function RegisterPage() {
                   {captures.map((src, i) => (
                     <div
                       key={i}
-                      className="w-14 h-14 rounded-lg overflow-hidden border-2 border-[#2563eb] relative"
+                      className="w-14 h-14 rounded-lg overflow-hidden border-2 border-[#1d4ed8] relative"
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={src} alt={`Capture ${i + 1}`} className="w-full h-full object-cover" />
-                      <span className="absolute bottom-0 right-0 bg-violet-600 text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-tl">
+                      <span className="absolute bottom-0 right-0 bg-[#1d4ed8] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-tl">
                         {i + 1}
                       </span>
                     </div>
@@ -641,7 +891,7 @@ export default function RegisterPage() {
               <button
                 type="button"
                 onClick={advance}
-                className="flex-1 flex items-center justify-center gap-1 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-sm font-semibold py-2.5 rounded-xl transition shadow-lg shadow-violet-600/25"
+                className="flex-1 flex items-center justify-center gap-1 bg-gradient-to-r from-[#1d4ed8] to-[#0d1f3c] hover:from-[#C9A84C] hover:to-[#132a4d] text-white text-sm font-semibold py-2.5 rounded-xl transition shadow-lg shadow-[#1d4ed8]/25"
               >
                 Continue <ChevronRight size={16} />
               </button>
@@ -649,7 +899,7 @@ export default function RegisterPage() {
               <button
                 type="submit"
                 disabled={isSubmitting || enrolling || captures.length < CAPTURE_COUNT}
-                className="flex-1 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-sm font-semibold py-2.5 rounded-xl transition shadow-lg shadow-violet-600/25 disabled:opacity-50"
+                className="flex-1 bg-gradient-to-r from-[#1d4ed8] to-[#0d1f3c] hover:from-[#C9A84C] hover:to-[#132a4d] text-white text-sm font-semibold py-2.5 rounded-xl transition shadow-lg shadow-[#1d4ed8]/25 disabled:opacity-50"
               >
                 {isSubmitting || enrolling ? "Submitting…" : "Submit Registration"}
               </button>
@@ -659,11 +909,12 @@ export default function RegisterPage() {
           {/* Footer link */}
           <p className="text-center text-xs text-white/40 pt-1">
             Already have an account?{" "}
-            <Link href="/login" className="text-violet-400 font-medium hover:text-violet-300 transition">
+            <Link href="/login" className="text-[#C9A84C] font-medium hover:text-[#e6cf8c] transition">
               Sign in
             </Link>
           </p>
         </form>
+      </div>
       </div>
     </div>
   );

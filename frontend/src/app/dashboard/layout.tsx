@@ -24,6 +24,7 @@ import {
   AlertTriangle,
   Gavel,
   TrendingUp,
+  History,
   Moon,
   Sun,
   Menu,
@@ -33,6 +34,7 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { useThemeStore } from "@/store/useThemeStore";
 import { useNotificationStore } from "@/store/useNotificationStore";
 import { OfflineBanner } from "@/components/ui/OfflineBanner";
+import { Avatar } from "@/components/ui/Avatar";
 import type { UserRole } from "@/types";
 
 // ── Nav definition ────────────────────────────────────────────────────────────
@@ -133,6 +135,12 @@ const navItems: NavItem[] = [
       roles: ["admin", "director", "coach", "student"],
     },
     {
+      href: "/dashboard/audit-logs",
+      label: "Audit Logs",
+      icon: History,
+      roles: ["admin", "director"],
+    },
+    {
       href: "/kiosk",
       label: "Attendance Scan",
       icon: Camera,
@@ -218,10 +226,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     router.push("/login");
   };
 
-  // Initials for avatar
-  const initials =
-    (user.first_name?.[0] ?? "") + (user.last_name?.[0] ?? "");
-
   return (
     <div className={`flex h-screen ${isDark ? "dark bg-[#0f1219]" : "bg-[#f5f6f8]"}`}>
       {/* ── Mobile Menu Overlay ── */}
@@ -236,11 +240,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Brand */}
         <div className="flex items-center justify-between px-4 py-4 border-b border-white/8">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-lg bg-[#2563eb] flex items-center justify-center text-white font-bold text-lg shrink-0">
-              O
+            <div className="w-9 h-9 rounded-lg overflow-hidden shrink-0">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/osca-logo.png" alt="OSCA Logo" className="w-full h-full object-contain" />
             </div>
             <div>
-              <p className="text-sm font-bold text-[#f8fafc] leading-tight">OSCA System</p>
+              <p className="text-sm font-bold text-[#f8fafc] leading-tight">OSCA Management System</p>
               <p className="text-[11px] text-[#94a3b8]">NAAP-Villamor</p>
             </div>
           </div>
@@ -303,9 +308,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* User section */}
         <div className="px-2 py-3 border-t border-white/8 space-y-0.5">
           <Link href="/dashboard/profile" className="flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-white/6 transition-colors">
-            <div className="w-7 h-7 rounded-full bg-[#2563eb] flex items-center justify-center text-white text-xs font-semibold shrink-0">
-              {initials.toUpperCase() || "?"}
-            </div>
+            <Avatar
+              src={user.profile_picture_url}
+              name={user.full_name}
+              size="sm"
+            />
             <div className="min-w-0">
               <p className="text-[13px] font-medium text-[#f1f5f9] truncate leading-tight">
                 {user.full_name}
@@ -420,9 +427,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
 
             {/* Avatar */}
-            <div className="w-8 h-8 rounded-full bg-[#2563eb] flex items-center justify-center text-white text-xs font-semibold">
-              {initials.toUpperCase() || "?"}
-            </div>
+            <Avatar
+              src={user.profile_picture_url}
+              name={user.full_name}
+              size="md"
+            />
           </div>
         </header>
 

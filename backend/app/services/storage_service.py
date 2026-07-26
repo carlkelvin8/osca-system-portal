@@ -121,3 +121,43 @@ class StorageService:
         for key in image_keys:
             await self.delete_object(settings.MINIO_BUCKET_FACES, key)
         logger.info("face_images_purged", user_id=user_id, count=len(image_keys))
+
+    async def upload_profile_picture(self, user_id: str, image_bytes: bytes, content_type: str = "image/jpeg") -> str:
+        """Upload a profile picture. Returns the object key."""
+        ext = "jpg" if "jpeg" in content_type or "jpg" in content_type else "png"
+        key = f"profiles/{user_id}/avatar.{ext}"
+        return await self.upload_bytes(
+            bucket=settings.MINIO_BUCKET_PROFILES,
+            key=key,
+            data=image_bytes,
+            content_type=content_type,
+        )
+
+    async def delete_profile_picture(self, user_id: str) -> None:
+        """Delete a user's profile picture (both jpg and png variants)."""
+        for ext in ("jpg", "png"):
+            key = f"profiles/{user_id}/avatar.{ext}"
+            await self.delete_object(settings.MINIO_BUCKET_PROFILES, key)
+
+    def get_profile_picture_url(self, user_id: str) -> str | None:
+        """Generate a presigned URL for the user's profile picture."""
+        import boto3
+        from botocore.client import Config as BotoConfig
+        from botocore.exceptions import ClientError
+
+        client = boto3.client(
+            "s3",
+            endpoint_url=f"{'https' if settings.MINIO_SECURE else 'http'}://{settings.MINIO_ENDPOINT}",
+            aws_access_key_id=settings.MINIO_ACCESS_KEY,
+            aws_secret_access_key=settings.MINIO_SECRET_KEY,
+            config=BotoConfig(signature_version="s3v4", s3={"addressing_style": "path"}),
+            region_name="us-east-1",
+        )
+        for ext in ("jpg", "png"):
+            key = f"profiles/{user_id}/avatar.{ext}"
+            try:
+                client.head_object(Bucket=settings.MINIO_BUCKET_PROFILES, Key=key)
+                return self.get_presigned_url(settings.MINIO_BUCKET_PROFILES, key, expires_in=3600)
+            except ClientError:
+                continue
+        return None

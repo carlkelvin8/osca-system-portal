@@ -36,6 +36,7 @@ export interface User {
   is_active: boolean;
   is_face_enrolled: boolean;
   biometric_consent: boolean;
+  profile_picture_url: string | null;
   created_at: string;
   last_login_at: string | null;
 }
@@ -48,6 +49,7 @@ export interface UserSummary {
   student_id: string | null;
   is_active: boolean;
   is_face_enrolled: boolean;
+  profile_picture_url: string | null;
 }
 
 export interface UserCreate {
@@ -206,6 +208,7 @@ export interface Announcement {
   id: string;
   title: string;
   content: string;
+  image_url: string | null;
   event_date: string | null;
   is_active: boolean;
   created_by_id: string;
@@ -386,6 +389,49 @@ export interface Sanction {
   acknowledged_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+// ── Audit Logs ────────────────────────────────────────────────────────────────
+
+export type AuditLogStatus = "success" | "failure" | "partial";
+
+export interface AuditLog {
+  id: string;
+  user_id: string | null;
+  admin_name: string | null;
+  admin_email: string | null;
+  admin_role: string | null;
+  action: string;
+  module: string | null;
+  description: string | null;
+  resource_type: string | null;
+  resource_id: string | null;
+  status: AuditLogStatus;
+  failure_reason: string | null;
+  ip_address: string | null;
+  browser: string | null;
+  os: string | null;
+  device_info: string | null;
+  session_id: string | null;
+  request_url: string | null;
+  http_method: string | null;
+  previous_values: Record<string, unknown> | null;
+  new_values: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface AuditLogListParams {
+  page?: number;
+  page_size?: number;
+  search?: string;
+  module?: string;
+  action?: string;
+  status?: AuditLogStatus;
+  user_id?: string;
+  ip_address?: string;
+  date_from?: string;
+  date_to?: string;
+  sort_order?: "asc" | "desc";
 }
 
 // ── Offline Sync ──────────────────────────────────────────────────────────────

@@ -7,7 +7,7 @@ import uuid
 from datetime import date, datetime, time, timedelta, UTC
 
 from sqlalchemy import select
-from app.database import AsyncSessionLocal
+from app.database import AsyncSessionLocal, Base, engine
 from app.models.user import User, UserRole
 from app.models.attendance import Session, AttendanceRecord
 from app.models.inventory import Equipment, EquipmentCategory, EquipmentCondition
@@ -17,6 +17,7 @@ from app.models.incident import Incident, IncidentCategory, IncidentSeverity, In
 from app.models.sanction import Sanction, ViolationType, SanctionSeverity, SanctionStatus
 from app.models.announcement import Announcement
 from app.core.security import hash_password
+from app.models import *  # noqa: F401, F403 — import all models so metadata is populated
 
 PASSWORD = "Demo@1234"
 NOW = datetime.now(UTC)
@@ -24,6 +25,10 @@ TODAY = date.today()
 
 
 async def seed():
+    # Ensure all tables exist before seeding
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
     async with AsyncSessionLocal() as db:
         print("🌱 Starting full database seed...\n")
 
