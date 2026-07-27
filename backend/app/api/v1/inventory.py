@@ -3,7 +3,7 @@ Inventory endpoints: equipment CRUD, borrowing IDs, borrow/return workflow,
 and equipment request/approval flow.
 """
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 import structlog
@@ -42,6 +42,7 @@ from app.schemas.inventory import (
     EquipmentRequestRead,
     EquipmentUpdate,
     RejectRequestBody,
+    REQUEST_QR_EXPIRY_MINUTES,
     ReturnRequest,
 )
 from app.services.barcode_service import BarcodeService
@@ -53,7 +54,7 @@ logger = structlog.get_logger(__name__)
 # Roles allowed to submit equipment requests
 _REQUEST_ROLES = {UserRole.COACH, UserRole.PE_INSTRUCTOR}
 # Roles allowed to approve/reject
-_APPROVAL_ROLES = {UserRole.ADMIN, UserRole.DIRECTOR}
+_APPROVAL_ROLES = {UserRole.ADMIN, UserRole.DIRECTOR, UserRole.STAFF}
 
 
 # ── Equipment ─────────────────────────────────────────────────────────────────
@@ -335,6 +336,32 @@ async def get_request_by_qr(
 
 
 @router.get(
+    "/requests/by-equipment/{equipment_id}",
+    response_model=list[EquipmentRequestRead],
+    summary="Get requests containing a specific equipment item",
+)
+async def get_requests_by_equipment(
+    equipment_id: uuid.UUID,
+    _user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> list[EquipmentRequestRead]:
+    result = await db.execute(
+        select(EquipmentRequestItem).where(EquipmentRequestItem.equipment_id == equipment_id)
+    )
+    items = result.scalars().all()
+
+    request_ids = list({item.request_id for item in items})
+    if not request_ids:
+        return []
+
+    requests_result = await db.execute(
+        select(EquipmentRequest).where(EquipmentRequest.id.in_(request_ids))
+    )
+    requests = requests_result.scalars().all()
+    return [await _build_request_read(r, db) for r in requests]
+
+
+@router.get(
     "/requests/{request_id}",
     response_model=EquipmentRequestRead,
     summary="Get single equipment request",
@@ -384,13 +411,22 @@ async def approve_equipment_request(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> EquipmentRequestRead:
     if current_user.role not in _APPROVAL_ROLES:
-        raise ForbiddenError("Only admin and director may approve requests.")
+        raise ForbiddenError("Only admin, director, and staff may approve requests.")
 
     req = await db.get(EquipmentRequest, request_id)
     if not req:
         raise NotFoundError("EquipmentRequest", str(request_id))
     if req.status != RequestStatus.PENDING:
         raise ConflictError(f"Request is already {req.status.value}.")
+
+    # Check 60-minute QR expiry
+    now = datetime.now(UTC)
+    ra = req.requested_at
+    if ra.tzinfo is None:
+        ra = ra.replace(tzinfo=UTC)
+    expiry = ra + timedelta(minutes=REQUEST_QR_EXPIRY_MINUTES)
+    if now > expiry:
+        raise ConflictError("Request has expired. The QR code is only valid for 60 minutes after submission.")
 
     # Validate stock for each item
     items_result = await db.execute(
@@ -414,7 +450,17 @@ async def approve_equipment_request(
     )
     bid = bid_result.scalar_one_or_none()
     if not bid:
-        raise ConflictError("Requester does not have an active Borrowing ID card.")
+        qr_value = BarcodeService.generate_qr_value(str(req.requester_id))
+        qr_img_bytes = BarcodeService.render_qr(qr_value)
+        storage = StorageService()
+        qr_key = await storage.upload_qr_image(qr_value, qr_img_bytes)
+        bid = BorrowingID(
+            instructor_id=req.requester_id,
+            qr_code=qr_value,
+            qr_image_key=qr_key,
+        )
+        db.add(bid)
+        await db.flush()
 
     transaction = BorrowTransaction(
         borrowing_id_record_id=bid.id,
@@ -464,7 +510,7 @@ async def reject_equipment_request(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> EquipmentRequestRead:
     if current_user.role not in _APPROVAL_ROLES:
-        raise ForbiddenError("Only admin and director may reject requests.")
+        raise ForbiddenError("Only admin, director, and staff may reject requests.")
 
     req = await db.get(EquipmentRequest, request_id)
     if not req:
@@ -677,9 +723,18 @@ async def _build_transaction_read(transaction: BorrowTransaction, db: AsyncSessi
         item_reads.append(ir)
 
     instructor = await db.get(User, transaction.instructor_id)
-    tr = BorrowTransactionRead.model_validate(transaction)
-    tr.instructor_name = instructor.full_name if instructor else ""
-    tr.items = item_reads
+    tr = BorrowTransactionRead(
+        id=transaction.id,
+        instructor_id=transaction.instructor_id,
+        instructor_name=instructor.full_name if instructor else "",
+        status=transaction.status,
+        borrowed_at=transaction.borrowed_at,
+        expected_return=transaction.expected_return,
+        returned_at=transaction.returned_at,
+        overdue_notified=transaction.overdue_notified,
+        notes=transaction.notes,
+        items=item_reads,
+    )
     return tr
 
 
@@ -700,7 +755,19 @@ async def _build_request_read(req: EquipmentRequest, db: AsyncSession) -> Equipm
         item_reads.append(ir)
 
     requester = await db.get(User, req.requester_id)
-    rr = EquipmentRequestRead.model_validate(req)
-    rr.requester_name = requester.full_name if requester else ""
-    rr.items = item_reads
+    approver = await db.get(User, req.approved_by_id) if req.approved_by_id else None
+    rr = EquipmentRequestRead(
+        id=req.id,
+        requester_id=req.requester_id,
+        requester_name=requester.full_name if requester else "",
+        status=req.status,
+        expected_return=req.expected_return,
+        notes=req.notes,
+        requested_at=req.requested_at,
+        approved_by_id=req.approved_by_id,
+        approved_by_name=approver.full_name if approver else "",
+        approved_at=req.approved_at,
+        rejection_reason=req.rejection_reason,
+        items=item_reads,
+    )
     return rr

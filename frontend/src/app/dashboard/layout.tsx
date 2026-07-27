@@ -64,7 +64,7 @@ const navItems: NavItem[] = [
       href: "/dashboard/attendance",
       label: "Attendance",
       icon: CalendarCheck,
-      roles: ["admin", "director", "coach", "student"],
+      roles: ["admin", "director", "staff", "coach", "student"],
       children: [
         {
           href: "/dashboard/attendance/roster",
@@ -96,19 +96,19 @@ const navItems: NavItem[] = [
       href: "/dashboard/admin/fr-config",
       label: "FR Config",
       icon: ScanFace,
-      roles: ["admin", "director"],
+      roles: ["admin", "director", "staff"],
     },
     {
       href: "/dashboard/reports",
       label: "Reports",
       icon: BarChart3,
-      roles: ["admin", "director", "coach"],
+      roles: ["admin", "director", "staff", "coach"],
     },
     {
       href: "/dashboard/analytics",
       label: "Analytics",
       icon: TrendingUp,
-      roles: ["admin", "director", "coach"],
+      roles: ["admin", "director", "staff", "coach"],
     },
     {
       href: "/dashboard/facilities",
@@ -120,7 +120,7 @@ const navItems: NavItem[] = [
       href: "/dashboard/eligibility",
       label: "Eligibility",
       icon: ShieldCheck,
-      roles: ["admin", "director", "coach", "student"],
+      roles: ["admin", "director", "staff", "coach", "student"],
     },
     {
       href: "/dashboard/incidents",
@@ -132,7 +132,7 @@ const navItems: NavItem[] = [
       href: "/dashboard/sanctions",
       label: "Sanctions",
       icon: Gavel,
-      roles: ["admin", "director", "coach", "student"],
+      roles: ["admin", "director", "staff", "coach", "student"],
     },
     {
       href: "/dashboard/audit-logs",

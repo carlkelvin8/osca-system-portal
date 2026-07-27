@@ -76,6 +76,7 @@ class Settings(BaseSettings):
 
     # --- MinIO ---
     MINIO_ENDPOINT: str = "minio:9000"
+    MINIO_PUBLIC_ENDPOINT: str = "localhost:9000"
     MINIO_ACCESS_KEY: str
     MINIO_SECRET_KEY: str
     MINIO_BUCKET_FACES: str = "osca-faces"

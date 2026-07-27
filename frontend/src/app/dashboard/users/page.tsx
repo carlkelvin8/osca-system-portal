@@ -33,6 +33,8 @@ import {
   ChevronRight,
   Loader2,
   ShieldCheck,
+  Trash2,
+  AlertTriangle,
 } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 
@@ -552,16 +554,76 @@ function FaceEnrollModal({
   );
 }
 
+// ── Delete User Confirmation Modal ─────────────────────────────────────────────
+
+function DeleteUserModal({
+  user,
+  onConfirm,
+  onCancel,
+  isDeleting,
+}: {
+  user: UserSummary;
+  onConfirm: () => void;
+  onCancel: () => void;
+  isDeleting: boolean;
+}) {
+  return (
+    <Modal title="Delete User Account" onClose={onCancel}>
+      <div className="p-6 space-y-4">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+            <AlertTriangle size={20} className="text-red-600" />
+          </div>
+          <div>
+            <p className="text-sm text-[#111827] font-medium">
+              Are you sure you want to permanently delete this account?
+            </p>
+            <p className="text-sm text-[#6b7280] mt-1">
+              This will permanently remove <strong>{user.full_name}</strong> ({user.email}) from the
+              system. This action cannot be undone.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex gap-3 pt-2">
+          <button onClick={onCancel} className={btnSecondary + " flex-1 justify-center"}>
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={isDeleting}
+            className="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition disabled:opacity-60 flex-1 justify-center"
+          >
+            {isDeleting ? (
+              <>
+                <Loader2 size={14} className="animate-spin" /> Deleting…
+              </>
+            ) : (
+              <>
+                <Trash2 size={14} /> Delete Account
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 // ── Row actions ───────────────────────────────────────────────────────────────
 
 function UserRow({
   user,
   onEnroll,
   onToggleActive,
+  onDelete,
+  canDelete,
 }: {
   user: UserSummary;
   onEnroll: (u: UserSummary) => void;
   onToggleActive: (u: UserSummary) => void;
+  onDelete: (u: UserSummary) => void;
+  canDelete: boolean;
 }) {
   return (
     <tr className="hover:bg-[#f9fafb] transition-colors">
@@ -628,6 +690,16 @@ function UserRow({
           >
             {user.is_active ? <UserX size={15} /> : <UserCheck size={15} />}
           </button>
+          {/* Delete permanently */}
+          {canDelete && (
+            <button
+              title="Delete Account"
+              onClick={() => onDelete(user)}
+              className="p-1.5 text-[#6b7280] hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+            >
+              <Trash2 size={15} />
+            </button>
+          )}
         </div>
       </td>
     </tr>
@@ -636,18 +708,21 @@ function UserRow({
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-type Tab = "all" | "pending";
+type Tab = "approved" | "pending";
 
 export default function UsersPage() {
   const qc = useQueryClient();
   const { user: currentUser } = useAuthStore();
-  const [tab, setTab] = useState<Tab>("all");
+  const [tab, setTab] = useState<Tab>("approved");
   const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState<UserRole | "">("");
   const [page, setPage] = useState(1);
   const [showCreate, setShowCreate] = useState(false);
   const [enrollUser, setEnrollUser] = useState<UserSummary | null>(null);
+  const [deleteUser, setDeleteUser] = useState<UserSummary | null>(null);
 
   const canCreateUsers = currentUser && (CREATOR_ROLE_LIMITS[currentUser.role]?.length ?? 0) > 0;
+  const canDeleteUsers = currentUser && ["admin", "staff", "director"].includes(currentUser.role);
 
   // ── Data fetching ───────────────────────────────────────────────────────────
 
@@ -655,12 +730,14 @@ export default function UsersPage() {
     page,
     page_size: 20,
     ...(search ? { search } : {}),
-    // Filter by is_active for pending tab — backend should support this param
-    ...(tab === "pending" ? { is_active: false } : {}),
+    // Filter by is_active based on tab
+    ...(tab === "approved" ? { is_active: true } : tab === "pending" ? { is_active: false } : {}),
+    // Filter by role
+    ...(roleFilter ? { role: roleFilter } : {}),
   };
 
   const { data, isLoading } = useQuery<PaginatedResponse<UserSummary>>({
-    queryKey: ["users", tab, page, search],
+    queryKey: ["users", tab, page, search, roleFilter],
     queryFn: async () => {
       const res = await usersApi.list(queryParams);
       return res.data;
@@ -678,6 +755,18 @@ export default function UsersPage() {
       }
     },
     onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["users"] });
+    },
+  });
+
+  // ── Delete permanently ──────────────────────────────────────────────────────
+
+  const deletePermanently = useMutation({
+    mutationFn: async (user: UserSummary) => {
+      await usersApi.deletePermanently(user.id);
+    },
+    onSuccess: () => {
+      setDeleteUser(null);
       qc.invalidateQueries({ queryKey: ["users"] });
     },
   });
@@ -710,11 +799,11 @@ export default function UsersPage() {
         )}
       </div>
 
-      {/* Tabs + Search */}
+      {/* Tabs + Search + Role Filter */}
       <div className="flex items-center gap-3 flex-wrap">
         {/* Tabs */}
         <div className="flex gap-1 bg-[#f3f4f6] p-1 rounded-lg">
-          {(["all", "pending"] as Tab[]).map((t) => (
+          {(["approved", "pending"] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => {
@@ -726,8 +815,8 @@ export default function UsersPage() {
                 : "text-[#6b7280] hover:text-[#374151]"
                 }`}
             >
-              {t === "all" ? "All Users" : "Pending Approval"}
-              {t === "all" && data && (
+              {t === "approved" ? "Approved Users" : "Pending Approval"}
+              {t === "approved" && data && (
                 <span className="ml-1.5 text-xs text-[#9ca3af]">({data.total})</span>
               )}
               {t === "pending" && pendingCount > 0 && (
@@ -738,6 +827,23 @@ export default function UsersPage() {
             </button>
           ))}
         </div>
+
+        {/* Role Filter */}
+        <select
+          value={roleFilter}
+          onChange={(e) => {
+            setRoleFilter(e.target.value as UserRole | "");
+            setPage(1);
+          }}
+          className="border border-[#d1d5db] rounded-lg px-3 py-2 text-sm text-[#111827] bg-white focus:outline-none focus:ring-2 focus:ring-[#2563eb]"
+        >
+          <option value="">All Roles</option>
+          {ALL_ROLES.map((r) => (
+            <option key={r} value={r}>
+              {roleLabel[r]}
+            </option>
+          ))}
+        </select>
 
         {/* Search */}
         <div className="relative flex-1 max-w-xs">
@@ -762,8 +868,7 @@ export default function UsersPage() {
           <div className="px-5 py-3 bg-amber-50 border-b border-amber-100 flex items-center gap-2">
             <ShieldCheck size={15} className="text-amber-600 shrink-0" />
             <p className="text-xs text-amber-800">
-              Students below have registered and are awaiting Admin activation before they can log
-              in. Click the activate icon to approve.
+              Users below are awaiting approval before they can log in. Click the activate icon to approve.
             </p>
           </div>
         )}
@@ -817,6 +922,8 @@ export default function UsersPage() {
                     user={u}
                     onEnroll={setEnrollUser}
                     onToggleActive={(usr) => toggleActive.mutate(usr)}
+                    onDelete={setDeleteUser}
+                    canDelete={!!canDeleteUsers}
                   />
                 ))
               )}
@@ -854,6 +961,14 @@ export default function UsersPage() {
       {showCreate && <CreateUserModal onClose={() => setShowCreate(false)} />}
       {enrollUser && (
         <FaceEnrollModal user={enrollUser} onClose={() => setEnrollUser(null)} />
+      )}
+      {deleteUser && (
+        <DeleteUserModal
+          user={deleteUser}
+          onConfirm={() => deletePermanently.mutate(deleteUser)}
+          onCancel={() => setDeleteUser(null)}
+          isDeleting={deletePermanently.isPending}
+        />
       )}
     </div>
   );

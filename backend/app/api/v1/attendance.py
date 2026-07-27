@@ -49,7 +49,13 @@ logger = structlog.get_logger(__name__)
 
 def _get_fr_service(request: Request) -> FacialRecognitionService:
     """Retrieve pre-warmed FR service from app state."""
-    return request.app.state.fr_service
+    svc = getattr(request.app.state, "fr_service", None)
+    if svc is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Facial recognition service is not available. The model failed to load at startup.",
+        )
+    return svc
 
 
 # ── Sessions ──────────────────────────────────────────────────────────────────
@@ -153,10 +159,16 @@ async def enroll_face(
             raise HTTPException(status_code=400, detail="Invalid base64 image data")
 
     # Generate embedding
-    embedding, model_used, minio_keys = await fr_service.enroll_face(
-        user_id=str(body.user_id),
-        images_bytes=images_bytes,
-    )
+    try:
+        embedding, model_used, minio_keys = await fr_service.enroll_face(
+            user_id=str(body.user_id),
+            images_bytes=images_bytes,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        logger.error("face_enroll_failed", error=str(e))
+        raise HTTPException(status_code=500, detail="Face enrollment failed due to an internal error.")
 
     # Upsert embedding
     existing = await db.execute(select(FaceEmbedding).where(FaceEmbedding.user_id == body.user_id))

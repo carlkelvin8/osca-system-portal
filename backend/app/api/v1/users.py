@@ -21,6 +21,13 @@ from app.services.storage_service import StorageService
 
 router = APIRouter()
 
+_storage = StorageService()
+
+
+def _resolve_user_profile_urls(user: User) -> None:
+    """Resolve stored profile picture key to a fresh presigned URL on the User model."""
+    user.profile_picture_url = _storage.resolve_profile_picture_url(user.profile_picture_url)
+
 
 @router.post(
     "/register",
@@ -41,13 +48,14 @@ async def create_user(
     # Others     → cannot create users
 
     if current_user is None:
-        # Self-registration — force student role regardless of what was sent
+        # Self-registration — force student role and require approval
         if body.role != UserRole.STUDENT:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Self-registration is only available for students.",
             )
         body.role = UserRole.STUDENT
+        body.is_active = False  # Must be approved by admin/staff/director
     else:
         # Authenticated caller — check what roles they may assign
         if current_user.role == UserRole.ADMIN:
@@ -68,6 +76,12 @@ async def create_user(
     existing = await db.execute(select(User).where(User.email == body.email))
     if existing.scalar_one_or_none():
         raise ConflictError("Email already registered")
+
+    # Check student_id uniqueness (for students)
+    if body.student_id:
+        existing_sid = await db.execute(select(User).where(User.student_id == body.student_id))
+        if existing_sid.scalar_one_or_none():
+            raise ConflictError("Student ID already registered")
 
     # Prevent self-promotion to admin during self-registration
     # (proper enforcement done via auth middleware in production)
@@ -125,6 +139,9 @@ async def list_users(
     result = await db.execute(query)
     users = result.scalars().all()
 
+    for u in users:
+        _resolve_user_profile_urls(u)
+
     return PaginatedResponse(
         items=[UserSummary.model_validate(u) for u in users],
         total=total,
@@ -148,6 +165,7 @@ async def get_user(
     user = result.scalar_one_or_none()
     if not user:
         raise NotFoundError("User", str(user_id))
+    _resolve_user_profile_urls(user)
     return UserRead.model_validate(user)
 
 
@@ -183,6 +201,7 @@ async def update_user(
     ))
     await db.commit()
     await db.refresh(user)
+    _resolve_user_profile_urls(user)
     return UserRead.model_validate(user)
 
 
@@ -206,6 +225,30 @@ async def deactivate_user(
     ))
     await db.commit()
     return MessageResponse(message=f"User {user.full_name} deactivated")
+
+
+@router.delete("/{user_id}/permanent", response_model=MessageResponse, summary="Permanently delete user (Admin/Staff/Director)")
+async def delete_user_permanently(
+    user_id: uuid.UUID,
+    _admin: AdminOnly,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> MessageResponse:
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise NotFoundError("User", str(user_id))
+
+    # Prevent self-deletion
+    # (checked via _admin but explicit for clarity)
+    db.add(AuditLog(
+        action="USER_DELETED",
+        resource_type="User",
+        resource_id=str(user_id),
+        status="success",
+    ))
+    await db.delete(user)
+    await db.commit()
+    return MessageResponse(message=f"User {user.full_name} has been permanently deleted")
 
 
 @router.put(
@@ -251,14 +294,8 @@ async def upload_profile_picture(
         content_type=file.content_type,
     )
 
-    # Build presigned URL for the response
-    profile_url = storage.get_presigned_url(
-        bucket="osca-profile-pictures",
-        key=key,
-        expires_in=3600,
-    )
-
-    user.profile_picture_url = profile_url
+    # Store the object key (not presigned URL) so it never expires
+    user.profile_picture_url = key
     db.add(AuditLog(
         user_id=current_user.id,
         action="PROFILE_PICTURE_UPDATED",
@@ -268,4 +305,5 @@ async def upload_profile_picture(
     ))
     await db.commit()
     await db.refresh(user)
+    _resolve_user_profile_urls(user)
     return UserRead.model_validate(user)

@@ -1,9 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { motion } from "framer-motion";
+
+/* ═══ HERO CAROUSEL IMAGES ═══ */
+const HERO_SLIDES = [
+  { src: "/osca_pic.jpg", alt: "OSCA Sports and Cultural Affairs" },
+  { src: "/osca_pic2.jpg", alt: "OSCA Athletic Events" },
+  { src: "/osca_pic3.jpg", alt: "OSCA Cultural Performances" },
+];
 
 /* ═══ NAV LINKS ═══ */
 const LEFT_LINKS = [
@@ -21,6 +28,32 @@ const RIGHT_LINKS = [
 /* ═══ MAIN PAGE ═══ */
 export default function WelcomeClient() {
   const [active, setActive] = useState("Home");
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const goTo = useCallback((idx: number) => {
+    setCurrentSlide(idx);
+  }, []);
+
+  const goNext = useCallback(() => {
+    setCurrentSlide((prev) => (prev + 1) % HERO_SLIDES.length);
+  }, []);
+
+  const goPrev = useCallback(() => {
+    setCurrentSlide((prev) => (prev - 1 + HERO_SLIDES.length) % HERO_SLIDES.length);
+  }, []);
+
+  useEffect(() => {
+    if (isPaused) {
+      if (timerRef.current) clearInterval(timerRef.current);
+      return;
+    }
+    timerRef.current = setInterval(goNext, 5000);
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [isPaused, goNext]);
 
   return (
     <div style={{ fontFamily: "'Inter', system-ui, sans-serif", background: "#ffffff", color: "#0f1b2d", minHeight: "100vh" }}>
@@ -76,20 +109,145 @@ export default function WelcomeClient() {
   </div>
 </nav>
 
-      {/* ─── HERO (photo background, bold overlay) ─── */}
+      {/* ─── HERO CAROUSEL ─── */}
       <section
+        onMouseEnter={() => setIsPaused(true)}
+        onMouseLeave={() => setIsPaused(false)}
         style={{
           position: "relative",
           minHeight: 440,
-          backgroundImage: "linear-gradient(180deg, rgba(13,31,60,0.3) 0%, rgba(13,31,60,0.8) 100%), url('/osca_pic.jpg')",
-          backgroundSize: "cover",
-          backgroundPosition: "center",
+          overflow: "hidden",
           display: "flex",
           alignItems: "flex-end",
           padding: "0 0 48px",
         }}
       >
-        <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px", width: "100%" }}>
+        {/* Slides */}
+        {HERO_SLIDES.map((slide, idx) => (
+          <div
+            key={idx}
+            style={{
+              position: "absolute",
+              inset: 0,
+              opacity: currentSlide === idx ? 1 : 0,
+              transition: "opacity 0.8s ease-in-out",
+              pointerEvents: currentSlide === idx ? "auto" : "none",
+            }}
+          >
+            <Image
+              src={slide.src}
+              alt={slide.alt}
+              fill
+              style={{ objectFit: "cover" }}
+              priority={idx === 0}
+              sizes="100vw"
+            />
+          </div>
+        ))}
+
+        {/* Gradient overlay */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: "linear-gradient(180deg, rgba(13,31,60,0.3) 0%, rgba(13,31,60,0.8) 100%)",
+            pointerEvents: "none",
+          }}
+        />
+
+        {/* Prev / Next arrows */}
+        <button
+          onClick={goPrev}
+          aria-label="Previous slide"
+          style={{
+            position: "absolute",
+            left: 16,
+            top: "50%",
+            transform: "translateY(-50%)",
+            zIndex: 10,
+            background: "rgba(0,0,0,0.35)",
+            border: "none",
+            borderRadius: "50%",
+            width: 40,
+            height: 40,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+            color: "#fff",
+            fontSize: 18,
+            lineHeight: 1,
+            backdropFilter: "blur(4px)",
+            transition: "background 0.2s",
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(0,0,0,0.6)"; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(0,0,0,0.35)"; }}
+        >
+          &#8249;
+        </button>
+        <button
+          onClick={goNext}
+          aria-label="Next slide"
+          style={{
+            position: "absolute",
+            right: 16,
+            top: "50%",
+            transform: "translateY(-50%)",
+            zIndex: 10,
+            background: "rgba(0,0,0,0.35)",
+            border: "none",
+            borderRadius: "50%",
+            width: 40,
+            height: 40,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+            color: "#fff",
+            fontSize: 18,
+            lineHeight: 1,
+            backdropFilter: "blur(4px)",
+            transition: "background 0.2s",
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(0,0,0,0.6)"; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(0,0,0,0.35)"; }}
+        >
+          &#8250;
+        </button>
+
+        {/* Pagination dots */}
+        <div
+          style={{
+            position: "absolute",
+            bottom: 16,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 10,
+            display: "flex",
+            gap: 8,
+          }}
+        >
+          {HERO_SLIDES.map((_, idx) => (
+            <button
+              key={idx}
+              onClick={() => goTo(idx)}
+              aria-label={`Go to slide ${idx + 1}`}
+              style={{
+                width: currentSlide === idx ? 24 : 10,
+                height: 10,
+                borderRadius: 5,
+                border: "none",
+                background: currentSlide === idx ? "#C9A84C" : "rgba(255,255,255,0.5)",
+                cursor: "pointer",
+                transition: "all 0.3s ease",
+                padding: 0,
+              }}
+            />
+          ))}
+        </div>
+
+        {/* Text overlay */}
+        <div style={{ position: "relative", zIndex: 5, maxWidth: 1280, margin: "0 auto", padding: "0 24px", width: "100%" }}>
           <motion.h1
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}
             style={{ fontSize: "clamp(28px, 5vw, 46px)", fontWeight: 900, lineHeight: 1.15, color: "#fff", textShadow: "0 2px 12px rgba(0,0,0,0.4)", marginBottom: 10 }}
@@ -101,7 +259,7 @@ export default function WelcomeClient() {
             style={{ fontSize: "clamp(28px, 5vw, 46px)", fontWeight: 900, lineHeight: 1.15, marginBottom: 24 }}
           >
            <span style={{ color: "#C9A84C" }}>
-  OFFICE <span style={{ color: "#fff", textShadow: "0 2px 12px rgba(0,0,0,0.4)" }}>of</span> SPORTS <span style={{ color: "#fff", textShadow: "0 2px 12px rgba(0,0,0,0.4)" }}>AND</span> CULTURAL AFFAIRS<span style={{ color: "#fff", textShadow: "0 2px 12px rgba(0,0,0,0.4)" }}>!</span>
+  OFFICE <span style={{ color: "#fff", textShadow: "0 2px 12px rgba(0,0,0,0.4)" }}>of</span> SPORTS <span style={{ color: "#fff", textShadow: "0 2px 12px rgba(0,0,0,0.4)" }}>AND</span> CULTURAL AFFAIRS
 </span>
           </motion.h1>
           <motion.div
@@ -111,7 +269,7 @@ export default function WelcomeClient() {
             <Link href="/register" style={{ padding: "14px 28px", fontWeight: 700, fontSize: 13, letterSpacing: "0.02em", color: "#fff", background: "#1d4ed8", borderRadius: 6, textDecoration: "none", textTransform: "uppercase" }}>
               Create Account
             </Link>
-            <Link href="/schedules" style={{ padding: "14px 28px", fontWeight: 700, fontSize: 13, letterSpacing: "0.02em", color: "#0d1f3c", background: "#C9A84C", borderRadius: 6, textDecoration: "none", textTransform: "uppercase" }}>
+            <Link href="/login" style={{ padding: "14px 28px", fontWeight: 700, fontSize: 13, letterSpacing: "0.02em", color: "#0d1f3c", background: "#C9A84C", borderRadius: 6, textDecoration: "none", textTransform: "uppercase" }}>
               Sign In
             </Link>
           </motion.div>
@@ -204,9 +362,8 @@ export default function WelcomeClient() {
         {/* Trainers */}
         <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}>
           <h3 style={{ fontSize: 13, fontWeight: 700, color: "#0d1f3c", textTransform: "uppercase", letterSpacing: "0.08em", textAlign: "center", marginBottom: 18 }}>Trainers</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 12 }}>
             {[
-              { name: "JONATHAN IVAN LUKE MANEJA", role: "Trainer of Musika Himpapawid" },
               { name: "JOHANN CINCO", role: "Choir Conduction of Himig Himpapawid" },
             ].map((trainer, i) => (
               <motion.div

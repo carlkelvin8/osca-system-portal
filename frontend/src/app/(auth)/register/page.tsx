@@ -17,6 +17,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import Link from "next/link";
 import Webcam from "react-webcam";
+import Cropper from "react-easy-crop";
 import { usersApi, attendanceApi, authApi } from "@/lib/api";
 import Cookies from "js-cookie";
 import {
@@ -28,14 +29,17 @@ import {
   RotateCcw,
   ArrowLeft,
   ImagePlus,
+  Eye,
+  EyeOff,
+  Crop,
 } from "lucide-react";
 import type { UserRole } from "@/types";
 
 // ── Role options (no admin) ────────────────────────────────────────────────────
 
-const REGISTRATION_ROLES: { value: UserRole; label: string }[] = [
-  { value: "student", label: "Student Athlete" },
-  { value: "student", label: "Student Artist" },
+const REGISTRATION_ROLES: { value: string; label: string }[] = [
+  { value: "student_athlete", label: "Student Athlete" },
+  { value: "student_artist", label: "Student Artist" },
 ];
 
 // ── Sports / Cultural Affairs options (for searchable Sport / Art field) ───────
@@ -68,7 +72,7 @@ const SPORTS_OPTIONS: { group: string; items: string[] }[] = [
 
 const registerSchema = z
   .object({
-    role: z.enum(["student", "coach", "pe_instructor", "director"], {
+    role: z.enum(["student_athlete", "student_artist", "coach", "pe_instructor", "director"], {
       required_error: "Please select a role",
     }),
     first_name: z.string().min(2, "First name is required"),
@@ -104,7 +108,7 @@ const registerSchema = z
     path: ["confirmPassword"],
   })
   .superRefine((data, ctx) => {
-    if (data.role === "student") {
+    if (data.role === "student_athlete" || data.role === "student_artist") {
       if (!data.student_id || data.student_id.length < 4) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -135,6 +139,24 @@ type RegisterForm = z.infer<typeof registerSchema>;
 
 const STEPS = ["Account", "Profile", "Emergency & Consent", "Profile Picture", "Face Enrollment"];
 const CAPTURE_COUNT = 5;
+
+function getCroppedImg(imageSrc: string, pixelCrop: { x: number; y: number; width: number; height: number }): Promise<File> {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.crossOrigin = "anonymous";
+    image.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = pixelCrop.width;
+      canvas.height = pixelCrop.height;
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(image, pixelCrop.x, pixelCrop.y, pixelCrop.width, pixelCrop.height, 0, 0, pixelCrop.width, pixelCrop.height);
+      canvas.toBlob((blob) => {
+        resolve(new File([blob!], "profile.jpg", { type: "image/jpeg" }));
+      }, "image/jpeg", 0.92);
+    };
+    image.src = imageSrc;
+  });
+}
 
 // ── Field helper ───────────────────────────────────────────────────────────────
 
@@ -171,9 +193,11 @@ const inputCls =
 function SportCombobox({
   control,
   name,
+  filterGroup,
 }: {
   control: Control<RegisterForm>;
   name: "sport_or_art";
+  filterGroup?: "Sports" | "Cultural Affairs";
 }) {
   const { field } = useController({ control, name });
   const [open, setOpen] = useState(false);
@@ -194,7 +218,11 @@ function SportCombobox({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const filtered = SPORTS_OPTIONS.map((g) => ({
+  const sourceOptions = filterGroup
+    ? SPORTS_OPTIONS.filter((g) => g.group === filterGroup)
+    : SPORTS_OPTIONS;
+
+  const filtered = sourceOptions.map((g) => ({
     group: g.group,
     items: g.items.filter((item) =>
       item.toLowerCase().includes(query.toLowerCase())
@@ -256,11 +284,21 @@ export default function RegisterPage() {
   const [captures, setCaptures] = useState<string[]>([]);
   const [enrolling, setEnrolling] = useState(false);
   const [createdUserId, setCreatedUserId] = useState<string | null>(null);
+  const [enrollError, setEnrollError] = useState<string | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Profile picture state
   const profilePicInputRef = useRef<HTMLInputElement>(null);
   const [profilePicFile, setProfilePicFile] = useState<File | null>(null);
   const [profilePicPreview, setProfilePicPreview] = useState<string | null>(null);
+
+  // Crop state
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<{ width: number; height: number; x: number; y: number } | null>(null);
 
   const {
     register,
@@ -272,15 +310,16 @@ export default function RegisterPage() {
   } = useForm<RegisterForm>({
     resolver: zodResolver(registerSchema),
     mode: "onTouched",
-    defaultValues: { role: "student" },
+    defaultValues: { role: "student_athlete" },
   });
 
   const selectedRole = watch("role");
+  const isStudent = selectedRole === "student_athlete" || selectedRole === "student_artist";
 
   // Fields per step — used for per-step validation before advancing
   const stepFields: (keyof RegisterForm)[][] = [
     ["email", "password", "confirmPassword", "role"],
-    selectedRole === "student"
+    isStudent
       ? ["first_name", "last_name", "student_id", "course", "year_level", "sport_or_art"]
       : ["first_name", "last_name", "sport_or_art"],
     ["emergency_contact_name", "emergency_contact_number", "biometric_consent"],
@@ -318,7 +357,7 @@ export default function RegisterPage() {
         first_name: data.first_name,
         last_name: data.last_name,
         middle_name: data.middle_name || undefined,
-        role: data.role,
+        role: data.role === "student_athlete" || data.role === "student_artist" ? "student" : data.role,
         sport_or_art: data.sport_or_art,
         medical_info: data.medical_info || undefined,
         emergency_contact_name: data.emergency_contact_name,
@@ -328,7 +367,7 @@ export default function RegisterPage() {
       };
 
       // Student-specific fields
-      if (data.role === "student") {
+    if (data.role === "student_athlete" || data.role === "student_artist") {
         createPayload.student_id = data.student_id;
         createPayload.course = data.course;
         createPayload.year_level = data.year_level;
@@ -358,8 +397,6 @@ export default function RegisterPage() {
       // 3. Upload profile picture (optional)
       if (profilePicFile) {
         try {
-          const formData = new FormData();
-          formData.append("file", profilePicFile);
           await usersApi.uploadProfilePicture(newUser.id, profilePicFile);
         } catch {
           // Profile picture upload is non-critical — continue
@@ -367,18 +404,20 @@ export default function RegisterPage() {
       }
 
       // 4. Enroll face — wrapped so we can always clean up tokens
+      setEnrolling(true);
+      let faceEnrolled = false;
       try {
         const images = captures.map((c) => c.split(",")[1]);
         await attendanceApi.enroll({ user_id: newUser.id, images_base64: images });
+        faceEnrolled = true;
       } catch (frErr: unknown) {
-        // Face enrollment failed but account was created — surface the FR error
-        // and still fall through to token cleanup + success state so the user
-        // can log in and retry enrollment later from the dashboard.
         const frMsg =
           (frErr as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
           "Face enrollment failed. You can retry from the dashboard after logging in.";
+        setEnrollError(frMsg);
         console.warn("Face enrollment error:", frMsg);
       }
+      setEnrolling(false);
 
       // 5. Always clean up auth tokens (user should login manually)
       Cookies.remove("access_token");
@@ -404,9 +443,23 @@ export default function RegisterPage() {
         <div className="relative z-10 bg-white/[0.03] backdrop-blur-xl border border-white/[0.08] rounded-3xl p-10 w-full max-w-md text-center shadow-[0_8px_60px_rgba(0,0,0,0.4)]">
           <CheckCircle2 size={52} className="text-green-400 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-white mb-2">Registration Complete</h2>
-          <p className="text-sm text-white/50 mb-1">
-            Your account has been created and your face has been enrolled.
-          </p>
+          {enrollError ? (
+            <>
+              <p className="text-sm text-white/50 mb-1">
+                Your account has been created.
+              </p>
+              <p className="text-sm text-amber-400 mb-1">
+                Face enrollment was not successful.
+              </p>
+              <p className="text-xs text-white/40 mb-6">
+                {enrollError}
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-white/50 mb-6">
+              Your account has been created and your face has been enrolled.
+            </p>
+          )}
           <p className="text-sm text-white/50 mb-6">
             You can now sign in with your credentials.
           </p>
@@ -542,22 +595,40 @@ export default function RegisterPage() {
                 />
               </Field>
               <Field label="Password" error={errors.password?.message} required>
-                <input
-                  {...register("password")}
-                  type="password"
-                  autoComplete="new-password"
-                  placeholder="Min 8 chars, 1 uppercase, 1 number"
-                  className={inputCls}
-                />
+                <div className="relative">
+                  <input
+                    {...register("password")}
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="new-password"
+                    placeholder="Min 8 chars, 1 uppercase, 1 number"
+                    className={inputCls + " pr-11"}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/25 hover:text-white/60 transition-colors"
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
               </Field>
               <Field label="Confirm Password" error={errors.confirmPassword?.message} required>
-                <input
-                  {...register("confirmPassword")}
-                  type="password"
-                  autoComplete="new-password"
-                  placeholder="Re-enter password"
-                  className={inputCls}
-                />
+                <div className="relative">
+                  <input
+                    {...register("confirmPassword")}
+                    type={showConfirmPassword ? "text" : "password"}
+                    autoComplete="new-password"
+                    placeholder="Re-enter password"
+                    className={inputCls + " pr-11"}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/25 hover:text-white/60 transition-colors"
+                  >
+                    {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
               </Field>
             </>
           )}
@@ -566,7 +637,7 @@ export default function RegisterPage() {
           {step === 1 && (
             <>
               <p className="text-sm font-semibold text-white">
-                {selectedRole === "student" ? "Student Profile" : "User Profile"}
+                {isStudent ? "Student Profile" : "User Profile"}
               </p>
               <div className="grid grid-cols-2 gap-3">
                 <Field label="First Name" error={errors.first_name?.message} required>
@@ -581,7 +652,7 @@ export default function RegisterPage() {
               </Field>
 
               {/* Student-specific fields */}
-              {selectedRole === "student" && (
+              {isStudent && (
                 <>
                   <Field label="Student ID" error={errors.student_id?.message} required>
                     <input
@@ -623,7 +694,11 @@ export default function RegisterPage() {
               )}
 
               <Field label="Sport / Art" error={errors.sport_or_art?.message} required>
-                <SportCombobox control={control} name="sport_or_art" />
+                <SportCombobox
+                  control={control}
+                  name="sport_or_art"
+                  filterGroup={selectedRole === "student_athlete" ? "Sports" : selectedRole === "student_artist" ? "Cultural Affairs" : undefined}
+                />
               </Field>
 
               <Field label="Contact Number" error={errors.contact_number?.message}>
@@ -718,8 +793,8 @@ export default function RegisterPage() {
               <div className="flex items-start gap-2 bg-[#fdf6e8] border border-[#e9d9a8] rounded-xl p-3">
                 <ImagePlus size={16} className="text-[#1d4ed8] mt-0.5 shrink-0" />
                 <p className="text-xs text-[#6b5424] leading-relaxed">
-                  Upload a clear photo of yourself. This will be used as your profile picture
-                  across the system. You can skip this step and add one later.
+                  Upload a clear photo of yourself. You can crop it to fit. This will be used as
+                  your profile picture across the system. You can skip this step and add one later.
                 </p>
               </div>
 
@@ -764,9 +839,12 @@ export default function RegisterPage() {
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (file) {
-                      setProfilePicFile(file);
                       const reader = new FileReader();
-                      reader.onload = (ev) => setProfilePicPreview(ev.target?.result as string);
+                      reader.onload = (ev) => {
+                        setCropSrc(ev.target?.result as string);
+                        setCrop({ x: 0, y: 0 });
+                        setZoom(1);
+                      };
                       reader.readAsDataURL(file);
                     }
                   }}
@@ -810,7 +888,13 @@ export default function RegisterPage() {
                   screenshotFormat="image/jpeg"
                   videoConstraints={{ facingMode: "user", width: 640, height: 360 }}
                   className="w-full h-full object-cover"
+                  onUserMediaError={() => setCameraError("Camera access denied. Please allow camera permissions and try again.")}
                 />
+                {cameraError && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-[#0f172a]/90 p-4">
+                    <p className="text-sm text-red-400 text-center">{cameraError}</p>
+                  </div>
+                )}
                 {/* Face guide overlay */}
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                   <div className="w-40 h-52 border-2 border-white/40 rounded-full" />
@@ -876,6 +960,18 @@ export default function RegisterPage() {
             </div>
           )}
 
+          {/* Show form validation errors when on last step */}
+          {step === STEPS.length - 1 && Object.keys(errors).length > 0 && (
+            <div className="bg-red-500/10 border border-red-500/20 text-red-300 text-sm px-4 py-3 rounded-xl">
+              <p className="font-semibold mb-1">Please fix the following:</p>
+              <ul className="list-disc list-inside text-xs space-y-0.5">
+                {Object.entries(errors).map(([field, err]) => (
+                  <li key={field}>{(err as { message?: string })?.message ?? `${field} is invalid`}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {/* ── Navigation buttons ──────────────────────────────────────────── */}
           <div className="flex gap-3 pt-2">
             {step > 0 && (
@@ -914,6 +1010,69 @@ export default function RegisterPage() {
             </Link>
           </p>
         </form>
+
+        {/* ── Crop Modal ─────────────────────────────────────────────── */}
+        {cropSrc && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+            <div className="bg-[#0d1f3c] border border-white/10 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+              <div className="px-5 pt-5 pb-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <Crop size={16} className="text-[#C9A84C]" />
+                  <p className="text-sm font-semibold text-white">Crop your photo</p>
+                </div>
+                <p className="text-xs text-white/40">Drag to reposition, scroll to zoom</p>
+              </div>
+              <div className="relative w-full h-72 bg-black">
+                <Cropper
+                  image={cropSrc}
+                  crop={crop}
+                  zoom={zoom}
+                  aspect={1}
+                  cropShape="round"
+                  onCropChange={setCrop}
+                  onZoomChange={setZoom}
+                  onCropComplete={(_cropped, croppedPixels) => setCroppedAreaPixels(croppedPixels)}
+                />
+              </div>
+              <div className="px-5 py-3">
+                <input
+                  type="range"
+                  min={1}
+                  max={3}
+                  step={0.1}
+                  value={zoom}
+                  onChange={(e) => setZoom(Number(e.target.value))}
+                  className="w-full accent-[#C9A84C]"
+                />
+              </div>
+              <div className="flex gap-3 px-5 pb-5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCropSrc(null);
+                    if (profilePicInputRef.current) profilePicInputRef.current.value = "";
+                  }}
+                  className="flex-1 border border-white/10 text-white/70 text-sm font-medium py-2.5 rounded-xl hover:bg-white/5 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!cropSrc || !croppedAreaPixels) return;
+                    const croppedFile = await getCroppedImg(cropSrc, croppedAreaPixels);
+                    setProfilePicFile(croppedFile);
+                    setProfilePicPreview(URL.createObjectURL(croppedFile));
+                    setCropSrc(null);
+                  }}
+                  className="flex-1 bg-gradient-to-r from-[#1d4ed8] to-[#0d1f3c] hover:from-[#C9A84C] hover:to-[#132a4d] text-white text-sm font-semibold py-2.5 rounded-xl transition shadow-lg shadow-[#1d4ed8]/25"
+                >
+                  Apply Crop
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
       </div>
     </div>

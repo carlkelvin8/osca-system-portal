@@ -10,7 +10,7 @@ import type { MonthlyInventoryReport } from "@/types";
 export default function ReportsPage() {
   const { user } = useAuthStore();
   const isCoach = user?.role === "coach";
-  const isAdmin = user?.role === "admin" || user?.role === "director";
+  const isAdmin = user?.role === "admin" || user?.role === "director" || user?.role === "staff";
   const sportFilter: Record<string, string> | undefined =
     isCoach && user?.sport_or_art ? { sport_or_art: user.sport_or_art } : undefined;
   const [monthYear, setMonthYear] = useState(() => {

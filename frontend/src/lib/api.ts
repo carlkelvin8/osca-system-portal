@@ -22,6 +22,9 @@ api.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  if (config.data instanceof FormData) {
+    delete config.headers["Content-Type"];
+  }
   return config;
 });
 
@@ -125,12 +128,11 @@ export const usersApi = {
   update: (id: string, data: Record<string, unknown>) =>
     api.patch(`/users/${id}`, data),
   deactivate: (id: string) => api.delete(`/users/${id}`),
+  deletePermanently: (id: string) => api.delete(`/users/${id}/permanent`),
   uploadProfilePicture: (userId: string, file: File) => {
     const formData = new FormData();
     formData.append("file", file);
-    return api.put(`/users/${userId}/profile-picture`, formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
+    return api.put(`/users/${userId}/profile-picture`, formData);
   },
 };
 
@@ -177,6 +179,8 @@ export const inventoryApi = {
     api.get(`/inventory/requests/${id}/qr`, { responseType: "blob" }),
   getRequestByQR: (qrValue: string) =>
     api.get(`/inventory/requests/qr/${encodeURIComponent(qrValue)}`),
+  getRequestsByEquipment: (equipmentId: string) =>
+    api.get(`/inventory/requests/by-equipment/${equipmentId}`),
   approveRequest: (id: string, data?: Record<string, unknown>) =>
     api.put(`/inventory/requests/${id}/approve`, data ?? {}),
   rejectRequest: (id: string, rejection_reason: string) =>
@@ -216,9 +220,7 @@ export const announcementsApi = {
   uploadImage: (id: string, file: File) => {
     const formData = new FormData();
     formData.append("file", file);
-    return api.post(`/announcements/${id}/image`, formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
+    return api.post(`/announcements/${id}/image`, formData);
   },
 };
 

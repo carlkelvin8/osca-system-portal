@@ -1,8 +1,8 @@
 """Inventory and borrowing schemas."""
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
-from pydantic import Field, field_validator
+from pydantic import Field, computed_field, field_validator
 
 from app.models.inventory import (
     EquipmentCategory,
@@ -11,6 +11,8 @@ from app.models.inventory import (
     TransactionStatus,
 )
 from app.schemas.common import OSCABaseModel
+
+REQUEST_QR_EXPIRY_MINUTES = 60
 
 
 # ── Equipment Schemas ──────────────────────────────────────────────────────────
@@ -173,9 +175,20 @@ class EquipmentRequestRead(OSCABaseModel):
     notes: str | None
     requested_at: datetime
     approved_by_id: uuid.UUID | None
+    approved_by_name: str = ""
     approved_at: datetime | None
     rejection_reason: str | None
     items: list[EquipmentRequestItemRead]
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def is_expired(self) -> bool:
+        now = datetime.now(timezone.utc)
+        ra = self.requested_at
+        if ra.tzinfo is None:
+            ra = ra.replace(tzinfo=timezone.utc)
+        expiry = ra + timedelta(minutes=REQUEST_QR_EXPIRY_MINUTES)
+        return now > expiry
 
 
 class ApproveRequestBody(OSCABaseModel):

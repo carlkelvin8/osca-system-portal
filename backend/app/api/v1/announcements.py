@@ -27,7 +27,7 @@ from app.services.storage_service import StorageService
 router = APIRouter()
 logger = structlog.get_logger(__name__)
 
-_EDITOR_ROLES = {UserRole.ADMIN, UserRole.DIRECTOR}
+_EDITOR_ROLES = {UserRole.ADMIN, UserRole.DIRECTOR, UserRole.STAFF}
 
 
 @router.get(

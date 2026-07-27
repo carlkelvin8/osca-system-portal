@@ -197,8 +197,10 @@ export interface EquipmentRequest {
   notes: string | null;
   requested_at: string;
   approved_by_id: string | null;
+  approved_by_name: string;
   approved_at: string | null;
   rejection_reason: string | null;
+  is_expired: boolean;
   items: EquipmentRequestItem[];
 }
 

@@ -36,9 +36,11 @@ from app.schemas.auth import (
 )
 from app.schemas.common import MessageResponse
 from app.schemas.user import UserRead
+from app.services.storage_service import StorageService
 
 router = APIRouter()
 logger = structlog.get_logger(__name__)
+_storage = StorageService()
 
 
 @router.post(
@@ -174,6 +176,7 @@ async def logout(
 
 @router.get("/me", response_model=UserRead, summary="Get current user profile")
 async def me(current_user: CurrentUser) -> UserRead:
+    current_user.profile_picture_url = _storage.resolve_profile_picture_url(current_user.profile_picture_url)
     return UserRead.model_validate(current_user)
 
 

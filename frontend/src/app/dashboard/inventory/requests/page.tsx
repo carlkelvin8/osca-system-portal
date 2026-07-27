@@ -19,19 +19,28 @@ import { format } from "date-fns";
 import { equipmentCache } from "@/lib/offlineStore";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 
+const REQUEST_QR_EXPIRY_MS = 60 * 60 * 1000;
+
 // ── Status badge helper ────────────────────────────────────────────────────────
 
-const statusConfig: Record<RequestStatus, { label: string; className: string; icon: React.ElementType }> = {
+const statusConfig: Record<string, { label: string; className: string; icon: React.ElementType }> = {
   pending:  { label: "Pending",  className: "bg-yellow-100 text-yellow-800", icon: Clock },
   approved: { label: "Approved", className: "bg-green-100 text-green-800",  icon: CheckCircle2 },
   rejected: { label: "Rejected", className: "bg-red-100 text-red-800",      icon: XCircle },
+  expired:  { label: "Expired",  className: "bg-gray-100 text-gray-500",    icon: Clock },
 };
+
+function getRequestStatus(req: EquipmentRequest): string {
+  if (req.status === "pending" && req.is_expired) return "expired";
+  return req.status;
+}
 
 // ── QR Code Display Modal ────────────────────────────────────────────────────
 
-function QRCodeModal({ requestId, onClose }: { requestId: string; onClose: () => void }) {
+function QRCodeModal({ requestId, requestedAt, onClose }: { requestId: string; requestedAt: string; onClose: () => void }) {
   const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [remaining, setRemaining] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -50,6 +59,26 @@ function QRCodeModal({ requestId, onClose }: { requestId: string; onClose: () =>
     return () => { if (qrUrl) URL.revokeObjectURL(qrUrl); };
   }, [qrUrl]);
 
+  useEffect(() => {
+    const iso = requestedAt.includes("Z") || requestedAt.includes("+") ? requestedAt : requestedAt + "Z";
+    const requested = new Date(iso).getTime();
+    const expiresAt = requested + REQUEST_QR_EXPIRY_MS;
+
+    const tick = () => {
+      const left = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
+      setRemaining(left);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [requestedAt]);
+
+  const ready = remaining !== null;
+  const minutes = Math.floor((remaining ?? 0) / 60);
+  const seconds = (remaining ?? 0) % 60;
+  const isExpired = ready && remaining !== null && remaining <= 0;
+  const isUrgent = remaining !== null && remaining > 0 && remaining <= 300;
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
@@ -63,17 +92,32 @@ function QRCodeModal({ requestId, onClose }: { requestId: string; onClose: () =>
           </button>
         </div>
         <p className="text-sm text-gray-500">
-          Show this QR code to the Admin/Director to approve your request.
+          Show this QR code to the OSCA Staff to approve your request.
         </p>
         <div className="flex items-center justify-center py-4">
-          {loading ? (
+          {loading || !ready ? (
             <Loader2 size={40} className="animate-spin text-gray-300" />
-          ) : qrUrl ? (
+          ) : qrUrl && !isExpired ? (
             <img src={qrUrl} alt="Request QR Code" className="w-48 h-48" />
+          ) : isExpired ? (
+            <div className="w-48 h-48 flex flex-col items-center justify-center bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
+              <Clock size={32} className="text-gray-400 mb-2" />
+              <p className="text-sm font-medium text-gray-600">QR Expired</p>
+            </div>
           ) : (
             <p className="text-sm text-red-500">Failed to load QR code</p>
           )}
         </div>
+        {!isExpired ? (
+          <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium ${
+            isUrgent ? "bg-red-100 text-red-700" : "bg-blue-50 text-blue-700"
+          }`}>
+            <Clock size={12} />
+            Expires in {String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}
+          </div>
+        ) : (
+          <p className="text-xs text-red-600">This QR code has expired. Please submit a new request.</p>
+        )}
         <p className="text-xs text-gray-400">Request ID: {requestId.slice(0, 8)}…</p>
       </div>
     </div>
@@ -87,7 +131,12 @@ interface ScannedRequest {
   requester_name: string;
   items: Array<{ equipment_name: string; quantity: number }>;
   expected_return: string;
+  requested_at: string;
   status: RequestStatus;
+  is_expired: boolean;
+  approved_by_name: string;
+  approved_at: string | null;
+  rejection_reason: string | null;
 }
 
 interface ScannedEquipmentInfo {
@@ -103,6 +152,8 @@ function QRScannerModal({ onClose, onApprove }: {
   const [error, setError] = useState<string | null>(null);
   const [scannedRequest, setScannedRequest] = useState<ScannedRequest | null>(null);
   const [scannedEquipment, setScannedEquipment] = useState<ScannedEquipmentInfo | null>(null);
+  const [relatedRequests, setRelatedRequests] = useState<ScannedRequest[]>([]);
+  const [loadingRelated, setLoadingRelated] = useState(false);
   const [scanning, setScanning] = useState(true);
   const readerRef = useRef<import("@zxing/browser").BrowserQRCodeReader | null>(null);
   const controlsRef = useRef<{ stop: () => void } | null>(null);
@@ -180,6 +231,21 @@ function QRScannerModal({ onClose, onApprove }: {
     };
   }, [scanning, stopScanning, isServerReachable]);
 
+  useEffect(() => {
+    if (!scannedEquipment) return;
+    let cancelled = false;
+    setLoadingRelated(true);
+    inventoryApi.getRequestsByEquipment(scannedEquipment.equipment.id).then((res) => {
+      if (cancelled) return;
+      setRelatedRequests(res.data);
+    }).catch(() => {
+      if (!cancelled) setRelatedRequests([]);
+    }).finally(() => {
+      if (!cancelled) setLoadingRelated(false);
+    });
+    return () => { cancelled = true; };
+  }, [scannedEquipment]);
+
   const handleApprove = () => {
     if (!scannedRequest) return;
     onApprove(scannedRequest.id);
@@ -190,6 +256,7 @@ function QRScannerModal({ onClose, onApprove }: {
     setError(null);
     setScannedRequest(null);
     setScannedEquipment(null);
+    setRelatedRequests([]);
     setScanning(true);
   };
 
@@ -261,6 +328,52 @@ function QRScannerModal({ onClose, onApprove }: {
                 )}
                 <p className="font-mono text-xs text-gray-400">{scannedEquipment.equipment.qr_code}</p>
               </div>
+
+              {/* Related Requests */}
+              <div className="p-4 bg-white border border-gray-200 rounded-xl space-y-2">
+                <p className="text-sm font-semibold text-gray-900">Related Requests</p>
+                {loadingRelated ? (
+                  <p className="text-xs text-gray-400 flex items-center gap-1">
+                    <Loader2 size={12} className="animate-spin" /> Loading...
+                  </p>
+                ) : relatedRequests.length === 0 ? (
+                  <p className="text-xs text-gray-400">No requests found for this equipment.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {relatedRequests.map((r) => (
+                      <div key={r.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                        <div className="space-y-0.5">
+                          <p className="text-xs font-medium text-gray-800">{r.requester_name}</p>
+                          <p className="text-xs text-gray-500">
+                            {r.items.find((i) => i.equipment_name === scannedEquipment.equipment.name)
+                              ? `x${r.items.find((i) => i.equipment_name === scannedEquipment.equipment.name)!.quantity}`
+                              : ""} · {format(new Date(r.requested_at), "MMM d, h:mm a")}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {(() => {
+                            const rDisplayStatus = r.status === "pending" && r.is_expired ? "expired" : r.status;
+                            return (
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig[rDisplayStatus].className}`}>
+                                {statusConfig[rDisplayStatus].label}
+                              </span>
+                            );
+                          })()}
+                          {r.status === "pending" && !r.is_expired && (
+                            <button
+                              onClick={() => { onApprove(r.id); onClose(); }}
+                              className="text-xs px-2 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+                            >
+                              Approve
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div className="flex justify-end gap-3">
                 <button onClick={handleRescan} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition">
                   Scan Another
@@ -276,9 +389,19 @@ function QRScannerModal({ onClose, onApprove }: {
           {scannedRequest && (
             <div className="space-y-4">
               <div className="p-4 bg-gray-50 rounded-xl space-y-2">
-                <p className="text-sm font-semibold text-gray-900">
-                  Request from {scannedRequest.requester_name}
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-gray-900">
+                    Request from {scannedRequest.requester_name}
+                  </p>
+                  {(() => {
+                    const scannedDisplayStatus = scannedRequest.status === "pending" && scannedRequest.is_expired ? "expired" : scannedRequest.status;
+                    return (
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig[scannedDisplayStatus].className}`}>
+                        {statusConfig[scannedDisplayStatus].label}
+                      </span>
+                    );
+                  })()}
+                </div>
                 <ul className="space-y-0.5">
                   {scannedRequest.items.map((item, i) => (
                     <li key={i} className="text-xs text-gray-600">
@@ -289,12 +412,34 @@ function QRScannerModal({ onClose, onApprove }: {
                 <p className="text-xs text-gray-500">
                   Return by: {format(new Date(scannedRequest.expected_return), "MMM d, yyyy · h:mm a")}
                 </p>
-                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig[scannedRequest.status].className}`}>
-                  {statusConfig[scannedRequest.status].label}
-                </span>
+                <p className="text-xs text-gray-400">
+                  Requested: {format(new Date(scannedRequest.requested_at), "MMM d, yyyy · h:mm a")}
+                </p>
+
+                {scannedRequest.status === "approved" && scannedRequest.approved_by_name && (
+                  <p className="text-xs text-green-700">
+                    Approved by <span className="font-medium">{scannedRequest.approved_by_name}</span>
+                    {scannedRequest.approved_at && (
+                      <> on {format(new Date(scannedRequest.approved_at), "MMM d, yyyy · h:mm a")}</>
+                    )}
+                  </p>
+                )}
+
+                {scannedRequest.status === "rejected" && scannedRequest.rejection_reason && (
+                  <p className="text-xs text-red-600">
+                    Rejection reason: {scannedRequest.rejection_reason}
+                  </p>
+                )}
               </div>
 
-              {scannedRequest.status === "pending" ? (
+              {scannedRequest.status === "pending" && scannedRequest.is_expired && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-center">
+                  <p className="text-sm font-medium text-amber-700">This request has expired.</p>
+                  <p className="text-xs text-amber-500 mt-0.5">QR codes are only valid for 60 minutes after submission.</p>
+                </div>
+              )}
+
+              {scannedRequest.status === "pending" && !scannedRequest.is_expired ? (
                 <div className="flex justify-end gap-3">
                   <button
                     onClick={onClose}
@@ -309,11 +454,11 @@ function QRScannerModal({ onClose, onApprove }: {
                     <CheckCircle2 size={14} /> Approve Request
                   </button>
                 </div>
-              ) : (
+              ) : scannedRequest.status !== "pending" ? (
                 <p className="text-sm text-center text-gray-500">
                   This request is already {scannedRequest.status}.
                 </p>
-              )}
+              ) : null}
             </div>
           )}
         </div>
@@ -574,6 +719,7 @@ export default function EquipmentRequestsPage() {
   const [showNewRequest, setShowNewRequest] = useState(false);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [qrViewId, setQrViewId] = useState<string | null>(null);
+  const [qrViewRequestedAt, setQrViewRequestedAt] = useState<string>("");
   const [showScanner, setShowScanner] = useState(false);
 
   const isRequester = user?.role === "coach" || user?.role === "pe_instructor";
@@ -600,7 +746,7 @@ export default function EquipmentRequestsPage() {
     <>
       {showNewRequest && <NewRequestModal onClose={() => setShowNewRequest(false)} />}
       {rejectingId && <RejectModal requestId={rejectingId} onClose={() => setRejectingId(null)} />}
-      {qrViewId && <QRCodeModal requestId={qrViewId} onClose={() => setQrViewId(null)} />}
+      {qrViewId && <QRCodeModal requestId={qrViewId} requestedAt={qrViewRequestedAt} onClose={() => setQrViewId(null)} />}
       {showScanner && (
         <QRScannerModal
           onClose={() => setShowScanner(false)}
@@ -657,6 +803,7 @@ export default function EquipmentRequestsPage() {
                 <th className="px-4 py-3 text-left font-medium">Items</th>
                 <th className="px-4 py-3 text-left font-medium">Expected Return</th>
                 <th className="px-4 py-3 text-left font-medium">Requested At</th>
+                {isApprover && <th className="px-4 py-3 text-left font-medium">Approved By</th>}
                 <th className="px-4 py-3 text-center font-medium">Status</th>
                 <th className="px-4 py-3 text-center font-medium">Actions</th>
               </tr>
@@ -664,18 +811,19 @@ export default function EquipmentRequestsPage() {
             <tbody className="divide-y divide-gray-100">
               {isLoading ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
+                  <td colSpan={isApprover ? 7 : 6} className="px-4 py-8 text-center text-gray-400">
                     <Loader2 size={20} className="animate-spin inline-block mr-2" />Loading…
                   </td>
                 </tr>
               ) : (data?.items ?? []).length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-gray-400 text-sm">
+                  <td colSpan={isApprover ? 7 : 6} className="px-4 py-10 text-center text-gray-400 text-sm">
                     No requests found.
                   </td>
                 </tr>
               ) : (data?.items ?? []).map((req) => {
-                const { label, className, icon: StatusIcon } = statusConfig[req.status];
+                const displayStatus = getRequestStatus(req);
+                const { label, className, icon: StatusIcon } = statusConfig[displayStatus];
                 return (
                   <tr key={req.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 font-medium text-gray-900">{req.requester_name}</td>
@@ -694,6 +842,20 @@ export default function EquipmentRequestsPage() {
                     <td className="px-4 py-3 text-gray-400 text-xs">
                       {format(new Date(req.requested_at), "MMM d, yyyy")}
                     </td>
+                    {isApprover && (
+                      <td className="px-4 py-3 text-gray-600 text-xs">
+                        {req.approved_by_name && req.status === "approved" ? (
+                          <span>
+                            {req.approved_by_name}
+                            {req.approved_at && (
+                              <span className="block text-gray-400">{format(new Date(req.approved_at), "MMM d, yyyy")}</span>
+                            )}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300">—</span>
+                        )}
+                      </td>
+                    )}
                     <td className="px-4 py-3 text-center">
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${className}`}>
                         <StatusIcon size={11} />
@@ -704,20 +866,25 @@ export default function EquipmentRequestsPage() {
                           {req.rejection_reason}
                         </p>
                       )}
+                      {req.status === "approved" && req.notes && (
+                        <p className="text-xs text-gray-400 mt-1 max-w-[140px] mx-auto truncate" title={req.notes}>
+                          {req.notes}
+                        </p>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-2">
-                        {/* Requester: Show QR for pending requests */}
-                        {isRequester && req.status === "pending" && (
+                        {/* Requester: Show QR for pending non-expired requests */}
+                        {isRequester && req.status === "pending" && !req.is_expired && (
                           <button
-                            onClick={() => setQrViewId(req.id)}
+                            onClick={() => { setQrViewId(req.id); setQrViewRequestedAt(req.requested_at); }}
                             className="flex items-center gap-1 px-3 py-1 text-xs bg-[#1E3A5F]/10 text-[#1E3A5F] rounded-lg hover:bg-[#1E3A5F]/20 transition font-medium"
                           >
                             <QrCode size={12} /> Show QR
                           </button>
                         )}
-                        {/* Approver: Approve / Reject for pending requests */}
-                        {isApprover && req.status === "pending" && (
+                        {/* Approver: Approve / Reject for pending non-expired requests */}
+                        {isApprover && req.status === "pending" && !req.is_expired && (
                           <>
                             <button
                               onClick={() => approveRequest(req.id)}

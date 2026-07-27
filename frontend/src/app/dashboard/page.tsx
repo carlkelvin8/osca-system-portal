@@ -240,7 +240,7 @@ export default function DashboardPage() {
   });
   const pendingCount = pendingData?.total ?? 0;
 
-  const isEditor = user?.role === "admin" || user?.role === "director";
+  const isEditor = user?.role === "admin" || user?.role === "director" || user?.role === "staff";
   const announcements = announcementsData?.items ?? [];
 
   if (isLoading) {
@@ -304,11 +304,10 @@ export default function DashboardPage() {
   // Staff: equipment + overdue (inventory-focused)
   // Admin/Director: all stats
   const stats = allStats.filter((s) => {
-    if (role === "student") return s.key === "equipment" || s.key === "attendance";
+    if (role === "student") return s.key === "attendance";
     if (role === "pe_instructor") return s.key === "equipment" || s.key === "overdue";
     if (role === "coach") return s.key !== "students" && s.key !== "pending";
-    if (role === "staff") return s.key === "pending" || s.key === "equipment" || s.key === "overdue";
-    return true; // admin, director see all
+    return true; // admin, director, staff see all
   });
 
   const equipmentChartData = summary
@@ -363,7 +362,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Bottom grid: charts + announcements */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className={`grid grid-cols-1 ${role === "student" ? "lg:grid-cols-1" : "lg:grid-cols-2"} gap-6`}>
           {/* Attendance Trend */}
           <div className="bg-white rounded-xl shadow-sm p-6">
             <h2 className="text-base font-semibold text-gray-800 mb-4">Attendance This Week</h2>
@@ -378,19 +377,21 @@ export default function DashboardPage() {
             </ResponsiveContainer>
           </div>
 
-          {/* Equipment Status */}
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <h2 className="text-base font-semibold text-gray-800 mb-4">Equipment Status</h2>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={equipmentChartData} barCategoryGap="40%">
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
-                <Tooltip />
-                <Bar dataKey="qty" fill="#1E3A5F" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          {/* Equipment Status — hidden for students */}
+          {role !== "student" && (
+            <div className="bg-white rounded-xl shadow-sm p-6">
+              <h2 className="text-base font-semibold text-gray-800 mb-4">Equipment Status</h2>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={equipmentChartData} barCategoryGap="40%">
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
+                  <Tooltip />
+                  <Bar dataKey="qty" fill="#1E3A5F" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </div>
 
         {/* Announcements */}

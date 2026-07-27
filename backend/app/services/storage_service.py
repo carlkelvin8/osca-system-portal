@@ -102,11 +102,16 @@ class StorageService:
 
     def get_presigned_url(self, bucket: str, key: str, expires_in: int = 3600) -> str:
         """Generate a pre-signed URL for temporary object access."""
-        return self._client.generate_presigned_url(
+        scheme = "https" if settings.MINIO_SECURE else "http"
+        url = self._client.generate_presigned_url(
             "get_object",
             Params={"Bucket": bucket, "Key": key},
             ExpiresIn=expires_in,
         )
+        # Replace internal Docker hostname with public-facing endpoint
+        internal = f"{scheme}://{settings.MINIO_ENDPOINT}"
+        public = f"{scheme}://{settings.MINIO_PUBLIC_ENDPOINT}"
+        return url.replace(internal, public)
 
     async def delete_object(self, bucket: str, key: str) -> None:
         """Delete an object (e.g., purge face images after retention period)."""
@@ -141,23 +146,48 @@ class StorageService:
 
     def get_profile_picture_url(self, user_id: str) -> str | None:
         """Generate a presigned URL for the user's profile picture."""
-        import boto3
-        from botocore.client import Config as BotoConfig
-        from botocore.exceptions import ClientError
-
-        client = boto3.client(
-            "s3",
-            endpoint_url=f"{'https' if settings.MINIO_SECURE else 'http'}://{settings.MINIO_ENDPOINT}",
-            aws_access_key_id=settings.MINIO_ACCESS_KEY,
-            aws_secret_access_key=settings.MINIO_SECRET_KEY,
-            config=BotoConfig(signature_version="s3v4", s3={"addressing_style": "path"}),
-            region_name="us-east-1",
-        )
-        for ext in ("jpg", "png"):
+        for ext in ("jpg", "png", "webp"):
             key = f"profiles/{user_id}/avatar.{ext}"
             try:
-                client.head_object(Bucket=settings.MINIO_BUCKET_PROFILES, Key=key)
+                self._client.head_object(Bucket=settings.MINIO_BUCKET_PROFILES, Key=key)
                 return self.get_presigned_url(settings.MINIO_BUCKET_PROFILES, key, expires_in=3600)
             except ClientError:
                 continue
         return None
+
+    def resolve_profile_picture_url(self, stored_value: str | None) -> str | None:
+        """Resolve a stored profile picture value to a fresh presigned URL.
+
+        Accepts either:
+        - A MinIO object key (e.g. 'profiles/{id}/avatar.jpg')
+        - An old presigned URL (legacy, extracts key from URL)
+        - None
+        """
+        if not stored_value:
+            return None
+
+        # If it looks like a URL (legacy presigned URL), extract the key
+        if stored_value.startswith("http"):
+            try:
+                # URLs look like: http://minio:9000/bucket/key?params...
+                # Extract everything after the bucket prefix
+                from urllib.parse import urlparse
+                parsed = urlparse(stored_value)
+                path = parsed.path.lstrip("/")
+                # path = "osca-profile-pictures/profiles/{id}/avatar.jpg"
+                # Strip the bucket prefix
+                bucket_prefix = settings.MINIO_BUCKET_PROFILES + "/"
+                if path.startswith(bucket_prefix):
+                    key = path[len(bucket_prefix):]
+                else:
+                    return None
+            except Exception:
+                return None
+        else:
+            key = stored_value
+
+        # Generate a fresh presigned URL
+        try:
+            return self.get_presigned_url(settings.MINIO_BUCKET_PROFILES, key, expires_in=3600)
+        except Exception:
+            return None
