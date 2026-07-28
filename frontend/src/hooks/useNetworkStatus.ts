@@ -19,7 +19,7 @@ export function useNetworkStatus() {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 5000);
       const res = await fetch(`${API_BASE}/auth/me`, {
-        method: "HEAD",
+        method: "GET",
         signal: controller.signal,
       });
       clearTimeout(timeout);

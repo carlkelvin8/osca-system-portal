@@ -35,6 +35,10 @@ import {
   ShieldCheck,
   Trash2,
   AlertTriangle,
+  Eye,
+  Phone,
+  Calendar,
+  Clock,
 } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 
@@ -610,23 +614,254 @@ function DeleteUserModal({
   );
 }
 
+// ── User Details Modal ───────────────────────────────────────────────────────
+
+function formatDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  } catch {
+    return "—";
+  }
+}
+
+function formatDateTime(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return "—";
+  }
+}
+
+function DetailRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string | null | undefined }) {
+  return (
+    <div className="flex items-start gap-3 py-2.5">
+      <span className="text-[#9ca3af] mt-0.5 shrink-0">{icon}</span>
+      <div className="min-w-0">
+        <p className="text-[11px] font-semibold text-[#9ca3af] uppercase tracking-wide">{label}</p>
+        <p className="text-sm text-[#111827] mt-0.5 break-words">{value || "—"}</p>
+      </div>
+    </div>
+  );
+}
+
+function UserDetailsModal({
+  userId,
+  onClose,
+}: {
+  userId: string;
+  onClose: () => void;
+}) {
+  const [fullPreview, setFullPreview] = useState<string | null>(null);
+  const { user: currentUser } = useAuthStore();
+  const canViewActivity = currentUser && ["admin", "director", "staff"].includes(currentUser.role);
+
+  const { data: user, isLoading } = useQuery<User>({
+    queryKey: ["user", userId],
+    queryFn: async () => {
+      const res = await usersApi.get(userId);
+      return res.data;
+    },
+  });
+
+  return (
+    <>
+      <Modal title="User Details" onClose={onClose} wide>
+        {isLoading ? (
+          <div className="p-10 text-center">
+            <Loader2 size={22} className="animate-spin text-[#2563eb] mx-auto" />
+          </div>
+        ) : !user ? (
+          <div className="p-10 text-center text-sm text-[#9ca3af]">User not found.</div>
+        ) : (
+          <div className="px-6 py-5 space-y-5">
+            {/* Header: avatar + name + status */}
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 rounded-full overflow-hidden bg-[#eff6ff] flex items-center justify-center shrink-0 border-2 border-[#e5e7eb]">
+                {user.profile_picture_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={user.profile_picture_url} alt={user.full_name} className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-xl font-bold text-[#2563eb]">
+                    {user.full_name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
+                  </span>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-lg font-bold text-[#111827] truncate">{user.full_name}</h3>
+                <p className="text-sm text-[#6b7280] truncate">{user.email}</p>
+                <div className="flex items-center gap-2 mt-1.5">
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${roleColors[user.role]}`}>
+                    {roleLabel[user.role]}
+                  </span>
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${user.is_active ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                    {user.is_active ? "Active" : "Pending"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Info grid */}
+            <div className="bg-[#f8fafc] border border-[#e5e7eb] rounded-xl px-5 py-2 divide-y divide-[#f3f4f6]">
+              {user.role === "student" && (
+                <>
+                  <DetailRow icon={<UserCheck size={15} />} label="Student ID" value={user.student_id} />
+                  <DetailRow icon={<span className="text-sm">📚</span>} label="Course" value={user.course} />
+                  <DetailRow icon={<span className="text-sm">🎓</span>} label="Year Level" value={user.year_level} />
+                </>
+              )}
+              {(user.role === "coach" || user.role === "pe_instructor") && user.sport_or_art && (
+                <DetailRow icon={<span className="text-sm">🏅</span>} label="Assigned Sport" value={user.sport_or_art} />
+              )}
+              <DetailRow icon={<Phone size={15} />} label="Phone Number" value={user.contact_number} />
+              <DetailRow icon={<Phone size={15} />} label="Emergency Contact" value={user.emergency_contact_name} />
+              <DetailRow icon={<Phone size={15} />} label="Emergency Number" value={user.emergency_contact_number} />
+              <DetailRow icon={<Calendar size={15} />} label="Date Registered" value={formatDate(user.created_at)} />
+              <DetailRow icon={<Clock size={15} />} label="Last Login" value={formatDateTime(user.last_login_at)} />
+            </div>
+
+            {/* Account Activity — admin/director/staff only */}
+            {canViewActivity && (
+              <div className="bg-[#f8fafc] border border-[#e5e7eb] rounded-xl p-5 space-y-3">
+                <h4 className="text-xs font-semibold text-[#6b7280] uppercase tracking-wide">
+                  Account Activity
+                </h4>
+                <div className="space-y-0 divide-y divide-[#f3f4f6]">
+                  <div className="flex items-center gap-3 py-2.5">
+                    <span className="text-[#9ca3af] mt-0.5 shrink-0">
+                      <span className={`inline-block w-2.5 h-2.5 rounded-full ${user.is_online ? "bg-emerald-500" : "bg-[#9ca3af]"}`} />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-semibold text-[#9ca3af] uppercase tracking-wide">Online Status</p>
+                      <p className={`text-sm font-medium mt-0.5 ${user.is_online ? "text-emerald-600" : "text-[#6b7280]"}`}>
+                        {user.is_online ? "Online" : "Offline"}
+                      </p>
+                    </div>
+                  </div>
+                  <DetailRow icon={<Clock size={15} />} label="Last Login" value={formatDateTime(user.last_login_at)} />
+                  <DetailRow icon={<Clock size={15} />} label="Last Logout" value={formatDateTime(user.last_logout_at)} />
+                </div>
+              </div>
+            )}
+
+            {/* Face Recognition section */}
+            <div className="bg-[#f8fafc] border border-[#e5e7eb] rounded-xl p-5 space-y-3">
+              <h4 className="text-xs font-semibold text-[#6b7280] uppercase tracking-wide">
+                Face Recognition
+              </h4>
+              <div className="flex items-start gap-4">
+                {/* Face image */}
+                <div className="shrink-0">
+                  {user.face_image_url ? (
+                    <button
+                      type="button"
+                      onClick={() => setFullPreview(user.face_image_url)}
+                      className="block w-20 h-20 rounded-xl overflow-hidden border-2 border-[#e5e7eb] hover:border-[#2563eb] transition-colors cursor-pointer"
+                      title="Click to enlarge"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={user.face_image_url}
+                        alt={`${user.full_name} face`}
+                        className="w-full h-full object-cover"
+                      />
+                    </button>
+                  ) : (
+                    <div className="w-20 h-20 rounded-xl border-2 border-dashed border-[#d1d5db] flex items-center justify-center bg-white">
+                      <span className="text-xs text-[#9ca3af] text-center leading-tight px-1">No face<br />image</span>
+                    </div>
+                  )}
+                </div>
+                {/* Face details */}
+                <div className="flex-1 space-y-1.5 pt-1">
+                  <div className="flex items-center gap-2">
+                    {user.is_face_enrolled ? (
+                      <CheckCircle size={15} className="text-emerald-500" />
+                    ) : (
+                      <XCircle size={15} className="text-[#d1d5db]" />
+                    )}
+                    <span className="text-sm text-[#374151]">
+                      {user.is_face_enrolled ? "Facial recognition registered" : "Not registered"}
+                    </span>
+                  </div>
+                  {user.is_face_enrolled && (
+                    <p className="text-xs text-[#6b7280]">
+                      Enrolled on {formatDateTime(user.face_enrolled_at)}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Close button */}
+            <div className="flex justify-end pt-1 pb-1">
+              <button onClick={onClose} className={btnSecondary}>
+                Close
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Full-size face image preview */}
+      {fullPreview && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4 cursor-pointer"
+          onClick={() => setFullPreview(null)}
+        >
+          <div className="relative max-w-lg w-full" onClick={(e) => e.stopPropagation()}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={fullPreview}
+              alt="Face preview"
+              className="w-full rounded-2xl shadow-2xl"
+            />
+            <button
+              onClick={() => setFullPreview(null)}
+              className="absolute top-3 right-3 bg-black/50 hover:bg-black/70 text-white rounded-full p-1.5 transition"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 // ── Row actions ───────────────────────────────────────────────────────────────
 
 function UserRow({
   user,
+  onView,
   onEnroll,
   onToggleActive,
   onDelete,
   canDelete,
 }: {
   user: UserSummary;
+  onView: (u: UserSummary) => void;
   onEnroll: (u: UserSummary) => void;
   onToggleActive: (u: UserSummary) => void;
   onDelete: (u: UserSummary) => void;
   canDelete: boolean;
 }) {
   return (
-    <tr className="hover:bg-[#f9fafb] transition-colors">
+    <tr
+      className="hover:bg-[#f9fafb] transition-colors cursor-pointer"
+      onClick={() => onView(user)}
+    >
       <td className="px-4 py-3">
         <div className="flex items-center gap-2.5">
           <Avatar
@@ -651,7 +886,13 @@ function UserRow({
         </span>
       </td>
       <td className="px-4 py-3 text-center">
-        {user.is_face_enrolled ? (
+        {user.face_image_url ? (
+          <img
+            src={user.face_image_url}
+            alt={`${user.full_name} face`}
+            className="w-8 h-8 rounded-full object-cover mx-auto border border-[#e5e7eb]"
+          />
+        ) : user.is_face_enrolled ? (
           <CheckCircle size={16} className="text-emerald-500 mx-auto" />
         ) : (
           <XCircle size={16} className="text-[#d1d5db] mx-auto" />
@@ -667,13 +908,27 @@ function UserRow({
           {user.is_active ? "Active" : "Pending"}
         </span>
       </td>
+      <td className="px-4 py-3 text-center">
+        <span className="inline-flex items-center gap-1.5">
+          <span className={`w-2.5 h-2.5 rounded-full ${user.is_online ? "bg-emerald-500" : "bg-[#9ca3af]"}`} />
+          <span className="text-xs text-[#6b7280]">{user.is_online ? "Online" : "Offline"}</span>
+        </span>
+      </td>
       <td className="px-4 py-3">
         <div className="flex items-center gap-1.5 justify-end">
+          {/* View details */}
+          <button
+            title="View Details"
+            onClick={() => onView(user)}
+            className="p-1.5 text-[#6b7280] hover:text-[#2563eb] hover:bg-[#eff6ff] rounded-lg transition-colors"
+          >
+            <Eye size={15} />
+          </button>
           {/* Enroll face */}
           {!user.is_face_enrolled && (
             <button
               title="Enroll Face"
-              onClick={() => onEnroll(user)}
+              onClick={(e) => { e.stopPropagation(); onEnroll(user); }}
               className="p-1.5 text-[#6b7280] hover:text-[#2563eb] hover:bg-[#eff6ff] rounded-lg transition-colors"
             >
               <Camera size={15} />
@@ -682,7 +937,7 @@ function UserRow({
           {/* Activate / Deactivate */}
           <button
             title={user.is_active ? "Deactivate" : "Activate"}
-            onClick={() => onToggleActive(user)}
+            onClick={(e) => { e.stopPropagation(); onToggleActive(user); }}
             className={`p-1.5 rounded-lg transition-colors ${user.is_active
               ? "text-[#6b7280] hover:text-red-600 hover:bg-red-50"
               : "text-[#6b7280] hover:text-emerald-600 hover:bg-emerald-50"
@@ -694,7 +949,7 @@ function UserRow({
           {canDelete && (
             <button
               title="Delete Account"
-              onClick={() => onDelete(user)}
+              onClick={(e) => { e.stopPropagation(); onDelete(user); }}
               className="p-1.5 text-[#6b7280] hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
             >
               <Trash2 size={15} />
@@ -718,6 +973,7 @@ export default function UsersPage() {
   const [roleFilter, setRoleFilter] = useState<UserRole | "">("");
   const [page, setPage] = useState(1);
   const [showCreate, setShowCreate] = useState(false);
+  const [viewUserId, setViewUserId] = useState<string | null>(null);
   const [enrollUser, setEnrollUser] = useState<UserSummary | null>(null);
   const [deleteUser, setDeleteUser] = useState<UserSummary | null>(null);
 
@@ -895,6 +1151,9 @@ export default function UsersPage() {
                 <th className="px-4 py-3 text-center text-xs font-semibold text-[#6b7280] uppercase tracking-wide">
                   Status
                 </th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-[#6b7280] uppercase tracking-wide">
+                  Online
+                </th>
                 <th className="px-4 py-3 text-right text-xs font-semibold text-[#6b7280] uppercase tracking-wide">
                   Actions
                 </th>
@@ -903,13 +1162,13 @@ export default function UsersPage() {
             <tbody className="divide-y divide-[#f3f4f6]">
               {isLoading ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center">
+                  <td colSpan={8} className="px-4 py-10 text-center">
                     <Loader2 size={22} className="animate-spin text-[#2563eb] mx-auto" />
                   </td>
                 </tr>
               ) : (data?.items ?? []).length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-[#9ca3af] text-sm">
+                  <td colSpan={8} className="px-4 py-10 text-center text-[#9ca3af] text-sm">
                     {tab === "pending"
                       ? "No pending approvals — all registrations are activated."
                       : "No users found."}
@@ -920,6 +1179,7 @@ export default function UsersPage() {
                   <UserRow
                     key={u.id}
                     user={u}
+                    onView={(usr) => setViewUserId(usr.id)}
                     onEnroll={setEnrollUser}
                     onToggleActive={(usr) => toggleActive.mutate(usr)}
                     onDelete={setDeleteUser}
@@ -959,6 +1219,9 @@ export default function UsersPage() {
 
       {/* Modals */}
       {showCreate && <CreateUserModal onClose={() => setShowCreate(false)} />}
+      {viewUserId && (
+        <UserDetailsModal userId={viewUserId} onClose={() => setViewUserId(null)} />
+      )}
       {enrollUser && (
         <FaceEnrollModal user={enrollUser} onClose={() => setEnrollUser(null)} />
       )}

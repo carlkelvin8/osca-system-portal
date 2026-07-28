@@ -46,8 +46,9 @@ async def list_announcements(
     query = select(Announcement)
     if not include_inactive:
         query = query.where(Announcement.is_active == True)
-    # Upcoming events first (NULL last), then by created_at desc
+    # Pinned first, then upcoming events (NULL last), then created_at desc
     query = query.order_by(
+        Announcement.pinned.desc(),
         Announcement.event_date.asc().nullslast(),
         Announcement.created_at.desc(),
     )
@@ -86,6 +87,8 @@ async def create_announcement(
         title=body.title,
         content=body.content,
         event_date=body.event_date,
+        tag=body.tag,
+        pinned=body.pinned,
         created_by_id=current_user.id,
     )
     db.add(ann)

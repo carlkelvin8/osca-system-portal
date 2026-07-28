@@ -26,6 +26,11 @@ class UserCreate(OSCABaseModel):
     assigned_sport: str | None = Field(default=None, max_length=100)
     biometric_consent: bool = False
     is_active: bool = True  # Auto-activate on registration (admin can deactivate later)
+    face_images_base64: list[str] | None = Field(
+        default=None,
+        max_length=10,
+        description="Optional 5-10 face images (base64) for auto-enrollment during registration",
+    )
 
 
 class UserUpdate(OSCABaseModel):
@@ -53,6 +58,8 @@ class UserSummary(OSCABaseModel):
     is_active: bool
     is_face_enrolled: bool
     profile_picture_url: str | None = None
+    face_image_url: str | None = None
+    is_online: bool = False
 
 
 class UserRead(OSCABaseModel):
@@ -77,5 +84,9 @@ class UserRead(OSCABaseModel):
     biometric_consent: bool
     biometric_consent_date: datetime | None
     profile_picture_url: str | None = None
+    face_image_url: str | None = None
+    face_enrolled_at: datetime | None = None
     created_at: datetime
     last_login_at: datetime | None
+    last_logout_at: datetime | None = None
+    is_online: bool = False

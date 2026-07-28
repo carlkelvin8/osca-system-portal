@@ -191,3 +191,21 @@ class StorageService:
             return self.get_presigned_url(settings.MINIO_BUCKET_PROFILES, key, expires_in=3600)
         except Exception:
             return None
+
+    def resolve_face_image_url(self, minio_keys: str | None) -> str | None:
+        """Resolve stored face image keys to a presigned URL for the first image.
+
+        Accepts the comma-separated minio_image_keys string from FaceEmbedding.
+        Returns a presigned URL for the first (primary) face image.
+        """
+        if not minio_keys:
+            return None
+
+        first_key = minio_keys.split(",")[0].strip()
+        if not first_key:
+            return None
+
+        try:
+            return self.get_presigned_url(settings.MINIO_BUCKET_FACES, first_key, expires_in=3600)
+        except Exception:
+            return None

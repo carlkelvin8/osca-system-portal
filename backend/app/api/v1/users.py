@@ -2,31 +2,40 @@
 User management endpoints.
 Admin: full CRUD. Students: self-register.
 """
+import base64
 import uuid
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, status
+import structlog
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile, File, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
-from app.core.dependencies import AdminOnly, CurrentUser, OptionalUser, get_db
+from app.core.dependencies import AdminOnly, CurrentUser, OptionalUser, get_db, get_redis
 from app.core.exceptions import ConflictError, NotFoundError
 from app.core.security import hash_password
 from app.models.audit import AuditLog
+from app.models.attendance import FaceEmbedding
 from app.models.user import User, UserRole
 from app.schemas.common import MessageResponse, PaginatedResponse
 from app.schemas.user import UserCreate, UserRead, UserSummary, UserUpdate
 from app.services.storage_service import StorageService
+from app.services.facial_recognition import FacialRecognitionService
 
 router = APIRouter()
+logger = structlog.get_logger(__name__)
 
 _storage = StorageService()
 
 
 def _resolve_user_profile_urls(user: User) -> None:
     """Resolve stored profile picture key to a fresh presigned URL on the User model."""
-    user.profile_picture_url = _storage.resolve_profile_picture_url(user.profile_picture_url)
+    try:
+        user.profile_picture_url = _storage.resolve_profile_picture_url(user.profile_picture_url)
+    except Exception:
+        pass
 
 
 @router.post(
@@ -39,6 +48,7 @@ async def create_user(
     body: UserCreate,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: OptionalUser = None,
+    request: Request = None,
 ) -> UserRead:
     # ── Role-based access control ─────────────────────────────────────────
     # No token  → self-registration: only students allowed
@@ -85,7 +95,7 @@ async def create_user(
 
     # Prevent self-promotion to admin during self-registration
     # (proper enforcement done via auth middleware in production)
-    user_data = body.model_dump(exclude={"password"})
+    user_data = body.model_dump(exclude={"password", "face_images_base64"})
     user = User(
         **user_data,
         hashed_password=hash_password(body.password),
@@ -101,6 +111,43 @@ async def create_user(
     ))
     await db.commit()
     await db.refresh(user)
+
+    # ── Auto-enroll face if images provided ───────────────────────────────────
+    if body.face_images_base64 and len(body.face_images_base64) >= 5 and request is not None:
+        fr_svc = getattr(request.app.state, "fr_service", None)
+        if fr_svc is not None:
+            try:
+                images_bytes = []
+                for img_b64 in body.face_images_base64:
+                    images_bytes.append(base64.b64decode(img_b64))
+
+                embedding, model_used, minio_keys = await fr_svc.enroll_face(
+                    user_id=str(user.id),
+                    images_bytes=images_bytes,
+                )
+
+                face_emb = FaceEmbedding(
+                    user_id=user.id,
+                    embedding=embedding,
+                    model_used=model_used,
+                    images_used=len(images_bytes),
+                    minio_image_keys=",".join(minio_keys),
+                )
+                db.add(face_emb)
+                user.is_face_enrolled = True
+                db.add(AuditLog(
+                    user_id=user.id,
+                    action="FACE_ENROLLED",
+                    resource_type="FaceEmbedding",
+                    status="success",
+                    details={"model": model_used, "images_count": len(images_bytes)},
+                ))
+                await db.commit()
+                await db.refresh(user)
+                logger.info("face_enrolled_during_registration", user_id=str(user.id), model=model_used)
+            except Exception as e:
+                logger.warning("face_enrollment_failed_during_registration", user_id=str(user.id), error=str(e))
+
     return UserRead.model_validate(user)
 
 
@@ -112,6 +159,7 @@ async def create_user(
 async def list_users(
     _admin: AdminOnly,
     db: Annotated[AsyncSession, Depends(get_db)],
+    redis=Depends(get_redis),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     role: UserRole | None = Query(None),
@@ -119,7 +167,7 @@ async def list_users(
     is_active: bool | None = Query(None),
     search: str | None = Query(None),
 ) -> PaginatedResponse[UserSummary]:
-    query = select(User)
+    query = select(User).options(selectinload(User.face_embedding))
     if role:
         query = query.where(User.role == role)
     if sport_or_art:
@@ -137,13 +185,26 @@ async def list_users(
 
     query = query.offset((page - 1) * page_size).limit(page_size).order_by(User.last_name)
     result = await db.execute(query)
-    users = result.scalars().all()
+    users = result.scalars().unique().all()
 
+    summaries = []
     for u in users:
         _resolve_user_profile_urls(u)
+        summary = UserSummary.model_validate(u)
+        if u.face_embedding:
+            try:
+                summary.face_image_url = _storage.resolve_face_image_url(u.face_embedding.minio_image_keys)
+            except Exception:
+                pass
+        try:
+            online_key = await redis.get(f"online:{u.id}")
+            summary.is_online = online_key is not None
+        except Exception:
+            pass
+        summaries.append(summary)
 
     return PaginatedResponse(
-        items=[UserSummary.model_validate(u) for u in users],
+        items=summaries,
         total=total,
         page=page,
         page_size=page_size,
@@ -156,17 +217,34 @@ async def get_user(
     user_id: uuid.UUID,
     current_user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
+    redis=Depends(get_redis),
 ) -> UserRead:
     # Students can only view their own profile
     if current_user.role == UserRole.STUDENT and current_user.id != user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
-    result = await db.execute(select(User).where(User.id == user_id))
+    result = await db.execute(select(User).options(selectinload(User.face_embedding)).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if not user:
         raise NotFoundError("User", str(user_id))
     _resolve_user_profile_urls(user)
-    return UserRead.model_validate(user)
+    if user.face_embedding:
+        try:
+            user.face_image_url = _storage.resolve_face_image_url(user.face_embedding.minio_image_keys)
+        except Exception:
+            pass
+    result = UserRead.model_validate(user)
+    if user.face_embedding:
+        result.face_enrolled_at = user.face_embedding.enrolled_at
+    result.last_logout_at = user.last_logout_at
+    # Only expose online status to admin/director/staff
+    if current_user.role in (UserRole.ADMIN, UserRole.DIRECTOR, UserRole.STAFF):
+        try:
+            online_key = await redis.get(f"online:{user.id}")
+            result.is_online = online_key is not None
+        except Exception:
+            pass
+    return result
 
 
 @router.patch("/{user_id}", response_model=UserRead, summary="Update user profile (Admin)")

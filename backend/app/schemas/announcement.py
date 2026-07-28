@@ -12,6 +12,8 @@ class AnnouncementCreate(OSCABaseModel):
     content: str = Field(min_length=1)
     event_date: datetime | None = None
     image_url: str | None = None
+    tag: str | None = Field(default=None, max_length=20)
+    pinned: bool = False
 
 
 class AnnouncementUpdate(OSCABaseModel):
@@ -19,6 +21,8 @@ class AnnouncementUpdate(OSCABaseModel):
     content: str | None = None
     event_date: datetime | None = None
     image_url: str | None = None
+    tag: str | None = Field(default=None, max_length=20)
+    pinned: bool | None = None
 
 
 class AnnouncementRead(OSCABaseModel):
@@ -27,6 +31,8 @@ class AnnouncementRead(OSCABaseModel):
     content: str
     image_url: str | None = None
     event_date: datetime | None
+    tag: str | None = None
+    pinned: bool = False
     is_active: bool
     created_by_id: uuid.UUID
     created_by_name: str = ""

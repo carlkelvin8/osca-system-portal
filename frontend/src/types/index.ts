@@ -32,13 +32,20 @@ export interface User {
   role: UserRole;
   course: string | null;
   year_level: string | null;
+  contact_number: string | null;
+  emergency_contact_name: string | null;
+  emergency_contact_number: string | null;
   sport_or_art: string | null;
   is_active: boolean;
   is_face_enrolled: boolean;
   biometric_consent: boolean;
   profile_picture_url: string | null;
+  face_image_url: string | null;
+  face_enrolled_at: string | null;
   created_at: string;
   last_login_at: string | null;
+  last_logout_at: string | null;
+  is_online: boolean;
 }
 
 export interface UserSummary {
@@ -50,6 +57,8 @@ export interface UserSummary {
   is_active: boolean;
   is_face_enrolled: boolean;
   profile_picture_url: string | null;
+  face_image_url: string | null;
+  is_online: boolean;
 }
 
 export interface UserCreate {
@@ -212,6 +221,8 @@ export interface Announcement {
   content: string;
   image_url: string | null;
   event_date: string | null;
+  tag: string | null;
+  pinned: boolean;
   is_active: boolean;
   created_by_id: string;
   created_by_name: string;

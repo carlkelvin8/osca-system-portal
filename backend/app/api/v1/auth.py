@@ -79,7 +79,7 @@ async def login(
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account is deactivated. Contact OSCA admin.",
+            detail="Your account is pending approval. Please wait for an administrator to activate it.",
         )
 
     # Check account lockout (stored on user model)
@@ -97,6 +97,10 @@ async def login(
 
     access_token = create_access_token(str(user.id), user.role.value)
     refresh_token = create_refresh_token(str(user.id))
+
+    # Mark user online in Redis (TTL = access token lifetime, renewed on /me and refresh)
+    online_ttl = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+    await redis.setex(f"online:{user.id}", online_ttl, "1")
 
     db.add(AuditLog(
         user_id=user.id,
@@ -149,6 +153,10 @@ async def refresh(
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
 
+    # Renew online key (heartbeat on refresh)
+    online_ttl = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+    await redis.setex(f"online:{user.id}", online_ttl, "1")
+
     return TokenResponse(
         access_token=create_access_token(str(user.id), user.role.value),
         refresh_token=create_refresh_token(str(user.id)),
@@ -161,6 +169,7 @@ async def refresh(
 async def logout(
     request: Request,
     current_user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
     redis=Depends(get_redis),
 ) -> MessageResponse:
     auth_header = request.headers.get("Authorization", "")
@@ -170,13 +179,27 @@ async def logout(
     ttl = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
     await redis.setex(f"blacklist:{token}", ttl, "1")
 
+    # Remove online key and record logout timestamp
+    await redis.delete(f"online:{current_user.id}")
+    current_user.last_logout_at = datetime.now(UTC)
+    await db.commit()
+
     logger.info("user_logout", user_id=str(current_user.id))
     return MessageResponse(message="Logged out successfully")
 
 
 @router.get("/me", response_model=UserRead, summary="Get current user profile")
-async def me(current_user: CurrentUser) -> UserRead:
-    current_user.profile_picture_url = _storage.resolve_profile_picture_url(current_user.profile_picture_url)
+async def me(
+    current_user: CurrentUser,
+    redis=Depends(get_redis),
+) -> UserRead:
+    # Renew online key (heartbeat) so the user stays "online" while active
+    online_ttl = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+    await redis.setex(f"online:{current_user.id}", online_ttl, "1")
+    try:
+        current_user.profile_picture_url = _storage.resolve_profile_picture_url(current_user.profile_picture_url)
+    except Exception:
+        pass
     return UserRead.model_validate(current_user)
 
 

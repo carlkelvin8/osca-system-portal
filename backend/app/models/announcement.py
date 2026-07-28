@@ -24,6 +24,11 @@ class Announcement(Base):
         DateTime(timezone=True), nullable=True,
         comment="Set when this is an upcoming event; None for general notices"
     )
+    tag: Mapped[str | None] = mapped_column(
+        String(20), nullable=True,
+        comment="Optional tag: urgent, event, or notice"
+    )
+    pinned: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_by_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=False

@@ -149,9 +149,9 @@ StaffOnly = Annotated[User, Depends(
 NotStudent = Annotated[User, Depends(
     require_roles(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.STAFF, UserRole.COACH, UserRole.PE_INSTRUCTOR)
 )]
-# For attendance scan — must be logged-in staff (not public, not student)
+# For attendance scan — must be logged-in user (not public)
 ScanStaff = Annotated[User, Depends(
-    require_roles(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.STAFF, UserRole.COACH)
+    require_roles(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.STAFF, UserRole.COACH, UserRole.PE_INSTRUCTOR, UserRole.STUDENT)
 )]
 
 

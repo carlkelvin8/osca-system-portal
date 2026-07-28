@@ -2,10 +2,10 @@
 
 /**
  * US-002: User Self-Registration (Updated)
- * 5-step wizard: Account → Profile → Emergency & Consent → Profile Picture → Face Enrollment.
+ * 4-step wizard: Account → Profile → Emergency & Consent → Profile Picture.
  * Supports all roles except admin. Student-specific fields are conditionally shown.
  *
- * Flow: register account → auto-login → upload profile picture (optional) → enroll face → success.
+ * Flow: register account → pending approval (admin must activate before login).
  *
  * Design: Direction 1 – Clean Professional (dark navy #0f172a auth shell,
  * white card, blue #1d4ed8 primary, aligned to OSCA PRD v2 frontend spec).
@@ -16,22 +16,22 @@ import { useForm, useController, type Control } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import Link from "next/link";
-import Webcam from "react-webcam";
+import { useRouter } from "next/navigation";
 import Cropper from "react-easy-crop";
-import { usersApi, attendanceApi, authApi } from "@/lib/api";
-import Cookies from "js-cookie";
+import { usersApi } from "@/lib/api";
 import {
   ShieldCheck,
   CheckCircle2,
   ChevronRight,
   ChevronLeft,
-  Camera,
-  RotateCcw,
   ArrowLeft,
   ImagePlus,
   Eye,
   EyeOff,
   Crop,
+  Camera,
+  CircleDot,
+  X,
 } from "lucide-react";
 import type { UserRole } from "@/types";
 
@@ -66,6 +66,23 @@ const SPORTS_OPTIONS: { group: string; items: string[] }[] = [
       "Musikang Himpapawid Live Band",
     ],
   },
+];
+
+// ── Course options (for searchable Course field) ────────────────────────────────
+
+const COURSES: string[] = [
+  "BSAT",
+  "BSAeE",
+  "BSAMT",
+  "BSAET",
+  "AAMT",
+  "AAET",
+  "BSAvCOMM",
+  "BSATTM",
+  "BSAvSSM",
+  "BSSCM-AvLOG",
+  "BSIT-AIT",
+  "BSIS-AIS",
 ];
 
 // ── Zod schema ─────────────────────────────────────────────────────────────────
@@ -137,8 +154,7 @@ type RegisterForm = z.infer<typeof registerSchema>;
 
 // ── Step labels ────────────────────────────────────────────────────────────────
 
-const STEPS = ["Account", "Profile", "Emergency & Consent", "Profile Picture", "Face Enrollment"];
-const CAPTURE_COUNT = 5;
+const STEPS = ["Account", "Profile", "Emergency & Consent", "Face Capture", "Profile Picture"];
 
 function getCroppedImg(imageSrc: string, pixelCrop: { x: number; y: number; width: number; height: number }): Promise<File> {
   return new Promise((resolve) => {
@@ -272,22 +288,101 @@ function SportCombobox({
   );
 }
 
+function CourseCombobox({
+  control,
+  name,
+}: {
+  control: Control<RegisterForm>;
+  name: "course";
+}) {
+  const { field } = useController({ control, name });
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState(field.value || "");
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setQuery(field.value || "");
+  }, [field.value]);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filtered = COURSES.filter((c) =>
+    c.toLowerCase().includes(query.toLowerCase())
+  );
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <input
+        value={query}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          field.onChange(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        autoComplete="off"
+        placeholder="Select your course"
+        className={inputCls}
+      />
+      {open && (
+        <div className="absolute z-20 mt-1.5 w-full max-h-60 overflow-y-auto bg-white border border-[#e9d9a8] rounded-xl shadow-lg py-1">
+          {filtered.length > 0 ? (
+            filtered.map((course) => (
+              <button
+                type="button"
+                key={course}
+                onClick={() => {
+                  field.onChange(course);
+                  setQuery(course);
+                  setOpen(false);
+                }}
+                className={`w-full text-left px-3 py-2 text-sm transition ${
+                  field.value === course
+                    ? "bg-[#fdf6e8] text-[#8a6d1f] font-semibold"
+                    : "text-[#1f2937] hover:bg-[#fdf6e8]"
+                }`}
+              >
+                {course}
+              </button>
+            ))
+          ) : (
+            <p className="px-3 py-2 text-sm text-gray-400 italic">No course found</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export default function RegisterPage() {
+  const router = useRouter();
   const [step, setStep] = useState(0);
-  const [submitted, setSubmitted] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
 
   // Face enrollment state
-  const webcamRef = useRef<Webcam>(null);
-  const [captures, setCaptures] = useState<string[]>([]);
-  const [enrolling, setEnrolling] = useState(false);
-  const [createdUserId, setCreatedUserId] = useState<string | null>(null);
-  const [enrollError, setEnrollError] = useState<string | null>(null);
-  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [faceImages, setFaceImages] = useState<string[]>([]); // base64 strings
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [captureCountdown, setCaptureCountdown] = useState<number | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // Face enrollment result state
+  const [createdUserId, setCreatedUserId] = useState<string | null>(null);
+  const [faceEnrolled, setFaceEnrolled] = useState(false);
+  const [faceEnrollLoading, setFaceEnrollLoading] = useState(false);
 
   // Profile picture state
   const profilePicInputRef = useRef<HTMLInputElement>(null);
@@ -323,34 +418,35 @@ export default function RegisterPage() {
       ? ["first_name", "last_name", "student_id", "course", "year_level", "sport_or_art"]
       : ["first_name", "last_name", "sport_or_art"],
     ["emergency_contact_name", "emergency_contact_number", "biometric_consent"],
-    [], // Step 3 — profile picture, optional
-    [], // Step 4 — face enrollment, validated separately
+    [], // Step 3 — face capture, no form fields
+    [], // Step 4 — profile picture, optional
   ];
 
   const advance = async () => {
+    setApiError(null);
     const valid = await trigger(stepFields[step] as (keyof RegisterForm)[]);
     if (valid) setStep((s) => s + 1);
   };
 
-  // Webcam capture
-  const capture = useCallback(() => {
-    const img = webcamRef.current?.getScreenshot();
-    if (img && captures.length < CAPTURE_COUNT) {
-      setCaptures((prev) => [...prev, img]);
+  // Submit face enrollment: create user + enroll face, only advance if enrollment succeeds
+  const submitFaceEnrollment = async () => {
+    if (faceImages.length < 5) {
+      setApiError("Please capture 5 face images before submitting.");
+      return;
     }
-  }, [captures.length]);
-
-  const resetCaptures = () => {
-    setCaptures([]);
     setApiError(null);
-  };
+    setFaceEnrollLoading(true);
 
-  // Submit: create account → auto-login → enroll face
-  const onSubmit = async (data: RegisterForm) => {
-    setApiError(null);
+    // Validate all form fields up to this point
+    const valid = await trigger();
+    if (!valid) {
+      setFaceEnrollLoading(false);
+      return;
+    }
+
+    const data = watch();
 
     try {
-      // 1. Create the user account
       const createPayload: Record<string, unknown> = {
         email: data.email,
         password: data.password,
@@ -364,115 +460,215 @@ export default function RegisterPage() {
         emergency_contact_number: data.emergency_contact_number,
         biometric_consent: true,
         contact_number: data.contact_number || undefined,
+        face_images_base64: faceImages,
       };
 
-      // Student-specific fields
-    if (data.role === "student_athlete" || data.role === "student_artist") {
+      if (data.role === "student_athlete" || data.role === "student_artist") {
         createPayload.student_id = data.student_id;
         createPayload.course = data.course;
         createPayload.year_level = data.year_level;
       }
 
-      // Coach/instructor-specific
       if (data.role === "coach" || data.role === "pe_instructor") {
         createPayload.assigned_sport = data.assigned_sport || data.sport_or_art;
       }
 
-      const { data: newUser } = await usersApi.create(createPayload);
-      setCreatedUserId(newUser.id);
+      const response = await usersApi.create(createPayload) as { data?: { id?: string; is_face_enrolled?: boolean } };
+      const userId = response?.data?.id;
+      const enrolled = response?.data?.is_face_enrolled;
 
-      // 2. Auto-login to get JWT (needed for face enrollment endpoint)
-      const { data: tokenData } = await authApi.login(data.email, data.password);
-      Cookies.set("access_token", tokenData.access_token, {
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
-        expires: 1 / 96,
-      });
-      Cookies.set("refresh_token", tokenData.refresh_token, {
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
-        expires: 7,
-      });
-
-      // 3. Upload profile picture (optional)
-      if (profilePicFile) {
-        try {
-          await usersApi.uploadProfilePicture(newUser.id, profilePicFile);
-        } catch {
-          // Profile picture upload is non-critical — continue
-        }
+      if (!userId) {
+        setApiError("Registration failed. Please try again.");
+        setFaceEnrollLoading(false);
+        return;
       }
 
-      // 4. Enroll face — wrapped so we can always clean up tokens
-      setEnrolling(true);
-      let faceEnrolled = false;
-      try {
-        const images = captures.map((c) => c.split(",")[1]);
-        await attendanceApi.enroll({ user_id: newUser.id, images_base64: images });
-        faceEnrolled = true;
-      } catch (frErr: unknown) {
-        const frMsg =
-          (frErr as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
-          "Face enrollment failed. You can retry from the dashboard after logging in.";
-        setEnrollError(frMsg);
-        console.warn("Face enrollment error:", frMsg);
+      setCreatedUserId(userId);
+
+      if (enrolled) {
+        setFaceEnrolled(true);
+        stopCamera();
+        setStep(4);
+      } else {
+        setApiError(
+          "Facial recognition enrollment failed. Your account has been created, but you will need to complete face enrollment after logging in. Please contact the OSCA administrator for assistance."
+        );
       }
-      setEnrolling(false);
-
-      // 5. Always clean up auth tokens (user should login manually)
-      Cookies.remove("access_token");
-      Cookies.remove("refresh_token");
-
-      setSubmitted(true);
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
         "Registration failed. Please try again.";
       setApiError(msg);
+    } finally {
+      setFaceEnrollLoading(false);
     }
   };
 
+  // Submit: upload profile picture if provided, then redirect
+  const onSubmit = async (data: RegisterForm) => {
+    setApiError(null);
+
+    if (!createdUserId) {
+      setStep(3);
+      return;
+    }
+
+    // Upload profile picture if provided
+    if (profilePicFile) {
+      try {
+        await usersApi.uploadProfilePicture(createdUserId, profilePicFile);
+      } catch {
+        // Profile picture upload failure is non-fatal
+      }
+    }
+
+    router.push("/register/success");
+  };
+
+  // Camera cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+      }
+    };
+  }, []);
+
+  // Attach stream to video element once it mounts
+  useEffect(() => {
+    if (cameraActive && streamRef.current && videoRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(() => {});
+    }
+  }, [cameraActive]);
+
+
+
+  // ── Camera helpers ─────────────────────────────────────────────────────────
+
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 640, height: 480, facingMode: "user" },
+      });
+      streamRef.current = stream;
+      setCameraActive(true);
+      setApiError(null);
+    } catch {
+      setApiError("Camera access denied. Please allow camera permissions and try again.");
+    }
+  };
+
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+    setCameraActive(false);
+  };
+
+  const captureImage = useCallback(() => {
+    if (!videoRef.current || !canvasRef.current) return;
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+
+    // Reject if camera feed is not ready
+    if (!video.videoWidth || !video.videoHeight) {
+      setApiError("Camera is not ready. Please wait a moment and try again.");
+      return;
+    }
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d")!;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    // ── Face detection: sample center region (where face should be) ───────
+    const sampleW = Math.min(canvas.width, 320);
+    const sampleH = Math.min(canvas.height, 240);
+    const sx = Math.floor((canvas.width - sampleW) / 2);
+    const sy = Math.floor((canvas.height - sampleH) / 2);
+    const imageData = ctx.getImageData(sx, sy, sampleW, sampleH);
+    const px = imageData.data;
+
+    let totalBrightness = 0;
+    let minB = 255;
+    let maxB = 0;
+    let skinPixels = 0;
+    let sampledPixels = 0;
+    const pxStep = Math.max(4, Math.floor(px.length / 4 / 2000)) * 4;
+
+    for (let i = 0; i < px.length; i += pxStep) {
+      const r = px[i];
+      const g = px[i + 1];
+      const b = px[i + 2];
+      const brightness = (r + g + b) / 3;
+      totalBrightness += brightness;
+      if (brightness < minB) minB = brightness;
+      if (brightness > maxB) maxB = brightness;
+      sampledPixels++;
+
+      // Skin-tone heuristic (works across light-to-medium skin tones)
+      // Conditions: R > 95, G > 40, B > 20, R-G > 15, R-B > 15, max(R,G,B) - min(R,G,B) > 15
+      if (
+        r > 95 && g > 40 && b > 20 &&
+        r - g > 15 && r - b > 15 &&
+        (Math.max(r, g, b) - Math.min(r, g, b)) > 15
+      ) {
+        skinPixels++;
+      }
+    }
+
+    const avgBrightness = totalBrightness / sampledPixels;
+    const contrastRange = maxB - minB;
+    const skinRatio = skinPixels / sampledPixels;
+
+    // Reject if too dark, too flat, or no skin-tone pixels detected
+    if (avgBrightness < 30) {
+      setApiError("The image is too dark. Please ensure good lighting and try again.");
+      return;
+    }
+    if (contrastRange < 20) {
+      setApiError("No face detected. Please face the camera directly and try again.");
+      return;
+    }
+    if (skinRatio < 0.08) {
+      setApiError(
+        "No face detected. Please position your face in the center of the frame with good lighting."
+      );
+      return;
+    }
+
+    setApiError(null);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
+    const base64 = dataUrl.split(",")[1];
+    setFaceImages((prev) => {
+      if (prev.length >= 5) return prev;
+      return [...prev, base64];
+    });
+  }, []);
+
+  const removeFaceImage = (index: number) => {
+    setFaceImages((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleCapture = useCallback(() => {
+    // 3-second countdown then capture
+    setCaptureCountdown(3);
+    let count = 3;
+    const timer = setInterval(() => {
+      count--;
+      if (count <= 0) {
+        clearInterval(timer);
+        setCaptureCountdown(null);
+        captureImage();
+      } else {
+        setCaptureCountdown(count);
+      }
+    }, 800);
+  }, [captureImage]);
+
   // ── Success screen ───────────────────────────────────────────────────────────
-  if (submitted) {
-    return (
-      <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-[#081428]">
-        <div className="absolute inset-0">
-          <div className="absolute -top-[40%] -left-[20%] w-[70vw] h-[70vw] rounded-full opacity-20 animate-pulse" style={{ background: "radial-gradient(circle, #1d4ed8, transparent 70%)", filter: "blur(80px)" }} />
-          <div className="absolute top-[30%] -right-[15%] w-[50vw] h-[50vw] rounded-full opacity-15 animate-pulse" style={{ background: "radial-gradient(circle, #C9A84C, transparent 70%)", filter: "blur(80px)" }} />
-        </div>
-        <div className="relative z-10 bg-white/[0.03] backdrop-blur-xl border border-white/[0.08] rounded-3xl p-10 w-full max-w-md text-center shadow-[0_8px_60px_rgba(0,0,0,0.4)]">
-          <CheckCircle2 size={52} className="text-green-400 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-white mb-2">Registration Complete</h2>
-          {enrollError ? (
-            <>
-              <p className="text-sm text-white/50 mb-1">
-                Your account has been created.
-              </p>
-              <p className="text-sm text-amber-400 mb-1">
-                Face enrollment was not successful.
-              </p>
-              <p className="text-xs text-white/40 mb-6">
-                {enrollError}
-              </p>
-            </>
-          ) : (
-            <p className="text-sm text-white/50 mb-6">
-              Your account has been created and your face has been enrolled.
-            </p>
-          )}
-          <p className="text-sm text-white/50 mb-6">
-            You can now sign in with your credentials.
-          </p>
-          <Link
-            href="/login"
-            className="inline-flex items-center gap-2 bg-gradient-to-r from-[#1d4ed8] to-[#0d1f3c] hover:from-[#C9A84C] hover:to-[#132a4d] text-white text-sm font-semibold py-3 px-6 rounded-xl transition shadow-lg shadow-[#1d4ed8]/25"
-          >
-            Back to Sign In
-          </Link>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen flex bg-[#081428] relative overflow-hidden">
@@ -663,11 +859,7 @@ export default function RegisterPage() {
                   </Field>
                   <div className="grid grid-cols-2 gap-3">
                     <Field label="Course" error={errors.course?.message} required>
-                      <input
-                        {...register("course")}
-                        className={inputCls}
-                        placeholder="e.g. BSIT"
-                      />
+                      <CourseCombobox control={control} name="course" />
                     </Field>
                     <Field label="Year Level" error={errors.year_level?.message} required>
                       <select {...register("year_level")} className={inputCls}>
@@ -786,10 +978,192 @@ export default function RegisterPage() {
             </>
           )}
 
-          {/* ── STEP 3: Profile Picture (Optional) ──────────────────────── */}
+          {/* ── STEP 3: Face Capture (Modal Style) ──────────────────────── */}
           {step === 3 && (
             <>
-              <p className="text-sm font-semibold text-white">Profile Picture</p>
+              <div className="flex flex-col items-center gap-4">
+                {/* ── Modal card ───────────────────────────────────────── */}
+                <div className="w-full bg-white/[0.06] backdrop-blur-xl border border-white/[0.1] rounded-2xl overflow-hidden shadow-[0_8px_40px_rgba(0,0,0,0.3)]">
+                  {/* Header */}
+                  <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
+                    <div>
+                      <h3 className="text-base font-bold text-white">Face Capture</h3>
+                      <p className="text-xs text-white/40 mt-0.5">
+                        {watch("first_name")} {watch("last_name")}
+                        {faceEnrolled && <span className="text-green-400 ml-2">✓ Enrolled</span>}
+                      </p>
+                    </div>
+                    {faceImages.length > 0 && !faceEnrolled && !createdUserId && (
+                      <button
+                        type="button"
+                        onClick={() => { stopCamera(); setFaceImages([]); setStep(2); }}
+                        className="p-1.5 rounded-lg hover:bg-white/10 text-white/40 hover:text-white/70 transition"
+                        title="Back"
+                      >
+                        <X size={18} />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Body */}
+                  <div className="px-5 py-4 space-y-4">
+                    {/* Instructions */}
+                    <div className="flex items-start gap-2.5 bg-[#fdf6e8] border border-[#e9d9a8] rounded-xl px-4 py-3">
+                      <Camera size={15} className="text-[#1d4ed8] mt-0.5 shrink-0" />
+                      <p className="text-xs text-[#6b5424] leading-relaxed">
+                        Capture <span className="font-semibold">5 face images</span> at different angles
+                        (front, left, right, slightly up, slightly down). Ensure good lighting.
+                      </p>
+                    </div>
+
+                    {/* Camera preview with face guide overlay */}
+                    <div className="relative w-full max-w-xs mx-auto aspect-[3/4] rounded-2xl overflow-hidden bg-black border border-white/10">
+                      {cameraActive ? (
+                        <>
+                          <video
+                            ref={videoRef}
+                            autoPlay
+                            playsInline
+                            muted
+                            className="w-full h-full object-cover"
+                          />
+                          {/* Oval face guide overlay */}
+                          <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                            <div
+                              className="w-[55%] h-[65%] rounded-[50%] border-2 border-white/50"
+                              style={{ boxShadow: "0 0 0 9999px rgba(0,0,0,0.35)" }}
+                            />
+                          </div>
+                          {/* Capture counter badge */}
+                          <div className="absolute top-3 right-3 bg-black/50 backdrop-blur-sm text-white text-xs font-bold px-2.5 py-1 rounded-full">
+                            {faceImages.length}/5
+                          </div>
+                          {/* Countdown overlay */}
+                          {captureCountdown !== null && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                              <span className="text-6xl font-bold text-white animate-pulse drop-shadow-lg">
+                                {captureCountdown}
+                              </span>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center gap-3">
+                          <div className="w-16 h-16 rounded-full bg-white/[0.06] flex items-center justify-center">
+                            <Camera size={24} className="text-white/30" />
+                          </div>
+                          <p className="text-xs text-white/30 text-center px-6">
+                            {faceImages.length >= 5
+                              ? "All 5 images captured"
+                              : "Click Start Camera below to begin"}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Hidden canvas */}
+                    <canvas ref={canvasRef} className="hidden" />
+
+                    {/* Progress dots */}
+                    <div className="flex items-center justify-center gap-2">
+                      {[0, 1, 2, 3, 4].map((i) => (
+                        <div
+                          key={i}
+                          className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
+                            i < faceImages.length
+                              ? "bg-[#C9A84C] scale-110"
+                              : "bg-white/15"
+                          }`}
+                        />
+                      ))}
+                    </div>
+
+                    {/* Capture button */}
+                    {!cameraActive ? (
+                      faceImages.length >= 5 ? null : (
+                        <button
+                          type="button"
+                          onClick={startCamera}
+                          className="w-full flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-[#1d4ed8] to-[#0d1f3c] hover:from-[#C9A84C] hover:to-[#132a4d] text-white text-sm font-semibold rounded-xl transition shadow-lg shadow-[#1d4ed8]/25"
+                        >
+                          <Camera size={16} /> Start Camera
+                        </button>
+                      )
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleCapture}
+                        disabled={faceImages.length >= 5 || captureCountdown !== null}
+                        className="w-full flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-[#1d4ed8] to-[#0d1f3c] hover:from-[#C9A84C] hover:to-[#132a4d] text-white text-sm font-semibold rounded-xl transition shadow-lg shadow-[#1d4ed8]/25 disabled:opacity-50"
+                      >
+                        <CircleDot size={16} /> Capture ({faceImages.length}/5)
+                      </button>
+                    )}
+
+                    {/* Submit Face Enrollment button — shown after 5 captures, only if user not yet created */}
+                    {faceImages.length >= 5 && !faceEnrolled && !createdUserId && (
+                      <button
+                        type="button"
+                        onClick={submitFaceEnrollment}
+                        disabled={faceEnrollLoading}
+                        className="w-full flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-green-600 to-green-800 hover:from-green-500 hover:to-green-700 text-white text-sm font-semibold rounded-xl transition shadow-lg shadow-green-600/25 disabled:opacity-50"
+                      >
+                        {faceEnrollLoading ? (
+                          <>
+                            <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            Enrolling Face…
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle2 size={16} /> Submit Face Enrollment
+                          </>
+                        )}
+                      </button>
+                    )}
+
+                    {/* Captured thumbnails strip */}
+                    {faceImages.length > 0 && (
+                      <div className="flex items-center justify-center gap-2">
+                        {faceImages.map((img, i) => (
+                          <div key={i} className="relative group shrink-0">
+                            <img
+                              src={`data:image/jpeg;base64,${img}`}
+                              alt={`Face ${i + 1}`}
+                              className="w-12 h-12 object-cover rounded-lg border border-white/15"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removeFaceImage(i)}
+                              className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition text-[8px] leading-none"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Success message */}
+                    {faceImages.length >= 5 && !faceEnrolled && !faceEnrollLoading && (
+                      <div className="flex items-center justify-center gap-2 text-[#C9A84C] text-xs font-medium">
+                        <CheckCircle2 size={14} /> 5 face images captured — click Submit Face Enrollment below
+                      </div>
+                    )}
+                    {faceEnrolled && (
+                      <div className="flex items-center justify-center gap-2 text-green-400 text-xs font-medium">
+                        <CheckCircle2 size={14} /> Face enrollment successful — click Continue below
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* ── STEP 4: Profile Picture (Optional) ──────────────────────── */}
+          {step === 4 && (
+            <>
+              <p className="text-sm font-semibold text-white">Profile Picture <span className="text-white/40 font-normal">(Optional)</span></p>
               <div className="flex items-start gap-2 bg-[#fdf6e8] border border-[#e9d9a8] rounded-xl p-3">
                 <ImagePlus size={16} className="text-[#1d4ed8] mt-0.5 shrink-0" />
                 <p className="text-xs text-[#6b5424] leading-relaxed">
@@ -868,93 +1242,8 @@ export default function RegisterPage() {
             </>
           )}
 
-          {/* ── STEP 4: Face Enrollment ────────────────────────────────────── */}
-          {step === 4 && (
-            <>
-              {/* Instructions */}
-              <div className="flex items-start gap-2 bg-[#fdf6e8] border border-[#e9d9a8] rounded-xl p-3">
-                <Camera size={16} className="text-[#1d4ed8] mt-0.5 shrink-0" />
-                <p className="text-xs text-[#6b5424] leading-relaxed">
-                  Capture <strong>{CAPTURE_COUNT} photos</strong> at different angles (front, left,
-                  right, slight up, slight down). Ensure good lighting. Liveness detection will be
-                  applied during recognition.
-                </p>
-              </div>
-
-              {/* Webcam */}
-              <div className="relative rounded-xl overflow-hidden bg-[#0f172a] aspect-video">
-                <Webcam
-                  ref={webcamRef}
-                  screenshotFormat="image/jpeg"
-                  videoConstraints={{ facingMode: "user", width: 640, height: 360 }}
-                  className="w-full h-full object-cover"
-                  onUserMediaError={() => setCameraError("Camera access denied. Please allow camera permissions and try again.")}
-                />
-                {cameraError && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-[#0f172a]/90 p-4">
-                    <p className="text-sm text-red-400 text-center">{cameraError}</p>
-                  </div>
-                )}
-                {/* Face guide overlay */}
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="w-40 h-52 border-2 border-white/40 rounded-full" />
-                </div>
-                {/* Counter badge */}
-                <div className="absolute top-3 right-3 bg-[#0f172a]/70 text-white text-xs font-semibold px-2.5 py-1 rounded-full">
-                  {captures.length} / {CAPTURE_COUNT}
-                </div>
-              </div>
-
-              {/* Thumbnails */}
-              {captures.length > 0 && (
-                <div className="flex gap-2 flex-wrap">
-                  {captures.map((src, i) => (
-                    <div
-                      key={i}
-                      className="w-14 h-14 rounded-lg overflow-hidden border-2 border-[#1d4ed8] relative"
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={src} alt={`Capture ${i + 1}`} className="w-full h-full object-cover" />
-                      <span className="absolute bottom-0 right-0 bg-[#1d4ed8] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-tl">
-                        {i + 1}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Capture / Reset buttons */}
-              <div className="flex gap-3">
-                {captures.length < CAPTURE_COUNT && (
-                  <button
-                    type="button"
-                    onClick={capture}
-                    className="flex-1 flex items-center justify-center gap-1.5 bg-[#0f172a] hover:bg-[#1e293b] text-white text-sm font-semibold py-2.5 rounded-lg transition"
-                  >
-                    <Camera size={15} /> Capture ({captures.length}/{CAPTURE_COUNT})
-                  </button>
-                )}
-                {captures.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={resetCaptures}
-                    className="flex items-center gap-1.5 border border-white/10 text-white/70 text-sm font-medium px-4 py-2.5 rounded-lg hover:bg-white/5 transition"
-                  >
-                    <RotateCcw size={14} /> Retake
-                  </button>
-                )}
-              </div>
-
-              {apiError && (
-                <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">
-                  {apiError}
-                </div>
-              )}
-            </>
-          )}
-
-          {/* Show API errors for non-face steps too */}
-          {step < 3 && apiError && (
+          {/* Show API errors for all steps */}
+          {apiError && (
             <div className="bg-red-500/10 border border-red-500/20 text-red-300 text-sm px-4 py-3 rounded-xl">
               {apiError}
             </div>
@@ -974,7 +1263,7 @@ export default function RegisterPage() {
 
           {/* ── Navigation buttons ──────────────────────────────────────────── */}
           <div className="flex gap-3 pt-2">
-            {step > 0 && (
+            {step > 0 && step !== 3 && (
               <button
                 type="button"
                 onClick={() => setStep((s) => s - 1)}
@@ -983,21 +1272,33 @@ export default function RegisterPage() {
                 <ChevronLeft size={16} /> Back
               </button>
             )}
-            {step < STEPS.length - 1 ? (
-              <button
-                type="button"
-                onClick={advance}
-                className="flex-1 flex items-center justify-center gap-1 bg-gradient-to-r from-[#1d4ed8] to-[#0d1f3c] hover:from-[#C9A84C] hover:to-[#132a4d] text-white text-sm font-semibold py-2.5 rounded-xl transition shadow-lg shadow-[#1d4ed8]/25"
-              >
-                Continue <ChevronRight size={16} />
-              </button>
+            {step < 4 ? (
+              step === 3 ? (
+                faceEnrolled ? (
+                  <button
+                    type="button"
+                    onClick={() => setStep(4)}
+                    className="flex-1 flex items-center justify-center gap-1 bg-gradient-to-r from-[#1d4ed8] to-[#0d1f3c] hover:from-[#C9A84C] hover:to-[#132a4d] text-white text-sm font-semibold py-2.5 rounded-xl transition shadow-lg shadow-[#1d4ed8]/25"
+                  >
+                    Continue <ChevronRight size={16} />
+                  </button>
+                ) : null
+              ) : (
+                <button
+                  type="button"
+                  onClick={advance}
+                  className="flex-1 flex items-center justify-center gap-1 bg-gradient-to-r from-[#1d4ed8] to-[#0d1f3c] hover:from-[#C9A84C] hover:to-[#132a4d] text-white text-sm font-semibold py-2.5 rounded-xl transition shadow-lg shadow-[#1d4ed8]/25"
+                >
+                  Continue <ChevronRight size={16} />
+                </button>
+              )
             ) : (
               <button
                 type="submit"
-                disabled={isSubmitting || enrolling || captures.length < CAPTURE_COUNT}
+                disabled={isSubmitting}
                 className="flex-1 bg-gradient-to-r from-[#1d4ed8] to-[#0d1f3c] hover:from-[#C9A84C] hover:to-[#132a4d] text-white text-sm font-semibold py-2.5 rounded-xl transition shadow-lg shadow-[#1d4ed8]/25 disabled:opacity-50"
               >
-                {isSubmitting || enrolling ? "Submitting…" : "Submit Registration"}
+                {isSubmitting ? "Submitting…" : "Submit Registration"}
               </button>
             )}
           </div>

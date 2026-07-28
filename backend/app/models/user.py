@@ -84,6 +84,7 @@ class User(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_logout_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # ── Relationships ──────────────────────────────────────────────────────────
     face_embedding: Mapped["FaceEmbedding | None"] = relationship(  # noqa: F821

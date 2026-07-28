@@ -3,11 +3,11 @@
 import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { reportsApi, announcementsApi, usersApi } from "@/lib/api";
-import { Users, CheckCircle, Package, AlertTriangle, Plus, Pencil, Trash2, Calendar, X, Loader2, Clock, ImagePlus } from "lucide-react";
+import { Users, CheckCircle, Package, AlertTriangle, Plus, Pencil, Trash2, Calendar, X, Loader2, Clock, ImagePlus, Megaphone, PartyPopper, Pin, MessageSquare, ThumbsUp } from "lucide-react";
 import type { UserSummary } from "@/types";
 import type { DashboardSummary, Announcement, PaginatedResponse } from "@/types";
 import { useAuthStore } from "@/store/useAuthStore";
-import { format } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
 import {
   BarChart,
   Bar,
@@ -19,6 +19,12 @@ import {
 } from "recharts";
 
 // ── Announcement Form Modal ────────────────────────────────────────────────────
+
+const tagConfig: Record<string, { label: string; icon: React.ElementType; bg: string; text: string; border: string }> = {
+  urgent: { label: "Urgent", icon: AlertTriangle, bg: "bg-red-100", text: "text-red-700", border: "border-red-300" },
+  event: { label: "Event", icon: PartyPopper, bg: "bg-blue-100", text: "text-blue-700", border: "border-blue-300" },
+  notice: { label: "Notice", icon: Megaphone, bg: "bg-amber-100", text: "text-amber-700", border: "border-amber-300" },
+};
 
 interface AnnouncementFormProps {
   existing?: Announcement;
@@ -35,6 +41,8 @@ function AnnouncementFormModal({ existing, onClose }: AnnouncementFormProps) {
       ? format(new Date(existing.event_date), "yyyy-MM-dd'T'HH:mm")
       : ""
   );
+  const [tag, setTag] = useState<string>(existing?.tag ?? "notice");
+  const [pinned, setPinned] = useState(existing?.pinned ?? false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(existing?.image_url ?? null);
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +53,8 @@ function AnnouncementFormModal({ existing, onClose }: AnnouncementFormProps) {
         title,
         content,
         event_date: eventDate ? new Date(eventDate).toISOString() : null,
+        tag,
+        pinned,
       };
       if (existing) {
         await announcementsApi.update(existing.id, payload);
@@ -131,6 +141,30 @@ function AnnouncementFormModal({ existing, onClose }: AnnouncementFormProps) {
             />
           </div>
           <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Tag</label>
+            <div className="flex gap-2">
+              {(["urgent", "event", "notice"] as const).map((t) => {
+                const cfg = tagConfig[t];
+                const Icon = cfg.icon;
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setTag(t)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition ${
+                      tag === t
+                        ? `${cfg.bg} ${cfg.text} ${cfg.border}`
+                        : "bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100"
+                    }`}
+                  >
+                    <Icon size={12} />
+                    {cfg.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Event Date <span className="text-gray-400 font-normal">(optional)</span>
             </label>
@@ -177,6 +211,18 @@ function AnnouncementFormModal({ existing, onClose }: AnnouncementFormProps) {
               </button>
             )}
           </div>
+          <label className="flex items-center gap-2.5 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={pinned}
+              onChange={(e) => setPinned(e.target.checked)}
+              className="w-4 h-4 rounded border-gray-300 text-[#1E3A5F] focus:ring-[#1E3A5F]/30"
+            />
+            <div className="flex items-center gap-1.5">
+              <Pin size={13} className="text-gray-400" />
+              <span className="text-sm text-gray-700 font-medium">Pin Post</span>
+            </div>
+          </label>
           {error && (
             <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>
           )}
@@ -241,7 +287,10 @@ export default function DashboardPage() {
   const pendingCount = pendingData?.total ?? 0;
 
   const isEditor = user?.role === "admin" || user?.role === "director" || user?.role === "staff";
-  const announcements = announcementsData?.items ?? [];
+  const announcements = [...(announcementsData?.items ?? [])].sort((a, b) => {
+    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+    return 0;
+  });
 
   if (isLoading) {
     return (
@@ -394,66 +443,115 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {/* Announcements */}
+        {/* Announcements Feed */}
         <div className="bg-white rounded-xl shadow-sm p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-semibold text-gray-800">Upcoming Events & Notices</h2>
-              {isEditor && (
-                <button
-                  onClick={() => setAnnouncementModal("new")}
-                  className="flex items-center gap-1 px-3 py-1.5 text-xs bg-[#1E3A5F] text-white rounded-lg hover:bg-[#16304f] transition font-medium"
-                >
-                  <Plus size={12} /> Add
-                </button>
-              )}
-            </div>
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="text-base font-semibold text-gray-800">Updates & Notices</h2>
+            {isEditor && (
+              <button
+                onClick={() => setAnnouncementModal("new")}
+                className="flex items-center gap-1 px-3 py-1.5 text-xs bg-[#1E3A5F] text-white rounded-lg hover:bg-[#16304f] transition font-medium"
+              >
+                <Plus size={12} /> Create Post
+              </button>
+            )}
+          </div>
 
-            {announcements.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-8">No announcements yet.</p>
-            ) : (
-              <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
-                {announcements.map((ann) => (
-                  <div key={ann.id} className="group p-3 bg-gray-50 rounded-xl border border-gray-100">
-                    {ann.image_url && (
-                      <img
-                        src={ann.image_url}
-                        alt={ann.title}
-                        className="w-full h-32 object-cover rounded-lg mb-2 border border-gray-200"
-                      />
-                    )}
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="text-sm font-semibold text-gray-900 leading-tight">{ann.title}</p>
-                      {isEditor && (
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition shrink-0">
-                          <button
-                            onClick={() => setAnnouncementModal(ann)}
-                            className="p-1 hover:bg-gray-200 rounded text-gray-500"
-                            title="Edit"
-                          >
-                            <Pencil size={12} />
-                          </button>
-                          <button
-                            onClick={() => deleteAnnouncement(ann.id)}
-                            className="p-1 hover:bg-red-100 rounded text-red-400"
-                            title="Delete"
-                          >
-                            <Trash2 size={12} />
-                          </button>
+          {announcements.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-8">No announcements yet.</p>
+          ) : (
+            <div className="space-y-4 max-h-[32rem] overflow-y-auto pr-1">
+              {announcements.map((ann) => {
+                const tc = ann.tag ? tagConfig[ann.tag] : null;
+                const TagIcon = tc?.icon;
+                return (
+                  <div key={ann.id} className={`group border rounded-xl overflow-hidden transition ${ann.pinned ? "border-amber-200 bg-amber-50/30" : "border-gray-100 bg-white"}`}>
+                    {/* Header */}
+                    <div className="flex items-center justify-between px-4 pt-4 pb-2">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-[#1E3A5F] flex items-center justify-center text-white text-sm font-semibold shrink-0">
+                          {(ann.created_by_name || "OSCA").charAt(0).toUpperCase()}
                         </div>
-                      )}
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900 leading-tight">{ann.created_by_name || "OSCA Admin"}</p>
+                          <p className="text-xs text-gray-400">{formatDistanceToNow(new Date(ann.created_at), { addSuffix: true })}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {ann.pinned && (
+                          <span className="flex items-center gap-1 text-xs font-medium text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full">
+                            <Pin size={10} /> Pinned
+                          </span>
+                        )}
+                        {tc && (
+                          <span className={`flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${tc.bg} ${tc.text} border ${tc.border}`}>
+                            <TagIcon size={10} /> {tc.label}
+                          </span>
+                        )}
+                        {isEditor && (
+                          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setAnnouncementModal(ann); }}
+                              className="p-1 hover:bg-gray-200 rounded text-gray-500"
+                              title="Edit"
+                            >
+                              <Pencil size={12} />
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); deleteAnnouncement(ann.id); }}
+                              className="p-1 hover:bg-red-100 rounded text-red-400"
+                              title="Delete"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <p className="text-xs text-gray-500 mt-1 line-clamp-2">{ann.content}</p>
+
+                    {/* Title + Content */}
+                    <div className="px-4 pb-2">
+                      <p className="text-sm font-bold text-gray-900">{ann.title}</p>
+                      <p className="text-sm text-gray-600 mt-1 leading-relaxed whitespace-pre-line">{ann.content}</p>
+                    </div>
+
+                    {/* Image */}
+                    {ann.image_url && (
+                      <div className="px-4 pb-2">
+                        <img
+                          src={ann.image_url}
+                          alt={ann.title}
+                          className="w-full max-h-64 object-cover rounded-lg border border-gray-100"
+                        />
+                      </div>
+                    )}
+
+                    {/* Event Date */}
                     {ann.event_date && (
-                      <div className="flex items-center gap-1 mt-1.5 text-xs text-[#1E3A5F] font-medium">
-                        <Calendar size={11} />
+                      <div className="px-4 pb-2 flex items-center gap-1.5 text-xs text-[#1E3A5F] font-medium">
+                        <Calendar size={12} />
                         {format(new Date(ann.event_date), "MMM d, yyyy · h:mm a")}
                       </div>
                     )}
+
+                    {/* Divider */}
+                    <div className="border-t border-gray-100 mx-4" />
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-1 px-4 py-2">
+                      <button className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-100 rounded-lg transition">
+                        <ThumbsUp size={13} /> Acknowledge
+                      </button>
+                      <button className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-100 rounded-lg transition">
+                        <MessageSquare size={13} /> Comment
+                      </button>
+                    </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
           <p className="text-xs text-gray-400 text-right">
             Last updated:{" "}
