@@ -71,6 +71,9 @@ class Session(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
+    # Grace period for late arrivals (in minutes)
+    grace_period_minutes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
     # Relationships
     attendance_records: Mapped[list["AttendanceRecord"]] = relationship(
         "AttendanceRecord", back_populates="session", cascade="all, delete-orphan"
@@ -112,6 +115,7 @@ class AttendanceRecord(Base):
     duration_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Status
+    status: Mapped[str | None] = mapped_column(String(20), nullable=True, comment="present, late, absent")
     is_complete: Mapped[bool] = mapped_column(default=False, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 

@@ -4,7 +4,7 @@ Attendance endpoints: sessions, kiosk face-scan, facial enrollment, records.
 import base64
 import time
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 import redis.asyncio as aioredis
@@ -33,6 +33,7 @@ from app.schemas.attendance import (
     FaceScanResponse,
     SessionCreate,
     SessionRead,
+    SessionUpdate,
 )
 from app.schemas.common import MessageResponse, PaginatedResponse
 from app.services.facial_recognition import FacialRecognitionService
@@ -117,6 +118,102 @@ async def list_sessions(
 
     return PaginatedResponse(items=items, total=total, page=page, page_size=page_size,
                              pages=(total + page_size - 1) // page_size)
+
+
+@router.get(
+    "/sessions/{session_id}",
+    response_model=SessionRead,
+    summary="Get a single session by ID",
+)
+async def get_session(
+    session_id: uuid.UUID,
+    current_user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SessionRead:
+    result = await db.execute(select(Session).where(Session.id == session_id))
+    session = result.scalar_one_or_none()
+    if not session:
+        raise NotFoundError("Session", str(session_id))
+
+    count_result = await db.execute(
+        select(func.count(AttendanceRecord.id)).where(AttendanceRecord.session_id == session.id)
+    )
+    sr = SessionRead.model_validate(session)
+    sr.attendance_count = count_result.scalar_one()
+    return sr
+
+
+@router.patch(
+    "/sessions/{session_id}",
+    response_model=SessionRead,
+    summary="Update a session (Admin/Coach)",
+)
+async def update_session(
+    session_id: uuid.UUID,
+    body: SessionUpdate,
+    current_user: AdminOrCoach,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SessionRead:
+    result = await db.execute(select(Session).where(Session.id == session_id))
+    session = result.scalar_one_or_none()
+    if not session:
+        raise NotFoundError("Session", str(session_id))
+
+    update_data = body.model_dump(exclude_unset=True)
+
+    # Validate scheduled_end > scheduled_start if both are being set
+    new_start = update_data.get("scheduled_start", session.scheduled_start)
+    new_end = update_data.get("scheduled_end", session.scheduled_end)
+    if new_end <= new_start:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="scheduled_end must be after scheduled_start",
+        )
+
+    for field, value in update_data.items():
+        setattr(session, field, value)
+
+    await db.commit()
+    await db.refresh(session)
+
+    count_result = await db.execute(
+        select(func.count(AttendanceRecord.id)).where(AttendanceRecord.session_id == session.id)
+    )
+    sr = SessionRead.model_validate(session)
+    sr.attendance_count = count_result.scalar_one()
+    return sr
+
+
+@router.post(
+    "/sessions/{session_id}/end",
+    response_model=SessionRead,
+    summary="Mark a session as ended/closed (Admin/Coach)",
+)
+async def end_session(
+    session_id: uuid.UUID,
+    current_user: AdminOrCoach,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SessionRead:
+    result = await db.execute(select(Session).where(Session.id == session_id))
+    session = result.scalar_one_or_none()
+    if not session:
+        raise NotFoundError("Session", str(session_id))
+    if not session.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Session is already closed",
+        )
+
+    session.is_active = False
+    await db.commit()
+    await db.refresh(session)
+
+    count_result = await db.execute(
+        select(func.count(AttendanceRecord.id)).where(AttendanceRecord.session_id == session.id)
+    )
+    sr = SessionRead.model_validate(session)
+    sr.attendance_count = count_result.scalar_one()
+    return sr
 
 
 # ── Face Enrollment ───────────────────────────────────────────────────────────
@@ -346,12 +443,16 @@ async def face_scan(
                 processing_time_ms=processing_ms,
                 message="Already timed in for this session",
             )
+        now = datetime.now(UTC)
+        grace_deadline = session.scheduled_start + timedelta(minutes=session.grace_period_minutes)
+        att_status = "present" if now <= grace_deadline else "late"
         record = AttendanceRecord(
             student_id=user_id,
             session_id=body.session_id,
-            time_in=datetime.now(UTC),
+            time_in=now,
             time_in_confidence=match_result.confidence,
             time_in_liveness_score=match_result.liveness_score,
+            status=att_status,
         )
         db.add(record)
 

@@ -139,6 +139,10 @@ export const usersApi = {
 export const attendanceApi = {
   createSession: (data: Record<string, unknown>) =>
     api.post("/attendance/sessions", data),
+  updateSession: (id: string, data: Record<string, unknown>) =>
+    api.patch(`/attendance/sessions/${id}`, data),
+  endSession: (id: string) =>
+    api.post(`/attendance/sessions/${id}/end`),
   listSessions: (params?: Record<string, string | number | boolean>) =>
     api.get("/attendance/sessions", { params }),
   getSession: (id: string) =>

@@ -17,6 +17,7 @@ class SessionCreate(OSCABaseModel):
     venue: str | None = Field(default=None, max_length=200)
     scheduled_start: datetime
     scheduled_end: datetime
+    grace_period_minutes: int = Field(default=0, ge=0, description="Minutes after start_time during which scan = PRESENT (beyond = LATE)")
     notes: str | None = None
 
     @field_validator("scheduled_end")
@@ -27,6 +28,17 @@ class SessionCreate(OSCABaseModel):
         return v
 
 
+class SessionUpdate(OSCABaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    activity_type: ActivityType | None = None
+    sport_or_art: str | None = Field(default=None, max_length=100)
+    venue: str | None = Field(default=None, max_length=200)
+    scheduled_start: datetime | None = None
+    scheduled_end: datetime | None = None
+    grace_period_minutes: int | None = Field(default=None, ge=0)
+    notes: str | None = None
+
+
 class SessionRead(OSCABaseModel):
     id: uuid.UUID
     name: str
@@ -35,6 +47,7 @@ class SessionRead(OSCABaseModel):
     venue: str | None
     scheduled_start: datetime
     scheduled_end: datetime
+    grace_period_minutes: int = 0
     notes: str | None
     is_active: bool
     created_at: datetime
@@ -55,6 +68,7 @@ class AttendanceRecordRead(OSCABaseModel):
     time_out_confidence: float | None
     duration_minutes: int | None
     is_complete: bool
+    status: str | None = None
     notes: str | None
 
 

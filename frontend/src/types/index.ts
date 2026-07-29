@@ -109,6 +109,8 @@ export interface Session {
   venue: string | null;
   scheduled_start: string;
   scheduled_end: string;
+  grace_period_minutes: number;
+  notes?: string;
   is_active: boolean;
   attendance_count: number;
   created_at: string;
@@ -126,6 +128,7 @@ export interface AttendanceRecord {
   time_in_confidence: number | null;
   time_out_confidence: number | null;
   is_complete: boolean;
+  status: string | null;
 }
 
 export interface FaceScanResponse {

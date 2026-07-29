@@ -4,7 +4,7 @@ import { use } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { attendanceApi, usersApi } from "@/lib/api";
 import { useAuthStore } from "@/store/useAuthStore";
-import { ArrowLeft, Loader2, CalendarCheck, Users, CheckCircle2, XCircle } from "lucide-react";
+import { ArrowLeft, Loader2, CalendarCheck, Users, CheckCircle2, XCircle, Clock } from "lucide-react";
 import Link from "next/link";
 import { format } from "date-fns";
 import type { AttendanceRecord, Session, PaginatedResponse } from "@/types";
@@ -17,7 +17,7 @@ interface User {
   sport_or_art: string | null;
 }
 
-type AttendanceStatus = "present" | "absent";
+type AttendanceStatus = "present" | "late" | "absent";
 
 interface PlayerRow {
   user: User;
@@ -81,15 +81,20 @@ export default function SessionMonitorPage({
   const playerRows: PlayerRow[] = (studentsData?.items ?? []).map((student) => {
     const record =
       recordsData?.items.find((r) => r.student_id === student.id) ?? null;
+    let status: AttendanceStatus = "absent";
+    if (record?.time_in) {
+      status = record.status === "late" ? "late" : "present";
+    }
     return {
       user: student,
       record,
-      status: record ? "present" : "absent",
+      status,
     };
   });
 
   // Summary counts
   const presentCount = playerRows.filter((r) => r.status === "present").length;
+  const lateCount = playerRows.filter((r) => r.status === "late").length;
   const absentCount = playerRows.filter((r) => r.status === "absent").length;
   const totalCount = playerRows.length;
 
@@ -131,10 +136,11 @@ export default function SessionMonitorPage({
               </span>
             </div>
             <p className="text-sm text-gray-500">
-              {format(new Date(sessionData.scheduled_start), "MMMM d, yyyy · h:mm a")}
-              {sessionData.venue ? ` · ${sessionData.venue}` : ""}
-              {sessionData.sport_or_art ? ` · ${sessionData.sport_or_art}` : ""}
-            </p>
+                {format(new Date(sessionData.scheduled_start), "MMMM d, yyyy · h:mm a")}
+                {sessionData.venue ? ` · ${sessionData.venue}` : ""}
+                {sessionData.sport_or_art ? ` · ${sessionData.sport_or_art}` : ""}
+                {sessionData.grace_period_minutes > 0 ? ` · Grace: ${sessionData.grace_period_minutes}min` : ""}
+              </p>
           </div>
           <span
             className={`self-start sm:self-auto px-3 py-1 rounded-full text-sm font-medium ${
@@ -151,7 +157,7 @@ export default function SessionMonitorPage({
       )}
 
       {/* Summary cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-4 gap-4">
         <div className="bg-white rounded-xl shadow-sm p-4 text-center">
           <p className="text-2xl font-bold text-[#1E3A5F]">{totalCount}</p>
           <p className="text-xs text-gray-500 mt-0.5 flex items-center justify-center gap-1">
@@ -162,6 +168,12 @@ export default function SessionMonitorPage({
           <p className="text-2xl font-bold text-green-600">{presentCount}</p>
           <p className="text-xs text-gray-500 mt-0.5 flex items-center justify-center gap-1">
             <CheckCircle2 size={12} /> Present
+          </p>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm p-4 text-center">
+          <p className="text-2xl font-bold text-amber-600">{lateCount}</p>
+          <p className="text-xs text-gray-500 mt-0.5 flex items-center justify-center gap-1">
+            <Clock size={12} /> Late
           </p>
         </div>
         <div className="bg-white rounded-xl shadow-sm p-4 text-center">
@@ -232,6 +244,10 @@ export default function SessionMonitorPage({
                     {status === "present" ? (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                         <CheckCircle2 size={11} /> Present
+                      </span>
+                    ) : status === "late" ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                        <Clock size={11} /> Late
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
