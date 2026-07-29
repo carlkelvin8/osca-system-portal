@@ -11,7 +11,7 @@
  * (Next.js 15, Tailwind CSS, React Hook Form + Zod, TanStack Query, react-webcam)
  */
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -35,7 +35,7 @@ import {
   ShieldCheck,
   Trash2,
   AlertTriangle,
-  Eye,
+  Eye, EyeOff,
   Phone,
   Calendar,
   Clock,
@@ -98,7 +98,39 @@ const createUserSchema = z
     year_level: z.string().optional(),
     sport_or_art: z.string().optional(),
     assigned_sport: z.string().optional(),
+    biometric_consent: z.boolean().optional(),
+    student_role: z.enum(["student_athlete", "student_artist"]).optional(),
+    emergency_contact_name: z.string().optional(),
+    emergency_contact_number: z.string().optional(),
   })
+  .refine(
+    (d) => {
+      if (d.role === "student") return d.biometric_consent === true;
+      return true;
+    },
+    { message: "Biometric consent is required for student accounts", path: ["biometric_consent"] }
+  )
+  .refine(
+    (d) => {
+      if (d.role !== "student") return true;
+      return !!d.emergency_contact_name && d.emergency_contact_name.length >= 2;
+    },
+    { message: "Emergency contact name is required", path: ["emergency_contact_name"] }
+  )
+  .refine(
+    (d) => {
+      if (d.role !== "student") return true;
+      return !!d.emergency_contact_number && d.emergency_contact_number.length >= 7 && /^\+?[0-9\s\-()]+$/.test(d.emergency_contact_number);
+    },
+    { message: "Enter a valid emergency contact number", path: ["emergency_contact_number"] }
+  )
+  .refine(
+    (d) => {
+      if (d.role !== "student") return true;
+      return !!d.student_role;
+    },
+    { message: "Please select a student role", path: ["student_role"] }
+  )
   .refine((d) => d.password === d.confirmPassword, {
     message: "Passwords do not match",
     path: ["confirmPassword"],
@@ -113,18 +145,48 @@ const createUserSchema = z
     { message: "Sport / Art is required for Coach and PE Instructor roles", path: ["assigned_sport"] }
   );
 
-const SPORT_OPTIONS = [
-  "Arnis",
-  "Badminton",
-  "Basketball",
-  "Sepak Takraw",
-  "Table Tennis",
-  "Taekwondo",
-  "Volleyball Men",
-  "Volleyball Women",
-  "Hataw Himpapawid Dance Group",
-  "Himig Himpapawid Chorale",
-  "Musikang Himpapawid Live Band",
+const COURSE_OPTIONS: string[] = [
+  "BSAT",
+  "BSAeE",
+  "BSAMT",
+  "BSAET",
+  "AAMT",
+  "AAET",
+  "BSAvCOMM",
+  "BSATTM",
+  "BSAvSSM",
+  "BSSCM-AvLOG",
+  "BSIT-AIT",
+  "BSIS-AIS",
+];
+
+const SPORT_GROUPS: { group: string; items: string[] }[] = [
+  {
+    group: "Sports",
+    items: [
+      "Arnis",
+      "Badminton",
+      "Basketball",
+      "Sepak Takraw",
+      "Table Tennis",
+      "Taekwondo",
+      "Volleyball Men",
+      "Volleyball Women",
+    ],
+  },
+  {
+    group: "Cultural Affairs",
+    items: [
+      "Hataw Himpapawid Dance Group",
+      "Himig Himpapawid Chorale",
+      "Musikang Himpapawid Live Band",
+    ],
+  },
+];
+
+const STUDENT_ROLES: { value: string; label: string }[] = [
+  { value: "student_athlete", label: "Student Athlete" },
+  { value: "student_artist", label: "Student Artist" },
 ];
 
 type CreateUserForm = z.infer<typeof createUserSchema>;
@@ -200,6 +262,115 @@ const CREATOR_ROLE_LIMITS: Record<UserRole, UserRole[]> = {
   student: [],
 };
 
+// ── Searchable Select ──────────────────────────────────────────────────────────
+
+function SearchableSelect({
+  value,
+  onChange,
+  options,
+  groups,
+  placeholder,
+  error,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options?: readonly string[];
+  groups?: readonly { group: string; items: string[] }[];
+  placeholder?: string;
+  error?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState(value || "");
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setOpen(false);
+  }, [value]);
+
+  useEffect(() => {
+    setSearch(value || "");
+  }, [value]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const allItems = groups ? groups.flatMap((g) => g.items) : options ?? [];
+  const filterFn = (s: string) => s.toLowerCase().includes(search.toLowerCase());
+
+  const filteredGroups = groups
+    ? groups
+        .map((g) => ({ ...g, items: g.items.filter(filterFn) }))
+        .filter((g) => g.items.length > 0)
+    : [];
+
+  const filteredFlat = options ? options.filter(filterFn) : [];
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <input
+        value={search}
+        onChange={(e) => { setSearch(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        className={inputCls}
+        placeholder={placeholder}
+      />
+      {open && (
+        <div className="absolute z-20 mt-1 w-full bg-white border border-[#d1d5db] rounded-lg shadow-lg max-h-48 overflow-y-auto">
+          {search && !allItems.includes(search) && (
+            <button
+              type="button"
+              className="w-full text-left px-3 py-2 text-sm text-[#6b7280] hover:bg-[#f3f4f6] border-b border-[#e5e7eb]"
+              onMouseDown={() => { onChange(search); setOpen(false); }}
+            >
+              Use &ldquo;{search}&rdquo;
+            </button>
+          )}
+          {groups
+            ? filteredGroups.length > 0
+              ? filteredGroups.map((g) => (
+                  <div key={g.group}>
+                    <p className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-[#8a6d1f]">
+                      {g.group}
+                    </p>
+                    {g.items.map((item) => (
+                      <button
+                        key={item}
+                        type="button"
+                        className={`w-full text-left px-3 py-2 text-sm hover:bg-[#f3f4f6] ${item === value ? "bg-[#eff6ff] text-[#2563eb] font-medium" : "text-[#111827]"}`}
+                        onMouseDown={() => { onChange(item); setOpen(false); }}
+                      >
+                        {item}
+                      </button>
+                    ))}
+                  </div>
+                ))
+              : <div className="px-3 py-2 text-sm text-[#9ca3af]">No matches</div>
+            : filteredFlat.length > 0
+              ? filteredFlat.map((o) => (
+                  <button
+                    key={o}
+                    type="button"
+                    className={`w-full text-left px-3 py-2 text-sm hover:bg-[#f3f4f6] ${o === value ? "bg-[#eff6ff] text-[#2563eb] font-medium" : "text-[#111827]"}`}
+                    onMouseDown={() => { onChange(o); setOpen(false); }}
+                  >
+                    {o}
+                  </button>
+                ))
+              : <div className="px-3 py-2 text-sm text-[#9ca3af]">No matches</div>
+          }
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Create User Modal ─────────────────────────────────────────────────────────
 
 function CreateUserModal({ onClose }: { onClose: () => void }) {
@@ -208,15 +379,18 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
   const [apiError, setApiError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  // Filter roles based on who is creating
   const allowedRoles = currentUser
     ? CREATOR_ROLE_LIMITS[currentUser.role] ?? []
     : [];
+
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const {
     register,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<CreateUserForm>({
     resolver: zodResolver(createUserSchema),
@@ -224,6 +398,8 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
   });
 
   const selectedRole = watch("role");
+  const studentRole = watch("student_role");
+  const isStudent = selectedRole === "student";
 
   const onSubmit = async (data: CreateUserForm) => {
     setApiError(null);
@@ -234,7 +410,7 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
         first_name: data.first_name,
         last_name: data.last_name,
         role: data.role,
-        is_active: true, // Admin-created users are active immediately
+        is_active: true,
         ...(data.student_id ? { student_id: data.student_id } : {}),
         ...(data.course ? { course: data.course } : {}),
         ...(data.year_level ? { year_level: data.year_level } : {}),
@@ -242,6 +418,9 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
         ...((data.role === "coach" || data.role === "pe_instructor") && data.assigned_sport
           ? { assigned_sport: data.assigned_sport }
           : {}),
+        ...(data.role === "student" ? { biometric_consent: data.biometric_consent } : {}),
+        ...(data.emergency_contact_name ? { emergency_contact_name: data.emergency_contact_name } : {}),
+        ...(data.emergency_contact_number ? { emergency_contact_number: data.emergency_contact_number } : {}),
       });
       qc.invalidateQueries({ queryKey: ["users"] });
       setSuccess(true);
@@ -292,10 +471,36 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Password" error={errors.password?.message} required>
-            <input {...register("password")} type="password" className={inputCls} />
+            <div className="relative">
+              <input
+                {...register("password")}
+                type={showPassword ? "text" : "password"}
+                className={inputCls + " pr-10"}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((p) => !p)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#9ca3af] hover:text-[#374151] transition"
+              >
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
           </Field>
           <Field label="Confirm Password" error={errors.confirmPassword?.message} required>
-            <input {...register("confirmPassword")} type="password" className={inputCls} />
+            <div className="relative">
+              <input
+                {...register("confirmPassword")}
+                type={showConfirmPassword ? "text" : "password"}
+                className={inputCls + " pr-10"}
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword((p) => !p)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#9ca3af] hover:text-[#374151] transition"
+              >
+                {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
           </Field>
         </div>
 
@@ -311,7 +516,7 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
         </Field>
 
         {/* Student-specific fields */}
-        {selectedRole === "student" && (
+        {isStudent && (
           <div className="bg-[#f8fafc] border border-[#e5e7eb] rounded-xl p-4 space-y-3">
             <p className="text-xs font-semibold text-[#6b7280] uppercase tracking-wide">
               Student Details
@@ -335,15 +540,72 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
               </Field>
             </div>
             <Field label="Course" error={errors.course?.message}>
-              <input {...register("course")} className={inputCls} placeholder="e.g. BSIT" />
+              <SearchableSelect
+                value={watch("course") || ""}
+                onChange={(v) => setValue("course", v, { shouldValidate: true })}
+                options={COURSE_OPTIONS}
+                placeholder="e.g. BSIT"
+              />
+            </Field>
+            <Field label="Student Role" error={errors.student_role?.message} required>
+              <select
+                value={studentRole || ""}
+                onChange={(e) => {
+                  setValue("student_role", e.target.value as "student_athlete" | "student_artist", { shouldValidate: true });
+                  setValue("sport_or_art", "", { shouldValidate: true });
+                }}
+                className={inputCls}
+              >
+                <option value="">Select…</option>
+                {STUDENT_ROLES.map((r) => (
+                  <option key={r.value} value={r.value}>{r.label}</option>
+                ))}
+              </select>
             </Field>
             <Field label="Sport / Art" error={errors.sport_or_art?.message}>
-              <input
-                {...register("sport_or_art")}
-                className={inputCls}
+              <SearchableSelect
+                value={watch("sport_or_art") || ""}
+                onChange={(v) => setValue("sport_or_art", v, { shouldValidate: true })}
+                groups={
+                  studentRole === "student_athlete"
+                    ? SPORT_GROUPS.filter((g) => g.group === "Sports")
+                    : studentRole === "student_artist"
+                      ? SPORT_GROUPS.filter((g) => g.group === "Cultural Affairs")
+                      : SPORT_GROUPS
+                }
                 placeholder="e.g. Basketball"
               />
             </Field>
+            <Field label="Biometric Consent (R.A. 10173)" error={errors.biometric_consent?.message} required>
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  {...register("biometric_consent")}
+                  className="mt-0.5 w-4 h-4 text-[#2563eb] border-[#d1d5db] rounded focus:ring-[#2563eb]"
+                />
+                <span className="text-sm text-[#374151] leading-relaxed">
+                  I confirm that the student has provided consent for biometric data processing in
+                  compliance with R.A. 10173. This is required for facial enrollment.
+                </span>
+              </label>
+            </Field>
+          </div>
+        )}
+
+        {/* Emergency Contact */}
+        {isStudent && (
+          <div className="bg-[#f8fafc] border border-[#e5e7eb] rounded-xl p-4 space-y-3">
+            <p className="text-xs font-semibold text-[#6b7280] uppercase tracking-wide">
+              Emergency Contact
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Contact Name" error={errors.emergency_contact_name?.message} required>
+                <input {...register("emergency_contact_name")} className={inputCls} placeholder="Full name" />
+              </Field>
+              <Field label="Contact Number" error={errors.emergency_contact_number?.message} required>
+                <input {...register("emergency_contact_number")} type="tel" className={inputCls} placeholder="+63 9XX XXX XXXX" />
+              </Field>
+            </div>
           </div>
         )}
 
@@ -354,12 +616,12 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
               {selectedRole === "coach" ? "Coach" : "PE Instructor"} Assignment
             </p>
             <Field label="Sport / Art" error={errors.assigned_sport?.message} required>
-              <select {...register("assigned_sport")} className={inputCls}>
-                <option value="">Select sport…</option>
-                {SPORT_OPTIONS.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
+              <SearchableSelect
+                value={watch("assigned_sport") || ""}
+                onChange={(v) => setValue("assigned_sport", v, { shouldValidate: true })}
+                groups={SPORT_GROUPS}
+                placeholder="Select sport…"
+              />
             </Field>
           </div>
         )}
@@ -565,11 +827,13 @@ function DeleteUserModal({
   onConfirm,
   onCancel,
   isDeleting,
+  error,
 }: {
   user: UserSummary;
   onConfirm: () => void;
   onCancel: () => void;
   isDeleting: boolean;
+  error: string | null;
 }) {
   return (
     <Modal title="Delete User Account" onClose={onCancel}>
@@ -588,6 +852,12 @@ function DeleteUserModal({
             </p>
           </div>
         </div>
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 rounded-lg">
+            {error}
+          </div>
+        )}
 
         <div className="flex gap-3 pt-2">
           <button onClick={onCancel} className={btnSecondary + " flex-1 justify-center"}>
@@ -976,6 +1246,7 @@ export default function UsersPage() {
   const [viewUserId, setViewUserId] = useState<string | null>(null);
   const [enrollUser, setEnrollUser] = useState<UserSummary | null>(null);
   const [deleteUser, setDeleteUser] = useState<UserSummary | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const canCreateUsers = currentUser && (CREATOR_ROLE_LIMITS[currentUser.role]?.length ?? 0) > 0;
   const canDeleteUsers = currentUser && ["admin", "staff", "director"].includes(currentUser.role);
@@ -1019,11 +1290,19 @@ export default function UsersPage() {
 
   const deletePermanently = useMutation({
     mutationFn: async (user: UserSummary) => {
+      setDeleteError(null);
       await usersApi.deletePermanently(user.id);
     },
     onSuccess: () => {
       setDeleteUser(null);
+      setDeleteError(null);
       qc.invalidateQueries({ queryKey: ["users"] });
+    },
+    onError: (err: unknown) => {
+      const msg =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
+        "Failed to delete user. Please try again.";
+      setDeleteError(msg);
     },
   });
 
@@ -1228,9 +1507,10 @@ export default function UsersPage() {
       {deleteUser && (
         <DeleteUserModal
           user={deleteUser}
-          onConfirm={() => deletePermanently.mutate(deleteUser)}
-          onCancel={() => setDeleteUser(null)}
+          onConfirm={() => { setDeleteError(null); deletePermanently.mutate(deleteUser); }}
+          onCancel={() => { setDeleteUser(null); setDeleteError(null); }}
           isDeleting={deletePermanently.isPending}
+          error={deleteError}
         />
       )}
     </div>

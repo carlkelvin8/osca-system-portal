@@ -201,6 +201,13 @@ class BorrowTransaction(Base):
         DateTime(timezone=True), nullable=True
     )
 
+    # Transaction QR Code for staff release workflow
+    transaction_qr_code: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, unique=True, index=True,
+        comment="Unique QR code for this transaction (used by staff to confirm release)"
+    )
+    transaction_qr_invalidated: Mapped[bool] = mapped_column(default=False, nullable=False)
+
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Relationships

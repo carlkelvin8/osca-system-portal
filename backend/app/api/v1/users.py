@@ -18,6 +18,7 @@ from app.core.exceptions import ConflictError, NotFoundError
 from app.core.security import hash_password
 from app.models.audit import AuditLog
 from app.models.attendance import FaceEmbedding
+from app.models.inventory import BorrowTransaction, EquipmentRequest
 from app.models.user import User, UserRole
 from app.schemas.common import MessageResponse, PaginatedResponse
 from app.schemas.user import UserCreate, UserRead, UserSummary, UserUpdate
@@ -316,8 +317,6 @@ async def delete_user_permanently(
     if not user:
         raise NotFoundError("User", str(user_id))
 
-    # Prevent self-deletion
-    # (checked via _admin but explicit for clarity)
     db.add(AuditLog(
         action="USER_DELETED",
         resource_type="User",

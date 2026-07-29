@@ -94,14 +94,19 @@ async def list_sessions(
     sport_or_art: str | None = Query(None),
     is_active: bool | None = Query(None),
 ) -> PaginatedResponse[SessionRead]:
+    # PE Instructors have no attendance access
+    if current_user.role == UserRole.PE_INSTRUCTOR:
+        return PaginatedResponse(items=[], total=0, page=page, page_size=page_size, pages=0)
+
     query = select(Session)
     # Coaches only see their assigned sport's sessions
     if current_user.role == UserRole.COACH and current_user.assigned_sport:
         query = query.where(Session.sport_or_art == current_user.assigned_sport)
+    # Students only see sessions matching their sport_or_art
+    if current_user.role == UserRole.STUDENT and current_user.sport_or_art:
+        query = query.where(Session.sport_or_art == current_user.sport_or_art)
     if sport_or_art:
         query = query.where(Session.sport_or_art == sport_or_art)
-    if is_active is not None:
-        query = query.where(Session.is_active == is_active)
 
     total = (await db.execute(select(func.count()).select_from(query.subquery()))).scalar_one()
     query = query.offset((page - 1) * page_size).limit(page_size).order_by(Session.scheduled_start.desc())
@@ -130,6 +135,11 @@ async def get_session(
     current_user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SessionRead:
+    if current_user.role == UserRole.PE_INSTRUCTOR:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="PE Instructors are not allowed to access attendance",
+        )
     result = await db.execute(select(Session).where(Session.id == session_id))
     session = result.scalar_one_or_none()
     if not session:
@@ -339,6 +349,21 @@ async def face_scan(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found or not active")
 
+    # PE Instructors cannot use attendance scan
+    if current_staff.role == UserRole.PE_INSTRUCTOR:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="PE Instructors are not allowed to scan attendance",
+        )
+
+    # Students can only scan sessions matching their assigned sport_or_art
+    if current_staff.role == UserRole.STUDENT and current_staff.sport_or_art and session.sport_or_art:
+        if current_staff.sport_or_art != session.sport_or_art:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This session does not match your assigned sport or art",
+            )
+
     # Fetch all embeddings for comparison
     emb_result = await db.execute(
         select(FaceEmbedding).join(User).where(User.is_active == True, User.is_face_enrolled == True)
@@ -458,12 +483,47 @@ async def face_scan(
 
     elif body.scan_type == AttendanceScanType.TIME_OUT:
         if not record or not record.time_in:
-            await db.commit()
-            return FaceScanResponse(
-                result=ScanResult.FAILED_RECOGNITION,
-                processing_time_ms=processing_ms,
-                message="No time-in record found for this session",
+            # Primary face match didn't find a user with time-in.
+            # Fallback: re-match against only users who have active time-in for this session.
+            active_in_result = await db.execute(
+                select(AttendanceRecord.student_id).where(
+                    AttendanceRecord.session_id == body.session_id,
+                    AttendanceRecord.time_in.isnot(None),
+                    AttendanceRecord.time_out.is_(None),
+                )
             )
+            active_ids = active_in_result.scalars().all()
+            if active_ids:
+                emb_result2 = await db.execute(
+                    select(FaceEmbedding).where(FaceEmbedding.user_id.in_(active_ids))
+                )
+                session_embs = emb_result2.scalars().all()
+                if session_embs:
+                    fb_result = await fr_service.identify_face(
+                        image_bytes=image_bytes,
+                        stored_embeddings=[(e.user_id, e.embedding) for e in session_embs],
+                        similarity_threshold=sim_threshold,
+                        liveness_threshold=live_threshold,
+                        liveness_enabled=live_enabled,
+                    )
+                    if fb_result.result == ScanResult.SUCCESS:
+                        fb_rec = await db.execute(
+                            select(AttendanceRecord).where(
+                                AttendanceRecord.student_id == fb_result.user_id,
+                                AttendanceRecord.session_id == body.session_id,
+                            )
+                        )
+                        record = fb_rec.scalar_one_or_none()
+                        if record and record.time_in:
+                            match_result = fb_result
+                            user_id = fb_result.user_id
+            if not record or not record.time_in:
+                await db.commit()
+                return FaceScanResponse(
+                    result=ScanResult.FAILED_RECOGNITION,
+                    processing_time_ms=processing_ms,
+                    message="No time-in record found for this session",
+                )
         now = datetime.now(UTC)
         record.time_out = now
         record.time_out_confidence = match_result.confidence

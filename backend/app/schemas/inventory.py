@@ -125,6 +125,8 @@ class BorrowTransactionRead(OSCABaseModel):
     returned_at: datetime | None
     overdue_notified: bool
     notes: str | None
+    transaction_qr_code: str | None = None
+    transaction_qr_invalidated: bool = False
     items: list[BorrowTransactionItemRead]
 
 
@@ -197,3 +199,76 @@ class ApproveRequestBody(OSCABaseModel):
 
 class RejectRequestBody(OSCABaseModel):
     rejection_reason: str = Field(min_length=1, max_length=500)
+
+
+# ── Staff Borrow Workflow Schemas ─────────────────────────────────────────────
+
+class ScannedUserEligibility(OSCABaseModel):
+    status: str | None = None
+    reason_detail: str | None = None
+    is_current: bool = False
+
+
+class ScannedUserSanction(OSCABaseModel):
+    violation_type: str
+    severity: str
+    status: str
+    description: str
+    start_date: datetime | None
+    end_date: datetime | None
+
+
+class ScannedUserBorrow(OSCABaseModel):
+    id: uuid.UUID
+    status: str
+    borrowed_at: datetime
+    expected_return: datetime
+    items_count: int = 0
+
+
+class ScanBorrowingIDResponse(OSCABaseModel):
+    user_id: uuid.UUID
+    full_name: str
+    role: str
+    email: str
+    is_active: bool
+    eligibility: ScannedUserEligibility | None = None
+    current_borrows: list[ScannedUserBorrow] = []
+    pending_requests: list[EquipmentRequestRead] = []
+    active_sanctions: list[ScannedUserSanction] = []
+
+
+class StaffBorrowItem(OSCABaseModel):
+    equipment_id: uuid.UUID
+    quantity: int = Field(ge=1, default=1)
+
+
+class StaffBorrowCreateRequest(OSCABaseModel):
+    borrowing_id_qr: str
+    items: list[StaffBorrowItem] = Field(min_length=1)
+    expected_return: datetime
+    notes: str | None = None
+
+    @field_validator("expected_return")
+    @classmethod
+    def return_must_be_future(cls, v: datetime) -> datetime:
+        from datetime import timezone
+        if v <= datetime.now(tz=timezone.utc):
+            raise ValueError("expected_return must be in the future")
+        return v
+
+
+class TransactionQRRead(OSCABaseModel):
+    transaction_id: uuid.UUID
+    transaction_qr_code: str
+    borrower_name: str
+    borrower_role: str
+    status: str
+    items: list[BorrowTransactionItemRead]
+    borrowed_at: datetime
+    expected_return: datetime
+    notes: str | None
+
+
+class TransactionReleaseRequest(OSCABaseModel):
+    notes: str | None = None

@@ -79,7 +79,16 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def integrity_error_handler(
         request: Request, exc: IntegrityError
     ) -> ORJSONResponse:
-        logger.error("db_integrity_error", error=str(exc.orig))
+        error_msg = str(exc.orig)
+        logger.error("db_integrity_error", error=error_msg)
+        if "violates foreign key constraint" in error_msg:
+            return ORJSONResponse(
+                status_code=status.HTTP_409_CONFLICT,
+                content={
+                    "detail": "Cannot delete: this record is referenced by other data. Remove all associated records first.",
+                    "code": "FK_CONSTRAINT",
+                },
+            )
         return ORJSONResponse(
             status_code=status.HTTP_409_CONFLICT,
             content={"detail": "A record with this data already exists.", "code": "DUPLICATE"},

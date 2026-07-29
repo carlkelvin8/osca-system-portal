@@ -91,7 +91,8 @@ class User(Base):
         "FaceEmbedding", back_populates="user", uselist=False, cascade="all, delete-orphan"
     )
     attendance_records: Mapped[list["AttendanceRecord"]] = relationship(  # noqa: F821
-        "AttendanceRecord", back_populates="student", foreign_keys="AttendanceRecord.student_id"
+        "AttendanceRecord", back_populates="student", foreign_keys="AttendanceRecord.student_id",
+        cascade="all, delete-orphan"
     )
     borrowing_id: Mapped["BorrowingID | None"] = relationship(  # noqa: F821
         "BorrowingID", back_populates="instructor", uselist=False, cascade="all, delete-orphan"

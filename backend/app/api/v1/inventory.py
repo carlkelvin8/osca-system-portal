@@ -1,6 +1,6 @@
 """
 Inventory endpoints: equipment CRUD, borrowing IDs, borrow/return workflow,
-and equipment request/approval flow.
+equipment request/approval flow, and staff-assisted borrow with QR workflow.
 """
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -9,12 +9,13 @@ from typing import Annotated
 import structlog
 from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import Response
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import AdminOnly, CurrentUser, get_db
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.models.audit import AuditLog
+from app.models.eligibility import AthleteEligibility
 from app.models.inventory import (
     BorrowingID,
     BorrowTransaction,
@@ -26,6 +27,7 @@ from app.models.inventory import (
     RequestStatus,
     TransactionStatus,
 )
+from app.models.sanction import Sanction
 from app.models.user import User, UserRole
 from app.schemas.common import MessageResponse, PaginatedResponse
 from app.schemas.inventory import (
@@ -44,6 +46,10 @@ from app.schemas.inventory import (
     RejectRequestBody,
     REQUEST_QR_EXPIRY_MINUTES,
     ReturnRequest,
+    ScanBorrowingIDResponse,
+    StaffBorrowCreateRequest,
+    TransactionQRRead,
+    TransactionReleaseRequest,
 )
 from app.services.barcode_service import BarcodeService
 from app.services.storage_service import StorageService
@@ -70,16 +76,12 @@ async def create_equipment(
     current_user: AdminOnly,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> EquipmentRead:
-    qr_value = BarcodeService.generate_qr_value(str(uuid.uuid4()))
-    qr_img_bytes = BarcodeService.render_qr(qr_value)
-
-    storage = StorageService()
-    img_key = await storage.upload_qr_image(qr_value, qr_img_bytes)
+    qr_value = f"EQ-{uuid.uuid4().hex[:12].upper()}"
 
     equipment = Equipment(
         **body.model_dump(),
         qr_code=qr_value,
-        qr_image_key=img_key,
+        qr_image_key=None,
         available_quantity=body.total_quantity,
         created_by_id=current_user.id,
     )
@@ -704,6 +706,321 @@ async def list_transactions(
                              pages=(total + page_size - 1) // page_size)
 
 
+# ── Staff Borrow Workflow ─────────────────────────────────────────────────────
+
+_STAFF_BORROW_ROLES = {UserRole.ADMIN, UserRole.DIRECTOR, UserRole.STAFF}
+
+
+@router.get(
+    "/borrowing-ids/scan/{qr_code}",
+    summary="(Staff) Scan a BorrowingID QR to view coach/instructor info",
+)
+async def scan_borrowing_id(
+    qr_code: str,
+    current_user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    if current_user.role not in _STAFF_BORROW_ROLES:
+        raise ForbiddenError("Only admin, director, and staff can scan borrowing IDs.")
+
+    bid_result = await db.execute(
+        select(BorrowingID).where(BorrowingID.qr_code == qr_code, BorrowingID.is_active == True)
+    )
+    bid = bid_result.scalar_one_or_none()
+    if not bid:
+        raise NotFoundError("Borrowing ID", qr_code)
+
+    instructor = await db.get(User, bid.instructor_id)
+    if not instructor:
+        raise NotFoundError("User", str(bid.instructor_id))
+
+    # Eligibility
+    eligibility_result = await db.execute(
+        select(AthleteEligibility).where(
+            AthleteEligibility.student_id == instructor.id,
+            AthleteEligibility.is_current == True,
+        )
+    )
+    eligibility = eligibility_result.scalar_one_or_none()
+
+    # Current active borrows
+    borrows_result = await db.execute(
+        select(BorrowTransaction).where(
+            BorrowTransaction.instructor_id == instructor.id,
+            BorrowTransaction.status.in_([TransactionStatus.ACTIVE, TransactionStatus.OVERDUE]),
+        )
+    )
+    active_borrows = borrows_result.scalars().all()
+    borrow_list = []
+    for b in active_borrows:
+        items_count = (await db.execute(
+            select(func.count(BorrowTransactionItem.id)).where(
+                BorrowTransactionItem.transaction_id == b.id
+            )
+        )).scalar_one()
+        borrow_list.append({
+            "id": str(b.id),
+            "status": b.status.value,
+            "borrowed_at": b.borrowed_at.isoformat(),
+            "expected_return": b.expected_return.isoformat(),
+            "items_count": items_count,
+        })
+
+    # Pending requests
+    pending_reqs_result = await db.execute(
+        select(EquipmentRequest).where(
+            EquipmentRequest.requester_id == instructor.id,
+            EquipmentRequest.status == RequestStatus.PENDING,
+        ).order_by(EquipmentRequest.requested_at.desc())
+    )
+    pending_reqs = [await _build_request_read(r, db) for r in pending_reqs_result.scalars().all()]
+
+    # Active sanctions
+    sanctions_result = await db.execute(
+        select(Sanction).where(
+            Sanction.student_id == instructor.id,
+            Sanction.status.in_(["active", "served"]),
+        )
+    )
+    sanctions = [
+        {
+            "violation_type": s.violation_type.value if hasattr(s.violation_type, 'value') else str(s.violation_type),
+            "severity": s.severity.value if hasattr(s.severity, 'value') else str(s.severity),
+            "status": s.status.value if hasattr(s.status, 'value') else str(s.status),
+            "description": s.description or "",
+            "start_date": s.start_date.isoformat() if s.start_date else None,
+            "end_date": s.end_date.isoformat() if s.end_date else None,
+        }
+        for s in sanctions_result.scalars().all()
+    ]
+
+    return {
+        "user_id": str(instructor.id),
+        "full_name": instructor.full_name,
+        "role": instructor.role.value if hasattr(instructor.role, 'value') else str(instructor.role),
+        "email": instructor.email,
+        "is_active": instructor.is_active,
+        "eligibility": {
+            "status": eligibility.status.value if eligibility else None,
+            "reason_detail": eligibility.reason_detail if eligibility else None,
+            "is_current": eligibility.is_current if eligibility else False,
+        } if eligibility else None,
+        "current_borrows": borrow_list,
+        "pending_requests": [r.model_dump(mode="json") for r in pending_reqs],
+        "active_sanctions": sanctions,
+    }
+
+
+@router.post(
+    "/borrow/staff",
+    response_model=BorrowTransactionRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="(Staff) Create borrow transaction from scanned BorrowingID",
+)
+async def staff_borrow(
+    body: StaffBorrowCreateRequest,
+    current_user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> BorrowTransactionRead:
+    if current_user.role not in _STAFF_BORROW_ROLES:
+        raise ForbiddenError("Only admin, director, and staff can use this endpoint.")
+
+    bid_result = await db.execute(
+        select(BorrowingID).where(BorrowingID.qr_code == body.borrowing_id_qr, BorrowingID.is_active == True)
+    )
+    bid = bid_result.scalar_one_or_none()
+    if not bid:
+        raise NotFoundError("Borrowing ID", body.borrowing_id_qr)
+
+    overdue_check = await db.execute(
+        select(BorrowTransaction).where(
+            BorrowTransaction.instructor_id == bid.instructor_id,
+            BorrowTransaction.status.in_([TransactionStatus.ACTIVE, TransactionStatus.OVERDUE]),
+        )
+    )
+    if overdue_check.scalar_one_or_none():
+        raise ConflictError("Instructor has an active or overdue borrow transaction. Return items first.")
+
+    transaction = BorrowTransaction(
+        borrowing_id_record_id=bid.id,
+        instructor_id=bid.instructor_id,
+        expected_return=body.expected_return,
+        notes=body.notes,
+        processed_by_id=current_user.id,
+    )
+    db.add(transaction)
+    await db.flush()
+
+    for item_req in body.items:
+        eq = await db.get(Equipment, item_req.equipment_id)
+        if not eq or not eq.is_active:
+            raise NotFoundError("Equipment", str(item_req.equipment_id))
+        if eq.available_quantity < item_req.quantity:
+            raise ConflictError(f"Insufficient quantity for {eq.name}. Available: {eq.available_quantity}")
+
+        eq.available_quantity -= item_req.quantity
+        tx_item = BorrowTransactionItem(
+            transaction=transaction,
+            equipment_id=eq.id,
+            quantity=item_req.quantity,
+        )
+        db.add(tx_item)
+
+    # Generate transaction QR code
+    transaction_qr = f"TXN-{transaction.id.hex[:12].upper()}"
+    transaction.transaction_qr_code = transaction_qr
+
+    db.add(AuditLog(
+        user_id=current_user.id,
+        action="EQUIPMENT_BORROWED_STAFF",
+        resource_type="BorrowTransaction",
+        status="success",
+        details={"instructor_id": str(bid.instructor_id), "items_count": len(body.items)},
+    ))
+    await db.commit()
+    await db.refresh(transaction)
+    return await _build_transaction_read(transaction, db)
+
+
+@router.get(
+    "/transactions/qr/{qr_code}",
+    summary="(Staff) Scan transaction QR code to view details",
+)
+async def scan_transaction_qr(
+    qr_code: str,
+    current_user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    if current_user.role not in _STAFF_BORROW_ROLES:
+        raise ForbiddenError("Only admin, director, and staff can scan transaction QR codes.")
+
+    if not qr_code.startswith("TXN-"):
+        raise NotFoundError("Transaction QR", qr_code)
+
+    result = await db.execute(
+        select(BorrowTransaction).where(BorrowTransaction.transaction_qr_code == qr_code)
+    )
+    transaction = result.scalar_one_or_none()
+    if not transaction:
+        raise NotFoundError("Transaction", qr_code)
+
+    instructor = await db.get(User, transaction.instructor_id)
+    items_result = await db.execute(
+        select(BorrowTransactionItem).where(BorrowTransactionItem.transaction_id == transaction.id)
+    )
+    items = items_result.scalars().all()
+
+    item_list = []
+    for item in items:
+        eq = await db.get(Equipment, item.equipment_id)
+        item_list.append({
+            "id": str(item.id),
+            "equipment_id": str(item.equipment_id),
+            "equipment_name": eq.name if eq else "Unknown",
+            "quantity": item.quantity,
+            "is_returned": item.is_returned,
+            "returned_at": item.returned_at.isoformat() if item.returned_at else None,
+        })
+
+    return {
+        "transaction_id": str(transaction.id),
+        "transaction_qr_code": transaction.transaction_qr_code,
+        "qr_invalidated": transaction.transaction_qr_invalidated,
+        "borrower_name": instructor.full_name if instructor else "Unknown",
+        "borrower_role": instructor.role.value if instructor and hasattr(instructor.role, 'value') else str(instructor.role) if instructor else "",
+        "status": transaction.status.value if hasattr(transaction.status, 'value') else str(transaction.status),
+        "borrowed_at": transaction.borrowed_at.isoformat(),
+        "expected_return": transaction.expected_return.isoformat(),
+        "notes": transaction.notes,
+        "items": item_list,
+    }
+
+
+@router.put(
+    "/transactions/{transaction_id}/release",
+    response_model=BorrowTransactionRead,
+    summary="(Staff) Confirm release of borrowed equipment",
+)
+async def confirm_release(
+    transaction_id: uuid.UUID,
+    body: TransactionReleaseRequest,
+    current_user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> BorrowTransactionRead:
+
+    if current_user.role not in _STAFF_BORROW_ROLES:
+        raise ForbiddenError("Only admin, director, and staff can confirm releases.")
+
+    transaction = await db.get(BorrowTransaction, transaction_id)
+    if not transaction:
+        raise NotFoundError("Transaction", str(transaction_id))
+    if transaction.status != TransactionStatus.ACTIVE:
+        raise ConflictError(f"Transaction is already {transaction.status.value}.")
+
+    if body.notes:
+        transaction.notes = (transaction.notes or "") + f"\n[Release confirmed by {current_user.full_name}]: {body.notes}"
+
+    db.add(AuditLog(
+        user_id=current_user.id,
+        action="TRANSACTION_RELEASED",
+        resource_type="BorrowTransaction",
+        resource_id=str(transaction.id),
+        status="success",
+    ))
+    await db.commit()
+    await db.refresh(transaction)
+    return await _build_transaction_read(transaction, db)
+
+
+@router.put(
+    "/transactions/{transaction_id}/complete",
+    response_model=BorrowTransactionRead,
+    summary="(Staff) Mark transaction as completed and invalidate QR",
+)
+async def complete_transaction(
+    transaction_id: uuid.UUID,
+    current_user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> BorrowTransactionRead:
+    if current_user.role not in _STAFF_BORROW_ROLES:
+        raise ForbiddenError("Only admin, director, and staff can complete transactions.")
+
+    transaction = await db.get(BorrowTransaction, transaction_id)
+    if not transaction:
+        raise NotFoundError("Transaction", str(transaction_id))
+    if transaction.status != TransactionStatus.ACTIVE:
+        raise ConflictError(f"Transaction is already {transaction.status.value}.")
+
+    # Return all items
+    now = datetime.now(UTC)
+    items_result = await db.execute(
+        select(BorrowTransactionItem).where(BorrowTransactionItem.transaction_id == transaction.id)
+    )
+    for item in items_result.scalars().all():
+        if not item.is_returned:
+            item.is_returned = True
+            item.returned_at = now
+            eq = await db.get(Equipment, item.equipment_id)
+            if eq:
+                eq.available_quantity += item.quantity
+
+    transaction.status = TransactionStatus.RETURNED
+    transaction.returned_at = now
+    transaction.transaction_qr_invalidated = True
+
+    db.add(AuditLog(
+        user_id=current_user.id,
+        action="TRANSACTION_COMPLETED",
+        resource_type="BorrowTransaction",
+        resource_id=str(transaction.id),
+        status="success",
+        details={"qr_invalidated": True},
+    ))
+    await db.commit()
+    await db.refresh(transaction)
+    return await _build_transaction_read(transaction, db)
+
+
 # ── Private helpers ────────────────────────────────────────────────────────────
 
 async def _build_transaction_read(transaction: BorrowTransaction, db: AsyncSession) -> BorrowTransactionRead:
@@ -733,6 +1050,8 @@ async def _build_transaction_read(transaction: BorrowTransaction, db: AsyncSessi
         returned_at=transaction.returned_at,
         overdue_notified=transaction.overdue_notified,
         notes=transaction.notes,
+        transaction_qr_code=transaction.transaction_qr_code,
+        transaction_qr_invalidated=transaction.transaction_qr_invalidated,
         items=item_reads,
     )
     return tr

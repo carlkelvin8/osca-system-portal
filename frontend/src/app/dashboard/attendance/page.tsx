@@ -516,7 +516,15 @@ export default function AttendancePage() {
   const queryClient = useQueryClient();
   const isCoach = user?.role === "coach";
   const isStudent = user?.role === "student";
+  const isPE = user?.role === "pe_instructor";
   const userSport = user?.sport_or_art ?? undefined;
+
+  // PE Instructors are not allowed in the attendance module
+  useEffect(() => {
+    if (isPE) {
+      router.replace("/dashboard");
+    }
+  }, [isPE, router]);
   const [page, setPage] = useState(1);
   const [showNewSession, setShowNewSession] = useState(false);
   const [editingSession, setEditingSession] = useState<Session | null>(null);
@@ -527,7 +535,7 @@ export default function AttendancePage() {
     queryKey: ["sessions", page, userSport, isStudent],
     queryFn: async () => {
       const params: Record<string, string | number> = { page, page_size: 20 };
-      if ((isCoach || isStudent) && userSport) params.sport = userSport;
+      if ((isCoach || isStudent) && userSport) params.sport_or_art = userSport;
       const res = await attendanceApi.listSessions(params);
       return res.data;
     },

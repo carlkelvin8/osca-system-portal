@@ -43,6 +43,14 @@ export default function StudentScanPage({
     },
   });
 
+  const isStudent = user?.role === "student";
+  const sportMismatch = !!(
+    isStudent &&
+    user?.sport_or_art &&
+    sessionData?.sport_or_art &&
+    user.sport_or_art !== sessionData.sport_or_art
+  );
+
   const { webcamRef, isScanning, captureAndScan } = useFacialRecognition({
     sessionId,
     scanType,
@@ -106,17 +114,27 @@ export default function StudentScanPage({
           </p>
         </div>
 
+        {/* Sport mismatch warning */}
+        {sportMismatch && (
+          <div className="w-full max-w-sm px-4 py-3 rounded-xl text-center text-white font-semibold bg-red-500/90">
+            <AlertCircle size={20} className="inline mr-1.5" />
+            This session is for <strong>{sessionData?.sport_or_art}</strong>, but your
+            assigned sport/art is <strong>{user?.sport_or_art}</strong>. You cannot scan for this session.
+          </div>
+        )}
+
         {/* Scan type toggle */}
         <div className="flex gap-3">
           {(["time_in", "time_out"] as const).map((type) => (
             <button
               key={type}
               onClick={() => setScanType(type)}
+              disabled={sportMismatch}
               className={`px-5 py-2 rounded-full text-sm font-semibold transition ${
                 scanType === type
                   ? "bg-white text-[#1E3A5F]"
                   : "bg-white/20 text-white hover:bg-white/30"
-              }`}
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
             >
               {type === "time_in" ? "Time In" : "Time Out"}
             </button>
@@ -179,7 +197,7 @@ export default function StudentScanPage({
         {/* Scan button */}
         <button
           onClick={captureAndScan}
-          disabled={isScanning || !sessionData?.is_active}
+          disabled={isScanning || !sessionData?.is_active || sportMismatch}
           className="px-12 py-4 bg-white text-[#1E3A5F] text-lg font-bold rounded-full shadow-lg hover:bg-blue-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isScanning ? "Scanning..." : "Scan Face"}

@@ -9,7 +9,7 @@ class FacilityCreate(BaseModel):
     name: str = Field(max_length=200)
     description: str | None = None
     location: str | None = Field(default=None, max_length=200)
-    capacity: int | None = None
+    capacity: int | None = Field(default=None, ge=0)
     status: FacilityStatus = FacilityStatus.AVAILABLE
     condition: FacilityCondition = FacilityCondition.GOOD
     notes: str | None = None
@@ -19,7 +19,7 @@ class FacilityUpdate(BaseModel):
     name: str | None = Field(default=None, max_length=200)
     description: str | None = None
     location: str | None = None
-    capacity: int | None = None
+    capacity: int | None = Field(default=None, ge=0)
     status: FacilityStatus | None = None
     condition: FacilityCondition | None = None
     notes: str | None = None

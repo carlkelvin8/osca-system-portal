@@ -4,8 +4,17 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { reportsApi } from "@/lib/api";
 import { useAuthStore } from "@/store/useAuthStore";
-import { FileText, FileSpreadsheet, Loader2, BarChart3 } from "lucide-react";
+import { FileText, FileSpreadsheet, Loader2, BarChart3, Calendar, Download } from "lucide-react";
 import type { MonthlyInventoryReport } from "@/types";
+
+function downloadBlob(data: Blob, filename: string) {
+  const url = URL.createObjectURL(data);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 export default function ReportsPage() {
   const { user } = useAuthStore();
@@ -20,6 +29,16 @@ export default function ReportsPage() {
 
   const [year, month] = monthYear.split("-").map(Number);
 
+  // Daily/Weekly/Monthly attendance date state
+  const [logDate, setLogDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [weekStart, setWeekStart] = useState(() => {
+    const d = new Date();
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    const monday = new Date(d.setDate(diff));
+    return monday.toISOString().slice(0, 10);
+  });
+
   const { data: monthlyReport, isLoading: monthlyLoading, refetch: refetchMonthly } =
     useQuery<MonthlyInventoryReport>({
       queryKey: ["monthly-inventory", year, month],
@@ -27,16 +46,17 @@ export default function ReportsPage() {
         const res = await reportsApi.inventoryMonthly(year, month, "json");
         return res.data;
       },
-      enabled: false, // only on demand
+      enabled: false,
     });
 
-  const downloadBlob = (data: Blob, filename: string) => {
-    const url = URL.createObjectURL(data);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
+  const exportAttendance = async (
+    endpoint: "daily" | "weekly" | "monthly",
+    format: "csv" | "xlsx" | "pdf",
+    params: Record<string, string | number | boolean>,
+  ) => {
+    const res = await reportsApi[`${endpoint}Attendance`]({ ...params, format });
+    const ext = format === "csv" ? "csv" : format === "xlsx" ? "xlsx" : "pdf";
+    downloadBlob(new Blob([res.data]), `attendance-${endpoint}-${Date.now()}.${ext}`);
   };
 
   return (
@@ -50,76 +70,158 @@ export default function ReportsPage() {
         </p>
       </div>
 
-      {/* Existing reports */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Attendance */}
-        <div className="bg-white rounded-xl shadow-sm p-6 space-y-4">
+      {/* Attendance Reports */}
+      <div className="bg-white rounded-xl shadow-sm p-6 space-y-4">
+        <div className="flex items-center gap-3">
+          <Calendar size={20} className="text-[#1E3A5F]" />
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">Attendance Report</h2>
-            <p className="text-sm text-gray-500 mt-1">
-              Complete attendance records with time-in/out, duration, and confidence scores.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <button
-              onClick={async () => {
-                const res = await reportsApi.attendancePdf(sportFilter);
-                downloadBlob(new Blob([res.data], { type: "application/pdf" }), "attendance_report.pdf");
-              }}
-              className="flex items-center gap-2 px-4 py-2 text-sm bg-[#1E3A5F] text-white rounded-lg hover:bg-[#16304f] transition"
-            >
-              <FileText size={16} /> Download PDF
-            </button>
-            <button
-              onClick={async () => {
-                const res = await reportsApi.attendanceXlsx(sportFilter);
-                downloadBlob(
-                  new Blob([res.data], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
-                  "attendance_report.xlsx"
-                );
-              }}
-              className="flex items-center gap-2 px-4 py-2 text-sm bg-[#1E3A5F] text-white rounded-lg hover:bg-[#16304f] transition"
-            >
-              <FileSpreadsheet size={16} /> Download Excel
-            </button>
+            <h2 className="text-lg font-semibold text-gray-900">Attendance Reports</h2>
+            <p className="text-sm text-gray-500">Daily, weekly, and monthly attendance logs with export.</p>
           </div>
         </div>
 
-        {/* Inventory — Admin/Director only */}
-        {isAdmin && <div className="bg-white rounded-xl shadow-sm p-6 space-y-4">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">Inventory Report</h2>
-            <p className="text-sm text-gray-500 mt-1">
-              Full equipment list with quantities, conditions, QR codes, and borrowing status.
-            </p>
+        {/* Daily */}
+        <div className="border border-gray-200 rounded-xl p-4 space-y-3">
+          <h3 className="text-sm font-semibold text-gray-700">Daily Attendance Log</h3>
+          <div className="flex items-center gap-3 flex-wrap">
+            <input
+              type="date"
+              value={logDate}
+              onChange={(e) => setLogDate(e.target.value)}
+              className="px-3 py-2 text-sm border border-gray-200 rounded-lg"
+            />
+            <div className="flex gap-2">
+              {(["csv", "xlsx", "pdf"] as const).map((fmt) => (
+                <button
+                  key={fmt}
+                  onClick={() => exportAttendance("daily", fmt, {
+                    log_date: logDate,
+                    ...(isCoach ? sportFilter : {}),
+                  })}
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs border border-gray-200 rounded-lg hover:bg-gray-50 transition"
+                >
+                  <Download size={12} /> {fmt.toUpperCase()}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="flex flex-wrap gap-3">
-            <button
-              onClick={async () => {
-                const res = await reportsApi.inventoryPdf();
-                downloadBlob(new Blob([res.data], { type: "application/pdf" }), "inventory_report.pdf");
-              }}
-              className="flex items-center gap-2 px-4 py-2 text-sm bg-[#1E3A5F] text-white rounded-lg hover:bg-[#16304f] transition"
-            >
-              <FileText size={16} /> Download PDF
-            </button>
-            <button
-              onClick={async () => {
-                const res = await reportsApi.inventoryXlsx();
-                downloadBlob(
-                  new Blob([res.data], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
-                  "inventory_report.xlsx"
-                );
-              }}
-              className="flex items-center gap-2 px-4 py-2 text-sm bg-[#1E3A5F] text-white rounded-lg hover:bg-[#16304f] transition"
-            >
-              <FileSpreadsheet size={16} /> Download Excel
-            </button>
+        </div>
+
+        {/* Weekly */}
+        <div className="border border-gray-200 rounded-xl p-4 space-y-3">
+          <h3 className="text-sm font-semibold text-gray-700">Weekly Attendance Log</h3>
+          <div className="flex items-center gap-3 flex-wrap">
+            <input
+              type="date"
+              value={weekStart}
+              onChange={(e) => setWeekStart(e.target.value)}
+              className="px-3 py-2 text-sm border border-gray-200 rounded-lg"
+            />
+            <span className="text-xs text-gray-400">(Week starting Monday)</span>
+            <div className="flex gap-2">
+              {(["csv", "xlsx", "pdf"] as const).map((fmt) => (
+                <button
+                  key={fmt}
+                  onClick={() => exportAttendance("weekly", fmt, {
+                    week_start: weekStart,
+                    ...(isCoach ? sportFilter : {}),
+                  })}
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs border border-gray-200 rounded-lg hover:bg-gray-50 transition"
+                >
+                  <Download size={12} /> {fmt.toUpperCase()}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>}
+        </div>
+
+        {/* Monthly */}
+        <div className="border border-gray-200 rounded-xl p-4 space-y-3">
+          <h3 className="text-sm font-semibold text-gray-700">Monthly Attendance Log</h3>
+          <div className="flex items-center gap-3 flex-wrap">
+            <input
+              type="month"
+              value={monthYear}
+              onChange={(e) => setMonthYear(e.target.value)}
+              className="px-3 py-2 text-sm border border-gray-200 rounded-lg"
+            />
+            <div className="flex gap-2">
+              {(["csv", "xlsx", "pdf"] as const).map((fmt) => (
+                <button
+                  key={fmt}
+                  onClick={() => exportAttendance("monthly", fmt, {
+                    year, month,
+                    ...(isCoach ? sportFilter : {}),
+                  })}
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs border border-gray-200 rounded-lg hover:bg-gray-50 transition"
+                >
+                  <Download size={12} /> {fmt.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Existing PDF/Excel full report */}
+        <div className="flex flex-wrap gap-3 pt-2 border-t border-gray-100">
+          <button
+            onClick={async () => {
+              const res = await reportsApi.attendancePdf(sportFilter);
+              downloadBlob(new Blob([res.data], { type: "application/pdf" }), "attendance_report.pdf");
+            }}
+            className="flex items-center gap-2 px-4 py-2 text-sm bg-[#1E3A5F] text-white rounded-lg hover:bg-[#16304f] transition"
+          >
+            <FileText size={16} /> Full Report PDF
+          </button>
+          <button
+            onClick={async () => {
+              const res = await reportsApi.attendanceXlsx(sportFilter);
+              downloadBlob(
+                new Blob([res.data], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+                "attendance_report.xlsx"
+              );
+            }}
+            className="flex items-center gap-2 px-4 py-2 text-sm bg-[#1E3A5F] text-white rounded-lg hover:bg-[#16304f] transition"
+          >
+            <FileSpreadsheet size={16} /> Full Report Excel
+          </button>
+        </div>
       </div>
 
-      {/* Monthly Inventory Summary — Admin/Director only */}
+      {/* Inventory — Admin/Director/Staff only */}
+      {isAdmin && <div className="bg-white rounded-xl shadow-sm p-6 space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">Inventory Report</h2>
+          <p className="text-sm text-gray-500 mt-1">
+            Full equipment list with quantities, conditions, QR codes, and borrowing status.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <button
+            onClick={async () => {
+              const res = await reportsApi.inventoryPdf();
+              downloadBlob(new Blob([res.data], { type: "application/pdf" }), "inventory_report.pdf");
+            }}
+            className="flex items-center gap-2 px-4 py-2 text-sm bg-[#1E3A5F] text-white rounded-lg hover:bg-[#16304f] transition"
+          >
+            <FileText size={16} /> Download PDF
+          </button>
+          <button
+            onClick={async () => {
+              const res = await reportsApi.inventoryXlsx();
+              downloadBlob(
+                new Blob([res.data], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+                "inventory_report.xlsx"
+              );
+            }}
+            className="flex items-center gap-2 px-4 py-2 text-sm bg-[#1E3A5F] text-white rounded-lg hover:bg-[#16304f] transition"
+          >
+            <FileSpreadsheet size={16} /> Download Excel
+          </button>
+        </div>
+      </div>}
+
+      {/* Monthly Inventory Summary — Admin/Director/Staff only */}
       {isAdmin && <div className="bg-white rounded-xl shadow-sm p-6 space-y-4">
         <div className="flex items-center gap-3">
           <BarChart3 size={20} className="text-[#1E3A5F]" />
@@ -189,7 +291,6 @@ export default function ReportsPage() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Top 5 */}
               <div>
                 <h3 className="text-sm font-semibold text-gray-700 mb-2">Top 5 Borrowed Equipment</h3>
                 {monthlyReport.top_5_borrowed.length === 0 ? (
@@ -205,8 +306,6 @@ export default function ReportsPage() {
                   </ol>
                 )}
               </div>
-
-              {/* Condition breakdown */}
               <div>
                 <h3 className="text-sm font-semibold text-gray-700 mb-2">Equipment Condition</h3>
                 <div className="space-y-1">
