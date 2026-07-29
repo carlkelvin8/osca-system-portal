@@ -526,10 +526,13 @@ export default function AttendancePage() {
     }
   }, [isPE, router]);
   const [page, setPage] = useState(1);
+  const [historyPage, setHistoryPage] = useState(1);
   const [showNewSession, setShowNewSession] = useState(false);
   const [editingSession, setEditingSession] = useState<Session | null>(null);
   const [endingSession, setEndingSession] = useState<Session | null>(null);
   const [activeTab, setActiveTab] = useState<"sessions" | "history">("sessions");
+  const [historySearch, setHistorySearch] = useState("");
+  const [historyFilter, setHistoryFilter] = useState<"all" | "daily" | "weekly" | "monthly">("all");
 
   const { data, isLoading } = useQuery<PaginatedResponse<Session>>({
     queryKey: ["sessions", page, userSport, isStudent],
@@ -542,14 +545,48 @@ export default function AttendancePage() {
   });
 
   // Student: fetch own attendance history
+  const historyQueryParams = (() => {
+    const p: Record<string, string | number | boolean> = { page: historyPage, page_size: 20 };
+    const now = new Date();
+    if (historyFilter === "daily") {
+      const start = new Date(now);
+      start.setHours(0, 0, 0, 0);
+      p.date_from = start.toISOString();
+    } else if (historyFilter === "weekly") {
+      const start = new Date(now);
+      start.setDate(start.getDate() - 6);
+      start.setHours(0, 0, 0, 0);
+      p.date_from = start.toISOString();
+    } else if (historyFilter === "monthly") {
+      const start = new Date(now);
+      start.setDate(1);
+      start.setHours(0, 0, 0, 0);
+      p.date_from = start.toISOString();
+    }
+    return p;
+  })();
   const { data: historyData, isLoading: historyLoading } = useQuery<PaginatedResponse<AttendanceRecord>>({
-    queryKey: ["my-attendance", user?.id],
+    queryKey: ["my-attendance", user?.id, historyPage, historyFilter],
     queryFn: async () => {
-      const res = await attendanceApi.getRecords({ student_id: user!.id, page_size: 50 });
+      const res = await attendanceApi.getRecords(historyQueryParams);
       return res.data;
     },
     enabled: isStudent && !!user?.id,
   });
+
+  // Filter records by search text
+  const filteredHistory = (historyData?.items ?? []).filter((rec) => {
+    if (!historySearch) return true;
+    const q = historySearch.toLowerCase();
+    return (
+      rec.session_name?.toLowerCase().includes(q) ||
+      rec.session_sport_or_art?.toLowerCase().includes(q) ||
+      (rec.time_in && new Date(rec.time_in).toLocaleDateString().includes(q)) ||
+      rec.status?.toLowerCase().includes(q)
+    );
+  });
+
+  const historyTotalPages = historyData?.pages ?? 1;
 
   const activityColors: Record<string, string> = {
     practice:    "bg-blue-50 text-blue-700 border border-blue-200",
@@ -822,72 +859,112 @@ export default function AttendancePage() {
 
         {/* ── My Attendance History tab (students only) ── */}
         {isStudent && activeTab === "history" && (
-          <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-[#1E3A5F] text-white">
-                <tr>
-                  <th className="px-4 py-3 text-left font-medium">Session</th>
-                  <th className="px-4 py-3 text-left font-medium">Date</th>
-                  <th className="px-4 py-3 text-center font-medium">Status</th>
-                  <th className="px-4 py-3 text-center font-medium">Time In</th>
-                  <th className="px-4 py-3 text-center font-medium">Time Out</th>
-                  <th className="px-4 py-3 text-center font-medium">Duration</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {historyLoading ? (
-                  <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
-                      <Loader2 size={20} className="animate-spin inline-block mr-2" />Loading…
-                    </td>
-                  </tr>
-                ) : (historyData?.items ?? []).length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="px-4 py-10 text-center text-gray-400 text-sm">
-                      No attendance records yet. Scan in to a session to record attendance.
-                    </td>
-                  </tr>
-                ) : (historyData?.items ?? []).map((record) => (
-                  <tr key={record.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 font-medium text-gray-900">
-                      <div className="flex items-center gap-2">
-                        <CalendarCheck size={14} className="text-gray-400" />
-                        {record.student_name || "Session"}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-gray-600 text-xs">
-                      {record.time_in ? format(new Date(record.time_in), "MMM d, yyyy") : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      {record.time_in ? (
-                        record.status === "late" ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-                            <Clock size={11} /> Late
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                            <CheckCircle2 size={11} /> Present
-                          </span>
-                        )
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                          <XCircle size={11} /> Absent
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-center text-xs text-gray-600">
-                      {record.time_in ? format(new Date(record.time_in), "h:mm a") : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-center text-xs text-gray-600">
-                      {record.time_out ? format(new Date(record.time_out), "h:mm a") : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-center text-xs text-gray-600">
-                      {record.duration_minutes ? `${record.duration_minutes} min` : "—"}
-                    </td>
-                  </tr>
+          <div className="space-y-4">
+            {/* Filter + Search */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
+                {(["all", "daily", "weekly", "monthly"] as const).map((f) => (
+                  <button
+                    key={f}
+                    onClick={() => { setHistoryFilter(f); setHistoryPage(1); }}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition capitalize ${
+                      historyFilter === f ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"
+                    }`}
+                  >
+                    {f === "all" ? "All" : f}
+                  </button>
                 ))}
-              </tbody>
-            </table>
+              </div>
+              <input
+                type="text"
+                placeholder="Search by session, sport, date…"
+                value={historySearch}
+                onChange={(e) => setHistorySearch(e.target.value)}
+                className="flex-1 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]/30 focus:border-[#1E3A5F]"
+              />
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-[#1E3A5F] text-white">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-medium">Attendance Date</th>
+                    <th className="px-4 py-3 text-left font-medium">Sport / Art</th>
+                    <th className="px-4 py-3 text-left font-medium">Attendance Session</th>
+                    <th className="px-4 py-3 text-center font-medium">Status</th>
+                    <th className="px-4 py-3 text-center font-medium">Time In</th>
+                    <th className="px-4 py-3 text-center font-medium">Time Out</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {historyLoading ? (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
+                        <Loader2 size={20} className="animate-spin inline-block mr-2" />Loading…
+                      </td>
+                    </tr>
+                  ) : filteredHistory.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-10 text-center text-gray-400 text-sm">
+                        {historySearch ? "No records match your search." : "No attendance records yet. Scan in to a session to record attendance."}
+                      </td>
+                    </tr>
+                  ) : filteredHistory.map((record) => (
+                    <tr key={record.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-gray-600 text-xs">
+                        {record.time_in ? format(new Date(record.time_in), "MMM d, yyyy") : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">
+                        {record.session_sport_or_art || "—"}
+                      </td>
+                      <td className="px-4 py-3 font-medium text-gray-900">
+                        <div className="flex items-center gap-2">
+                          <CalendarCheck size={14} className="text-gray-400" />
+                          {record.session_name || "Session"}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {record.time_in ? (
+                          record.status === "late" ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                              <Clock size={11} /> Late
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              <CheckCircle2 size={11} /> Present
+                            </span>
+                          )
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                            <XCircle size={11} /> Absent
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center text-xs text-gray-600">
+                        {record.time_in ? format(new Date(record.time_in), "h:mm a") : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-center text-xs text-gray-600">
+                        {record.time_out ? format(new Date(record.time_out), "h:mm a") : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {historyTotalPages > 1 && (
+              <div className="flex items-center justify-center gap-2">
+                <button onClick={() => setHistoryPage((p) => Math.max(1, p - 1))} disabled={historyPage === 1}
+                  className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition">
+                  Previous
+                </button>
+                <span className="text-sm text-gray-500">Page {historyPage} of {historyTotalPages}</span>
+                <button onClick={() => setHistoryPage((p) => Math.min(historyTotalPages, p + 1))} disabled={historyPage === historyTotalPages}
+                  className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition">
+                  Next
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

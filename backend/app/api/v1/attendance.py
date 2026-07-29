@@ -12,6 +12,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.dependencies import AdminOnly, AdminOrCoach, CurrentUser, ScanStaff, StaffOnly, get_db, get_redis
 from app.core.exceptions import NotFoundError
@@ -570,10 +571,15 @@ async def get_attendance_records(
     db: Annotated[AsyncSession, Depends(get_db)],
     session_id: uuid.UUID | None = Query(None),
     student_id: uuid.UUID | None = Query(None),
+    date_from: datetime | None = Query(None),
+    date_to: datetime | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
 ) -> PaginatedResponse[AttendanceRecordRead]:
-    query = select(AttendanceRecord)
+    query = (
+        select(AttendanceRecord, Session)
+        .join(Session, AttendanceRecord.session_id == Session.id)
+    )
 
     # Students only see their own records
     if current_user.role == UserRole.STUDENT:
@@ -584,17 +590,25 @@ async def get_attendance_records(
     if session_id:
         query = query.where(AttendanceRecord.session_id == session_id)
 
+    if date_from:
+        query = query.where(AttendanceRecord.time_in >= date_from)
+    if date_to:
+        query = query.where(AttendanceRecord.time_in <= date_to)
+
     total = (await db.execute(select(func.count()).select_from(query.subquery()))).scalar_one()
     query = query.offset((page - 1) * page_size).limit(page_size).order_by(AttendanceRecord.time_in.desc())
-    records = (await db.execute(query)).scalars().all()
+    query = query.options(selectinload(AttendanceRecord.student))
+    rows = (await db.execute(query)).all()
 
     items = []
-    for r in records:
+    for r, s in rows:
         ar = AttendanceRecordRead.model_validate(r)
-        student = await db.get(User, r.student_id)
-        if student:
-            ar.student_name = student.full_name
-            ar.student_number = student.student_id
+        if r.student:
+            ar.student_name = r.student.full_name
+            ar.student_number = r.student.student_id
+        if s:
+            ar.session_name = s.name
+            ar.session_sport_or_art = s.sport_or_art
         items.append(ar)
 
     return PaginatedResponse(items=items, total=total, page=page, page_size=page_size,

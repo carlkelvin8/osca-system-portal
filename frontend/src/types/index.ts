@@ -143,6 +143,8 @@ export interface AttendanceRecord {
   id: string;
   student_id: string;
   session_id: string;
+  session_name: string;
+  session_sport_or_art: string | null;
   student_name: string;
   student_number: string | null;
   time_in: string | null;
