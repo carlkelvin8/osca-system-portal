@@ -28,11 +28,17 @@ export interface User {
   first_name: string;
   last_name: string;
   middle_name: string | null;
+  suffix: string | null;
   full_name: string;
   role: UserRole;
   course: string | null;
   year_level: string | null;
   contact_number: string | null;
+  address: string | null;
+  date_of_birth: string | null;
+  gender: string | null;
+  employee_id: string | null;
+  department: string | null;
   emergency_contact_name: string | null;
   emergency_contact_number: string | null;
   sport_or_art: string | null;
@@ -67,27 +73,44 @@ export interface UserCreate {
   first_name: string;
   last_name: string;
   middle_name?: string;
+  suffix?: string;
   role: UserRole;
   student_id?: string;
   course?: string;
   year_level?: string;
+  contact_number?: string;
+  address?: string;
+  date_of_birth?: string;
+  gender?: string;
+  employee_id?: string;
+  department?: string;
   sport_or_art?: string;
   medical_info?: string;
   emergency_contact_name?: string;
   emergency_contact_number?: string;
+  assigned_sport?: string;
   biometric_consent?: boolean;
   is_active?: boolean;
+  face_images_base64?: string[];
 }
 
 export interface UserUpdate {
   first_name?: string;
   last_name?: string;
   middle_name?: string;
+  suffix?: string;
   role?: UserRole;
   course?: string;
   year_level?: string;
+  contact_number?: string;
+  address?: string;
+  date_of_birth?: string;
+  gender?: string;
+  employee_id?: string;
+  department?: string;
   sport_or_art?: string;
   is_active?: boolean;
+  assigned_sport?: string;
 }
 
 // ── Attendance ────────────────────────────────────────────────────────────────
@@ -152,7 +175,7 @@ export type EquipmentCondition = "new" | "good" | "fair" | "poor" | "for_repair"
 
 export type TransactionStatus = "active" | "returned" | "overdue" | "partial_return";
 
-export type RequestStatus = "pending" | "approved" | "rejected";
+export type RequestStatus = "pending" | "approved" | "rejected" | "cancelled";
 
 export interface Equipment {
   id: string;
@@ -189,6 +212,9 @@ export interface BorrowTransaction {
   expected_return: string;
   returned_at: string | null;
   overdue_notified: boolean;
+  notes: string | null;
+  transaction_qr_code: string | null;
+  transaction_qr_invalidated: boolean;
   items: BorrowTransactionItem[];
 }
 
@@ -214,6 +240,55 @@ export interface EquipmentRequest {
   rejection_reason: string | null;
   is_expired: boolean;
   items: EquipmentRequestItem[];
+}
+
+// ── Staff Borrow / Scanner Types ──────────────────────────────────────────────
+
+export interface ScannedUserEligibility {
+  status: string | null;
+  reason_detail: string | null;
+  is_current: boolean;
+}
+
+export interface ScannedUserSanction {
+  violation_type: string;
+  severity: string;
+  status: string;
+  description: string;
+  start_date: string | null;
+  end_date: string | null;
+}
+
+export interface ScannedUserBorrow {
+  id: string;
+  status: string;
+  borrowed_at: string;
+  expected_return: string;
+  items_count: number;
+}
+
+export interface ScanBorrowingIDResponse {
+  user_id: string;
+  full_name: string;
+  role: string;
+  email: string;
+  is_active: boolean;
+  eligibility: ScannedUserEligibility | null;
+  current_borrows: ScannedUserBorrow[];
+  pending_requests: EquipmentRequest[];
+  active_sanctions: ScannedUserSanction[];
+}
+
+export interface TransactionQRRead {
+  transaction_id: string;
+  transaction_qr_code: string;
+  borrower_name: string;
+  borrower_role: string;
+  status: string;
+  items: BorrowTransactionItem[];
+  borrowed_at: string;
+  expected_return: string;
+  notes: string | null;
 }
 
 // ── Announcements ─────────────────────────────────────────────────────────────

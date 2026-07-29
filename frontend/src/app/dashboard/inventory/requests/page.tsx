@@ -24,10 +24,11 @@ const REQUEST_QR_EXPIRY_MS = 60 * 60 * 1000;
 // ── Status badge helper ────────────────────────────────────────────────────────
 
 const statusConfig: Record<string, { label: string; className: string; icon: React.ElementType }> = {
-  pending:  { label: "Pending",  className: "bg-yellow-100 text-yellow-800", icon: Clock },
-  approved: { label: "Approved", className: "bg-green-100 text-green-800",  icon: CheckCircle2 },
-  rejected: { label: "Rejected", className: "bg-red-100 text-red-800",      icon: XCircle },
-  expired:  { label: "Expired",  className: "bg-gray-100 text-gray-500",    icon: Clock },
+  pending:   { label: "Pending",   className: "bg-yellow-100 text-yellow-800", icon: Clock },
+  approved:  { label: "Approved",  className: "bg-green-100 text-green-800",  icon: CheckCircle2 },
+  rejected:  { label: "Rejected",  className: "bg-red-100 text-red-800",      icon: XCircle },
+  cancelled: { label: "Cancelled", className: "bg-gray-200 text-gray-700",    icon: XCircle },
+  expired:   { label: "Expired",   className: "bg-gray-100 text-gray-500",    icon: Clock },
 };
 
 function getRequestStatus(req: EquipmentRequest): string {
@@ -709,6 +710,54 @@ function RejectModal({ requestId, onClose }: { requestId: string; onClose: () =>
   );
 }
 
+// ── Cancel Confirmation Modal ───────────────────────────────────────────────────
+
+function CancelConfirmModal({ requestId, onClose }: { requestId: string; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const [error, setError] = useState<string | null>(null);
+
+  const { mutate, isPending } = useMutation({
+    mutationFn: () => inventoryApi.cancelRequest(requestId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["equipment-requests"] });
+      onClose();
+    },
+    onError: (err: unknown) => {
+      const msg =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
+        "Failed to cancel request.";
+      setError(msg);
+    },
+  });
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
+        <h2 className="text-lg font-bold text-gray-900">Cancel Request</h2>
+        <p className="text-sm text-gray-600">
+          Are you sure you want to cancel this equipment request? This action cannot be undone.
+        </p>
+        {error && <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
+        <div className="flex justify-end gap-3 pt-1">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition">
+            Keep Request
+          </button>
+          <button
+            onClick={() => mutate()}
+            disabled={isPending}
+            className="flex items-center gap-2 px-5 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition disabled:opacity-50 font-medium"
+          >
+            {isPending ? <><Loader2 size={14} className="animate-spin" /> Cancelling…</> : "Yes, Cancel Request"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function EquipmentRequestsPage() {
@@ -721,6 +770,7 @@ export default function EquipmentRequestsPage() {
   const [qrViewId, setQrViewId] = useState<string | null>(null);
   const [qrViewRequestedAt, setQrViewRequestedAt] = useState<string>("");
   const [showScanner, setShowScanner] = useState(false);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   const isRequester = user?.role === "coach" || user?.role === "pe_instructor";
   const isApprover = user?.role === "admin" || user?.role === "director" || user?.role === "staff";
@@ -756,6 +806,7 @@ export default function EquipmentRequestsPage() {
           }}
         />
       )}
+      {cancellingId && <CancelConfirmModal requestId={cancellingId} onClose={() => setCancellingId(null)} />}
 
       <div className="space-y-6">
         <div className="flex items-center justify-between">
@@ -775,6 +826,7 @@ export default function EquipmentRequestsPage() {
               <option value="pending">Pending</option>
               <option value="approved">Approved</option>
               <option value="rejected">Rejected</option>
+              <option value="cancelled">Cancelled</option>
             </select>
             {isApprover && (
               <button
@@ -881,6 +933,15 @@ export default function EquipmentRequestsPage() {
                             className="flex items-center gap-1 px-3 py-1 text-xs bg-[#1E3A5F]/10 text-[#1E3A5F] rounded-lg hover:bg-[#1E3A5F]/20 transition font-medium"
                           >
                             <QrCode size={12} /> Show QR
+                          </button>
+                        )}
+                        {/* Requester: Cancel own pending non-expired requests */}
+                        {isRequester && req.status === "pending" && !req.is_expired && (
+                          <button
+                            onClick={() => setCancellingId(req.id)}
+                            className="flex items-center gap-1 px-3 py-1 text-xs bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition font-medium border border-red-200"
+                          >
+                            <XCircle size={12} /> Cancel
                           </button>
                         )}
                         {/* Approver: Approve / Reject for pending non-expired requests */}

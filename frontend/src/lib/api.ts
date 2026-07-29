@@ -187,6 +187,8 @@ export const inventoryApi = {
     api.put(`/inventory/requests/${id}/approve`, data ?? {}),
   rejectRequest: (id: string, rejection_reason: string) =>
     api.put(`/inventory/requests/${id}/reject`, { rejection_reason }),
+  cancelRequest: (id: string) =>
+    api.put(`/inventory/requests/${id}/cancel`),
 };
 
 export const staffBorrowApi = {

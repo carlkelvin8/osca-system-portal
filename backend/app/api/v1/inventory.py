@@ -193,7 +193,20 @@ async def get_my_borrowing_id(
     )
     bid = result.scalar_one_or_none()
     if not bid:
-        raise NotFoundError("Borrowing ID", str(current_user.id))
+        if current_user.role not in (UserRole.COACH, UserRole.PE_INSTRUCTOR):
+            raise NotFoundError("Borrowing ID", str(current_user.id))
+        qr_value = BarcodeService.generate_qr_value(str(current_user.id))
+        qr_img_bytes = BarcodeService.render_qr(qr_value)
+        storage = StorageService()
+        qr_key = await storage.upload_qr_image(qr_value, qr_img_bytes)
+        bid = BorrowingID(
+            instructor_id=current_user.id,
+            qr_code=qr_value,
+            qr_image_key=qr_key,
+        )
+        db.add(bid)
+        await db.commit()
+        await db.refresh(bid)
     schema = BorrowingIDRead.model_validate(bid)
     schema.instructor_name = current_user.full_name
     return schema
@@ -532,6 +545,42 @@ async def reject_equipment_request(
         resource_id=str(req.id),
         status="success",
         details={"rejection_reason": body.rejection_reason},
+    ))
+    await db.commit()
+    await db.refresh(req)
+    return await _build_request_read(req, db)
+
+
+@router.put(
+    "/requests/{request_id}/cancel",
+    response_model=EquipmentRequestRead,
+    summary="Cancel own pending equipment request (Coach / PE Instructor)",
+)
+async def cancel_equipment_request(
+    request_id: uuid.UUID,
+    current_user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> EquipmentRequestRead:
+    if current_user.role not in _REQUEST_ROLES:
+        raise ForbiddenError("Only coaches and PE instructors may cancel requests.")
+
+    req = await db.get(EquipmentRequest, request_id)
+    if not req:
+        raise NotFoundError("EquipmentRequest", str(request_id))
+    if req.requester_id != current_user.id:
+        raise ForbiddenError("You may only cancel your own requests.")
+    if req.status != RequestStatus.PENDING:
+        raise ConflictError(f"Cannot cancel a request that is already {req.status.value}.")
+
+    req.status = RequestStatus.CANCELLED
+    req.approved_at = datetime.now(UTC)
+
+    db.add(AuditLog(
+        user_id=current_user.id,
+        action="EQUIPMENT_REQUEST_CANCELLED",
+        resource_type="EquipmentRequest",
+        resource_id=str(req.id),
+        status="success",
     ))
     await db.commit()
     await db.refresh(req)

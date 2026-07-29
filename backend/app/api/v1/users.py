@@ -18,10 +18,11 @@ from app.core.exceptions import ConflictError, NotFoundError
 from app.core.security import hash_password
 from app.models.audit import AuditLog
 from app.models.attendance import FaceEmbedding
-from app.models.inventory import BorrowTransaction, EquipmentRequest
+from app.models.inventory import BorrowingID, BorrowTransaction, EquipmentRequest
 from app.models.user import User, UserRole
 from app.schemas.common import MessageResponse, PaginatedResponse
 from app.schemas.user import UserCreate, UserRead, UserSummary, UserUpdate
+from app.services.barcode_service import BarcodeService
 from app.services.storage_service import StorageService
 from app.services.facial_recognition import FacialRecognitionService
 
@@ -112,6 +113,25 @@ async def create_user(
     ))
     await db.commit()
     await db.refresh(user)
+
+    # ── Auto-generate Borrowing ID for Coach / PE Instructor ─────────────────
+    if user.role in (UserRole.COACH, UserRole.PE_INSTRUCTOR):
+        existing_bid = await db.execute(
+            select(BorrowingID).where(BorrowingID.instructor_id == user.id)
+        )
+        if not existing_bid.scalar_one_or_none():
+            qr_value = BarcodeService.generate_qr_value(str(user.id))
+            qr_img_bytes = BarcodeService.render_qr(qr_value)
+            _bid_storage = StorageService()
+            qr_key = await _bid_storage.upload_qr_image(qr_value, qr_img_bytes)
+            bid = BorrowingID(
+                instructor_id=user.id,
+                qr_code=qr_value,
+                qr_image_key=qr_key,
+            )
+            db.add(bid)
+            await db.commit()
+            await db.refresh(user)
 
     # ── Auto-enroll face if images provided ───────────────────────────────────
     if body.face_images_base64 and len(body.face_images_base64) >= 5 and request is not None:

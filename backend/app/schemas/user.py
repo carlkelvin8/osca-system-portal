@@ -1,6 +1,6 @@
 """User schemas."""
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import EmailStr, Field
 
@@ -14,11 +14,17 @@ class UserCreate(OSCABaseModel):
     first_name: str = Field(min_length=1, max_length=100)
     last_name: str = Field(min_length=1, max_length=100)
     middle_name: str | None = Field(default=None, max_length=100)
+    suffix: str | None = Field(default=None, max_length=20)
     student_id: str | None = Field(default=None, max_length=20)
     role: UserRole = UserRole.STUDENT
     course: str | None = Field(default=None, max_length=100)
     year_level: str | None = Field(default=None, max_length=20)
     contact_number: str | None = Field(default=None, max_length=20)
+    address: str | None = None
+    date_of_birth: date | None = None
+    gender: str | None = Field(default=None, max_length=20)
+    employee_id: str | None = Field(default=None, max_length=50)
+    department: str | None = Field(default=None, max_length=200)
     sport_or_art: str | None = Field(default=None, max_length=100)
     medical_info: str | None = None
     emergency_contact_name: str | None = Field(default=None, max_length=200)
@@ -37,9 +43,15 @@ class UserUpdate(OSCABaseModel):
     first_name: str | None = Field(default=None, max_length=100)
     last_name: str | None = Field(default=None, max_length=100)
     middle_name: str | None = Field(default=None, max_length=100)
+    suffix: str | None = Field(default=None, max_length=20)
     course: str | None = Field(default=None, max_length=100)
     year_level: str | None = Field(default=None, max_length=20)
     contact_number: str | None = Field(default=None, max_length=20)
+    address: str | None = None
+    date_of_birth: date | None = None
+    gender: str | None = Field(default=None, max_length=20)
+    employee_id: str | None = Field(default=None, max_length=50)
+    department: str | None = Field(default=None, max_length=200)
     sport_or_art: str | None = Field(default=None, max_length=100)
     medical_info: str | None = None
     emergency_contact_name: str | None = Field(default=None, max_length=200)
@@ -69,11 +81,17 @@ class UserRead(OSCABaseModel):
     first_name: str
     last_name: str
     middle_name: str | None
+    suffix: str | None = None
     full_name: str
     role: UserRole
     course: str | None
     year_level: str | None
     contact_number: str | None
+    address: str | None = None
+    date_of_birth: date | None = None
+    gender: str | None = None
+    employee_id: str | None = None
+    department: str | None = None
     sport_or_art: str | None
     medical_info: str | None
     emergency_contact_name: str | None

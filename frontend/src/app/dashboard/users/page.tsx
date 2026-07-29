@@ -85,6 +85,8 @@ const createUserSchema = z
   .object({
     first_name: z.string().min(2, "First name required"),
     last_name: z.string().min(2, "Last name required"),
+    middle_name: z.string().optional(),
+    suffix: z.string().optional(),
     email: z.string().email("Enter a valid email"),
     password: z
       .string()
@@ -96,6 +98,13 @@ const createUserSchema = z
     student_id: z.string().optional(),
     course: z.string().optional(),
     year_level: z.string().optional(),
+    contact_number: z.string().optional(),
+    address: z.string().optional(),
+    date_of_birth: z.string().optional(),
+    gender: z.string().optional(),
+    employee_id: z.string().optional(),
+    department: z.string().optional(),
+    is_active: z.boolean().optional(),
     sport_or_art: z.string().optional(),
     assigned_sport: z.string().optional(),
     biometric_consent: z.boolean().optional(),
@@ -137,12 +146,17 @@ const createUserSchema = z
   })
   .refine(
     (d) => {
-      if (d.role === "coach" || d.role === "pe_instructor") {
-        return !!d.assigned_sport && d.assigned_sport.length > 0;
-      }
+      if (d.role === "coach") return !!d.assigned_sport && d.assigned_sport.length > 0;
       return true;
     },
-    { message: "Sport / Art is required for Coach and PE Instructor roles", path: ["assigned_sport"] }
+    { message: "Sport / Art is required for Coach accounts", path: ["assigned_sport"] }
+  )
+  .refine(
+    (d) => {
+      if (d.role === "coach" || d.role === "pe_instructor") return d.biometric_consent === true;
+      return true;
+    },
+    { message: "Biometric consent is required for Coach and PE Instructor accounts", path: ["biometric_consent"] }
   );
 
 const COURSE_OPTIONS: string[] = [
@@ -394,33 +408,47 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
     formState: { errors, isSubmitting },
   } = useForm<CreateUserForm>({
     resolver: zodResolver(createUserSchema),
-    defaultValues: { role: (allowedRoles[0] as CreateUserForm["role"]) ?? "student" },
+    defaultValues: { role: (allowedRoles[0] as CreateUserForm["role"]) ?? "student", is_active: true },
   });
 
   const selectedRole = watch("role");
   const studentRole = watch("student_role");
   const isStudent = selectedRole === "student";
+  const isCoach = selectedRole === "coach";
+  const isPE = selectedRole === "pe_instructor";
+  const biometricConsent = watch("biometric_consent");
+  const webcamRef = useRef<Webcam>(null);
+  const [faceCaptures, setFaceCaptures] = useState<string[]>([]);
 
   const onSubmit = async (data: CreateUserForm) => {
     setApiError(null);
     try {
+      const isCoachOrPE = data.role === "coach" || data.role === "pe_instructor";
       await usersApi.create({
         email: data.email,
         password: data.password,
         first_name: data.first_name,
         last_name: data.last_name,
         role: data.role,
-        is_active: true,
+        ...(isCoachOrPE && data.is_active !== undefined ? { is_active: data.is_active } : {}),
+        ...(isCoachOrPE && data.middle_name ? { middle_name: data.middle_name } : {}),
+        ...(isCoachOrPE && data.suffix ? { suffix: data.suffix } : {}),
+        ...(isCoachOrPE && data.contact_number ? { contact_number: data.contact_number } : {}),
+        ...(isCoachOrPE && data.address ? { address: data.address } : {}),
+        ...(isCoachOrPE && data.date_of_birth ? { date_of_birth: data.date_of_birth } : {}),
+        ...(isCoachOrPE && data.gender ? { gender: data.gender } : {}),
+        ...(isCoachOrPE && data.employee_id ? { employee_id: data.employee_id } : {}),
+        ...(data.role === "pe_instructor" && data.department ? { department: data.department } : {}),
         ...(data.student_id ? { student_id: data.student_id } : {}),
         ...(data.course ? { course: data.course } : {}),
         ...(data.year_level ? { year_level: data.year_level } : {}),
         ...(data.sport_or_art ? { sport_or_art: data.sport_or_art } : {}),
-        ...((data.role === "coach" || data.role === "pe_instructor") && data.assigned_sport
-          ? { assigned_sport: data.assigned_sport }
-          : {}),
+        ...(isCoachOrPE && data.assigned_sport ? { assigned_sport: data.assigned_sport } : {}),
+        ...(isCoachOrPE ? { biometric_consent: !!data.biometric_consent } : {}),
         ...(data.role === "student" ? { biometric_consent: data.biometric_consent } : {}),
         ...(data.emergency_contact_name ? { emergency_contact_name: data.emergency_contact_name } : {}),
         ...(data.emergency_contact_number ? { emergency_contact_number: data.emergency_contact_number } : {}),
+        ...(faceCaptures.length >= 5 ? { face_images_base64: faceCaptures.map((c) => c.split(",")[1]) } : {}),
       });
       qc.invalidateQueries({ queryKey: ["users"] });
       setSuccess(true);
@@ -452,15 +480,36 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
   return (
     <Modal title="Create User Account" onClose={onClose} wide>
       <form onSubmit={handleSubmit(onSubmit)} className="px-6 py-5 space-y-4">
-        {/* Basic info */}
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="First Name" error={errors.first_name?.message} required>
-            <input {...register("first_name")} className={inputCls} placeholder="Juan" />
-          </Field>
-          <Field label="Last Name" error={errors.last_name?.message} required>
-            <input {...register("last_name")} className={inputCls} placeholder="Dela Cruz" />
-          </Field>
-        </div>
+        {/* Personal Information */}
+        {isCoach || isPE ? (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="First Name" error={errors.first_name?.message} required>
+                <input {...register("first_name")} className={inputCls} placeholder="Juan" />
+              </Field>
+              <Field label="Middle Name" error={errors.middle_name?.message}>
+                <input {...register("middle_name")} className={inputCls} placeholder="Middle name" />
+              </Field>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Last Name" error={errors.last_name?.message} required>
+                <input {...register("last_name")} className={inputCls} placeholder="Dela Cruz" />
+              </Field>
+              <Field label="Suffix" error={errors.suffix?.message}>
+                <input {...register("suffix")} className={inputCls} placeholder="e.g. Jr., III" />
+              </Field>
+            </div>
+          </>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="First Name" error={errors.first_name?.message} required>
+              <input {...register("first_name")} className={inputCls} placeholder="Juan" />
+            </Field>
+            <Field label="Last Name" error={errors.last_name?.message} required>
+              <input {...register("last_name")} className={inputCls} placeholder="Dela Cruz" />
+            </Field>
+          </div>
+        )}
         <Field label="Email Address" error={errors.email?.message} required>
           <input
             {...register("email")}
@@ -609,20 +658,153 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
           </div>
         )}
 
-        {/* Coach / PE Instructor sport assignment */}
-        {(selectedRole === "coach" || selectedRole === "pe_instructor") && (
+        {/* Coach / PE Instructor — Profile Section */}
+        {(isCoach || isPE) && (
           <div className="bg-[#f8fafc] border border-[#e5e7eb] rounded-xl p-4 space-y-3">
             <p className="text-xs font-semibold text-[#6b7280] uppercase tracking-wide">
-              {selectedRole === "coach" ? "Coach" : "PE Instructor"} Assignment
+              {isCoach ? "Coach Profile" : "PE Instructor Profile"}
             </p>
-            <Field label="Sport / Art" error={errors.assigned_sport?.message} required>
-              <SearchableSelect
-                value={watch("assigned_sport") || ""}
-                onChange={(v) => setValue("assigned_sport", v, { shouldValidate: true })}
-                groups={SPORT_GROUPS}
-                placeholder="Select sport…"
-              />
+
+            {/* Row 1: Contact Number | Gender */}
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Contact Number" error={errors.contact_number?.message}>
+                <input {...register("contact_number")} type="tel" className={inputCls} placeholder="+63 9XX XXX XXXX" />
+              </Field>
+              <Field label="Gender" error={errors.gender?.message}>
+                <select {...register("gender")} className={inputCls}>
+                  <option value="">Select…</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                  <option value="non-binary">Non-binary</option>
+                  <option value="prefer-not">Prefer not to say</option>
+                </select>
+              </Field>
+            </div>
+
+            {/* Row 2: Date of Birth | Employee / Coach ID */}
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Date of Birth" error={errors.date_of_birth?.message}>
+                <input {...register("date_of_birth")} type="date" className={inputCls} />
+              </Field>
+              <Field label={isCoach ? "Employee / Coach ID" : "Employee ID"} error={errors.employee_id?.message}>
+                <input {...register("employee_id")} className={inputCls} placeholder="e.g. EMP-001" />
+              </Field>
+            </div>
+
+            {/* Row 3: Sport/Art (Coach) or Department/College (PE) */}
+            {isCoach ? (
+              <Field label="Sport / Art (Assigned)" error={errors.assigned_sport?.message} required>
+                <SearchableSelect
+                  value={watch("assigned_sport") || ""}
+                  onChange={(v) => setValue("assigned_sport", v, { shouldValidate: true })}
+                  groups={SPORT_GROUPS}
+                  placeholder="Select sport…"
+                />
+              </Field>
+            ) : (
+              <Field label="Department / College" error={errors.department?.message}>
+                <input {...register("department")} className={inputCls} placeholder="e.g. College of Education" />
+              </Field>
+            )}
+
+            {/* Row 4: Address */}
+            <Field label="Address" error={errors.address?.message}>
+              <textarea {...register("address")} className={inputCls + " min-h-[60px]"} placeholder="Street, City, Province" rows={2} />
             </Field>
+
+            {/* Row 5: Account Status */}
+            <Field label="Account Status" error={errors.is_active?.message}>
+              <select
+                value={watch("is_active") === false ? "false" : "true"}
+                onChange={(e) => setValue("is_active", e.target.value === "true", { shouldValidate: true })}
+                className={inputCls}
+              >
+                <option value="true">Active</option>
+                <option value="false">Inactive</option>
+              </select>
+            </Field>
+
+            {/* Row 6: Biometric Consent */}
+            <Field label="Biometric Consent (R.A. 10173)">
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={!!biometricConsent}
+                  onChange={(e) => setValue("biometric_consent", e.target.checked, { shouldValidate: true })}
+                  className="mt-0.5 w-4 h-4 text-[#2563eb] border-[#d1d5db] rounded focus:ring-[#2563eb]"
+                />
+                <span className="text-sm text-[#374151] leading-relaxed">
+                  I confirm that this person has provided consent for biometric data processing in
+                  compliance with R.A. 10173. This is required for facial enrollment.
+                </span>
+              </label>
+            </Field>
+
+            {/* Row 7: Face Enrollment — only after biometric consent */}
+            {biometricConsent && (
+              <div className="border border-[#bfdbfe] rounded-xl p-3 space-y-3 bg-white">
+                <p className="text-xs font-semibold text-[#2563eb] uppercase tracking-wide">Face Enrollment</p>
+                <p className="text-xs text-[#374151]">
+                  Capture <strong>{CAPTURE_COUNT} photos</strong> at different angles (front, left,
+                  right, slight up, slight down). Ensure good lighting.
+                </p>
+                <div className="relative rounded-xl overflow-hidden bg-[#0f172a] aspect-video max-w-sm">
+                  <Webcam
+                    ref={webcamRef}
+                    screenshotFormat="image/jpeg"
+                    videoConstraints={{ facingMode: "user", width: 640, height: 360 }}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="w-40 h-52 border-2 border-white/40 rounded-full" />
+                  </div>
+                  <div className="absolute top-3 right-3 bg-[#0f172a]/70 text-white text-xs font-semibold px-2.5 py-1 rounded-full">
+                    {faceCaptures.length} / {CAPTURE_COUNT}
+                  </div>
+                </div>
+
+                {/* Thumbnails */}
+                {faceCaptures.length > 0 && (
+                  <div className="flex gap-2 flex-wrap">
+                    {faceCaptures.map((src, i) => (
+                      <div key={i} className="w-14 h-14 rounded-lg overflow-hidden border-2 border-[#2563eb] relative">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={src} alt={`Capture ${i + 1}`} className="w-full h-full object-cover" />
+                        <span className="absolute bottom-0 right-0 bg-[#2563eb] text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-tl">
+                          {i + 1}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  {faceCaptures.length > 0 && (
+                    <button type="button" onClick={() => setFaceCaptures([])} className={btnSecondary}>
+                      Retake All
+                    </button>
+                  )}
+                  {faceCaptures.length < CAPTURE_COUNT && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const img = webcamRef.current?.getScreenshot();
+                        if (img) setFaceCaptures((prev) => [...prev, img]);
+                      }}
+                      className={btnPrimary + " flex-1 justify-center"}
+                    >
+                      <Camera size={14} />
+                      Capture ({faceCaptures.length}/{CAPTURE_COUNT})
+                    </button>
+                  )}
+                  {faceCaptures.length >= CAPTURE_COUNT && (
+                    <span className="text-xs text-emerald-600 font-semibold flex items-center gap-1">
+                      <CheckCircle size={14} /> Photos captured
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

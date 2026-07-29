@@ -3,10 +3,11 @@ User model — stores all OSCA system users across all roles.
 """
 import enum
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import (
     Boolean,
+    Date,
     DateTime,
     Enum,
     Index,
@@ -48,6 +49,12 @@ class User(Base):
     course: Mapped[str | None] = mapped_column(String(100), nullable=True)
     year_level: Mapped[str | None] = mapped_column(String(20), nullable=True)
     contact_number: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    suffix: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    date_of_birth: Mapped[date | None] = mapped_column(Date, nullable=True)
+    gender: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    employee_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    department: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
     # Student-specific fields
     sport_or_art: Mapped[str | None] = mapped_column(String(100), nullable=True)

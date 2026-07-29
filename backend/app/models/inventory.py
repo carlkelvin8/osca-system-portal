@@ -41,6 +41,7 @@ class RequestStatus(str, enum.Enum):
     PENDING = "pending"
     APPROVED = "approved"
     REJECTED = "rejected"
+    CANCELLED = "cancelled"
 
 
 class EquipmentCondition(str, enum.Enum):

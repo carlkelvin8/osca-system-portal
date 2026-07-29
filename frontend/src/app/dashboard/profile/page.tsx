@@ -17,14 +17,13 @@ export default function ProfilePage() {
   const hasBorrowingQR = user?.role === "coach" || user?.role === "pe_instructor";
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
 
-  const { data: borrowingId } = useQuery({
+  const { data: borrowingId, isLoading: loadingBid } = useQuery({
     queryKey: ["borrowing-id-me"],
     queryFn: async () => {
       const res = await inventoryApi.getMyBorrowingId();
       return res.data as { qr_code: string; is_active: boolean };
     },
     enabled: hasBorrowingQR,
-    retry: false,
   });
 
   useEffect(() => {
@@ -181,9 +180,14 @@ export default function ProfilePage() {
                 Print QR
               </button>
             </div>
+          ) : loadingBid ? (
+            <div className="flex flex-col items-center gap-2 py-4">
+              <Loader2 size={20} className="animate-spin text-gray-400" />
+              <p className="text-sm text-gray-400">Generating your Digital ID…</p>
+            </div>
           ) : (
             <p className="text-sm text-gray-400 text-center py-4">
-              No Borrowing ID issued yet. Contact the OSCA administrator to generate one.
+              Unable to load Digital ID. Please try again later.
             </p>
           )}
         </div>
