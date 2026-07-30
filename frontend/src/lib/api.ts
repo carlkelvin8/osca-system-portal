@@ -224,27 +224,12 @@ export const reportsApi = {
       responseType: format === "json" ? "json" : "blob",
     }),
   dashboardSummary: () => api.get("/reports/dashboard/summary"),
-  dailyAttendance: (params?: Record<string, unknown>) => {
-    const fmt = params?.format as string;
-    return api.get("/reports/attendance/daily", {
-      params,
-      responseType: fmt && fmt !== "json" ? "blob" : "json",
-    });
-  },
-  weeklyAttendance: (params?: Record<string, unknown>) => {
-    const fmt = params?.format as string;
-    return api.get("/reports/attendance/weekly", {
-      params,
-      responseType: fmt && fmt !== "json" ? "blob" : "json",
-    });
-  },
-  monthlyAttendance: (params?: Record<string, unknown>) => {
-    const fmt = params?.format as string;
-    return api.get("/reports/attendance/monthly", {
-      params,
-      responseType: fmt && fmt !== "json" ? "blob" : "json",
-    });
-  },
+  dailyAttendance: (params?: Record<string, string | number | boolean>) =>
+    api.get("/reports/attendance/daily", { params }),
+  weeklyAttendance: (params?: Record<string, string | number | boolean>) =>
+    api.get("/reports/attendance/weekly", { params }),
+  monthlyAttendance: (params?: Record<string, string | number | boolean>) =>
+    api.get("/reports/attendance/monthly", { params }),
 };
 
 export const announcementsApi = {

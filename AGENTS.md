@@ -7,47 +7,27 @@ Build equipment borrowing with static QR workflow for Staff, attendance reports 
 - Docker containers: `osca_api`, `osca_frontend`, `osca_postgres`, `osca_redis`, `osca_minio`, `osca_celery`, `osca_celery_beat`, `osca_nginx`
 - RBAC: `_STAFF_BORROW_ROLES = {ADMIN, DIRECTOR, STAFF}` for new borrow endpoints
 - Transaction QR format: `TXN-{id_hex[:12].upper()}` — auto-generated, unique, invalidated on completion
-- Static QR (BorrowingID) format: `BID-{instructor_uuid}` — auto-generated on Coach/PE Instructor creation, permanent, never expires
 - Static QR (BorrowingID) scan returns full coach/PE instructor info: eligibility, active borrows, pending requests, active sanctions
-- Alembic head: `f3g4h5i6j7k8` (add cancelled to request_status_enum). Chain: `0e82300a6c8d` → `1a2b3c4d5e6f` → `f2b253e4d908` → `d61caf6ffd94` → `e7f8a9b0c1d2` → `f3g4h5i6j7k8`
+- Alembic chain: `0e82300a6c8d` (attendance) → `1a2b3c4d5e6f` (transaction QR columns) — migration applied
 - Attendance reports export via CSV (built-in `csv`), XLSX (`openpyxl`), PDF (`xhtml2pdf`)
-- Facility `capacity` field: backend `ge=0` in Pydantic schema, frontend `min="0"` on number input, explicit validation message "Quantity cannot be less than 0."
+- Facility `capacity` field: backend `ge=0` in Pydantic schema, frontend `min="0"` on number input
 - Equipment creation no longer renders/upload QR images — uses `EQ-{uuid_hex[:12].upper()}` as simple code
 - User communicates in Taglish (Tagalog + English)
-- Coach nav matches PE Instructor feature set (both lose Reports, Analytics, Facilities, Eligibility, Incidents, Sanctions); Coach keeps Attendance/Roster/Kiosk
-- `GET /attendance/records`: accepts `date_from`, `date_to` query params; returns `session_name`, `session_sport_or_art`; students auto-filtered to own records
 
 ## Work State
 ### Completed (current session)
-- **Student Dashboard Welcome**: Personalized "Welcome, {First Name}!" heading for students with descriptive subtitle; non-students see original "Dashboard" heading
-- **Student Attendance Trend**: Weekly bar chart now uses real attendance records (last 7 days) instead of random mock data
-- **Student Attendance stat**: "Attendance Today" card shows the student's own scan count instead of global total
-- **My Attendance page**: Added search input + Daily/Weekly/Monthly filter buttons; columns changed to Attendance Date, Sport/Art, Attendance Session, Status, Time In, Time Out; paginated with 20 records/page
-- **Backend GET /records**: Added `date_from`, `date_to` query params for date-range filtering; joined with `Session` to populate `session_name` and `session_sport_or_art` in response
-- **Schema**: `AttendanceRecordRead` now includes `session_name` (str) and `session_sport_or_art` (str | None)
+- **FR scan threshold fix**: `.env` `FACE_SIMILARITY_THRESHOLD` changed `0.85` → `0.5`; Redis `fr_config` seeded with `similarity_threshold=0.5`
+- **LATE student time-out fix**: Added fallback in `attendance.py` TIME_OUT path (lines 461–501) that re-matches against only users with active time-in records when primary match fails
+- **Delete User button fix**: Root cause was `AttendanceRecord.student_id` FK has no `ondelete` and `ScanAttempt.matched_user_id` FK has no `ondelete` → both block deletion with `IntegrityError`. Fix: added `cascade="all, delete-orphan"` to `User.attendance_records` relationship, `ondelete="CASCADE"` to `AttendanceRecord.student_id` FK, and `ondelete="SET NULL"` to `ScanAttempt.matched_user_id` FK (via migrations `f2b253e4d908` and `d61caf6ffd94`). Global `IntegrityError` handler updated to distinguish FK violations from duplicates. Frontend: added `onError` handler + error display in `DeleteUserModal` showing the server error message.
+- **Account Creation & Face Enrollment improvements**: Added password show/hide toggles for Password and Confirm Password fields (independent toggles). Replaced Course, Sport/Art, and Assigned Sport dropdowns with searchable dropdowns (keep custom typed values). Added required Biometric Consent (R.A. 10173) checkbox in student section — saved to DB, blocks enrollment if unchecked. Used `SearchableSelect` component with click-outside-close, filtered options, and custom value support.
 
 ### Completed (previous sessions)
-- **Auto-generate Digital ID**: BorrowingID auto-created for Coach/PE Instructor on account creation (`users.py:116-133`). Also auto-generated on profile fetch (`GET /borrowing-ids/me`) if missing. Removed "Contact OSCA administrator" message from profile page.
-- **Cancel Request**: Added `CANCELLED` to `RequestStatus` enum, backend cancel endpoint (`PUT /requests/{id}/cancel`), frontend `CancelConfirmationModal` + Cancel button for own PENDING requests. Migration `f3g4h5i6j7k8`.
-- **Borrow Scanner page**: Two-step flow at `/dashboard/inventory/borrow-scanner` — scan Static QR → identity info, then scan Transaction QR → release/complete actions. Visible to Admin/Director/Staff.
-- **Coach nav alignment**: Removed Coach from Reports, Analytics, Facilities, Eligibility, Incidents, Sanctions (matching PE Instructor's limited set). Coach keeps Attendance, Player Roster, Kiosk.
-- **Reports export columns**: Daily/Weekly/Monthly attendance exports include Student Role and Attendance Date
-- **Attendance record eager loading**: Added `selectinload(AttendanceRecord.student)` to eliminate N+1 queries
-- **Facility quantity validation**: Backend `ge=0`, frontend `min="0"` with explicit error message
-- **Five earlier module updates**: Inventory QR removal, static QR borrowing, attendance reports, facility capacity validation, delete-user cascade fix, account creation improvements
-- **Attendance session filtering**: Backend filters sessions by student's `sport_or_art`; PE Instructor rejected with 403
-- **Create User form enhancements**: suffix, address, date_of_birth, gender, employee_id, department fields; migration `e7f8a9b0c1d2`
-- **Login failure fix**: Migration `e7f8a9b0c1d2` applied — existing users table has 6 new columns
+- **Four module updates**: Inventory QR removal, static QR borrowing, attendance reports, facility capacity validation — all verified present in codebase
 
 ## Relevant Files
-- `backend/app/api/v1/attendance.py` (lines 564–620): `GET /records` — date range filters, Session join, student auto-filter
-- `backend/app/schemas/attendance.py` (line 59): `AttendanceRecordRead` — added `session_name`, `session_sport_or_art`
-- `frontend/src/types/index.ts` (line 142): `AttendanceRecord` — added `session_name`, `session_sport_or_art`
-- `frontend/src/app/dashboard/page.tsx`: student welcome heading (lines ~389-402), real attendance trend (lines ~377-400), student today count
-- `frontend/src/app/dashboard/attendance/page.tsx`: My Attendance tab — search, Daily/Weekly/Monthly filter, updated columns with pagination
-- `backend/app/api/v1/users.py` (lines 116–133): auto-generate BorrowingID after Coach/PE Instructor creation
-- `backend/app/api/v1/inventory.py` (lines 187–213): `GET /borrowing-ids/me` — auto-generates if missing for Coach/PE Instructor
-- `backend/app/api/v1/inventory.py` (lines 541–574): `PUT /requests/{id}/cancel` — cancel own PENDING request
-- `frontend/src/app/dashboard/profile/page.tsx`: profile page — shows loading spinner while Digital ID is auto-generated
-- `frontend/src/app/dashboard/inventory/borrow-scanner/page.tsx`: borrow scanner page with two-step QR flow
-- `frontend/src/app/dashboard/inventory/requests/page.tsx`: `CancelConfirmModal` + Cancel button for own PENDING requests
+- `backend/app/api/v1/users.py` (lines 308–329): `delete_user_permanently` — cascade handles attendance records automatically, no pre-check needed
+- `backend/app/core/exceptions.py` (lines 78–91): `integrity_error_handler` — distinguishes FK violations from duplicate key violations
+- `backend/app/models/attendance.py` (line 98): `AttendanceRecord.student_id` FK — changed to `ondelete="CASCADE"` (migration `f2b253e4d908`)
+- `backend/app/models/attendance.py` (line 199): `ScanAttempt.matched_user_id` FK — changed to `ondelete="SET NULL"` (migration `d61caf6ffd94`)
+- `backend/app/models/user.py` (line 93-95): `User.attendance_records` relationship — added `cascade="all, delete-orphan"`
+- `frontend/src/app/dashboard/users/page.tsx`: `deletePermanently` mutation with `onError`, `DeleteUserModal` with error display, `deleteError` state

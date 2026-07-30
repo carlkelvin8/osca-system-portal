@@ -51,7 +51,6 @@ export default function FacilitiesPage() {
   });
 
   const [form, setForm] = useState({ name: "", description: "", location: "", capacity: "", status: "available", condition: "good" });
-  const [capacityError, setCapacityError] = useState<string | null>(null);
 
   return (
     <div>
@@ -115,31 +114,11 @@ export default function FacilitiesPage() {
               <h2 className="font-bold text-lg">Add Facility</h2>
               <button onClick={() => setShowAdd(false)}><X size={18} /></button>
             </div>
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              const capNum = form.capacity ? +form.capacity : null;
-              if (capNum !== null && capNum < 0) {
-                setCapacityError("Quantity cannot be less than 0.");
-                return;
-              }
-              setCapacityError(null);
-              createMutation.mutate({ ...form, capacity: capNum });
-            }} className="space-y-3">
+            <form onSubmit={(e) => { e.preventDefault(); createMutation.mutate({ ...form, capacity: form.capacity ? +form.capacity : null }); }} className="space-y-3">
               <input placeholder="Name *" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full px-3 py-2 text-sm border rounded-lg" />
               <input placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="w-full px-3 py-2 text-sm border rounded-lg" />
               <input placeholder="Location" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} className="w-full px-3 py-2 text-sm border rounded-lg" />
-              <input
-                placeholder="Capacity"
-                type="number"
-                min="0"
-                value={form.capacity}
-                onChange={(e) => {
-                  setCapacityError(null);
-                  setForm({ ...form, capacity: e.target.value });
-                }}
-                className="w-full px-3 py-2 text-sm border rounded-lg"
-              />
-              {capacityError && <p className="text-xs text-red-600">{capacityError}</p>}
+              <input placeholder="Capacity" type="number" min="0" value={form.capacity} onChange={(e) => setForm({ ...form, capacity: e.target.value })} className="w-full px-3 py-2 text-sm border rounded-lg" />
               <button type="submit" disabled={createMutation.isPending} className="w-full py-2 bg-[#1E3A5F] text-white rounded-lg text-sm font-medium disabled:opacity-50">
                 {createMutation.isPending ? "Saving..." : "Create Facility"}
               </button>

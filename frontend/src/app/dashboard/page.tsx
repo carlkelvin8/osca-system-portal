@@ -2,10 +2,10 @@
 
 import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { reportsApi, announcementsApi, usersApi, attendanceApi } from "@/lib/api";
+import { reportsApi, announcementsApi, usersApi } from "@/lib/api";
 import { Users, CheckCircle, Package, AlertTriangle, Plus, Pencil, Trash2, Calendar, X, Loader2, Clock, ImagePlus, Megaphone, PartyPopper, Pin, MessageSquare, ThumbsUp } from "lucide-react";
 import type { UserSummary } from "@/types";
-import type { DashboardSummary, Announcement, AttendanceRecord, PaginatedResponse } from "@/types";
+import type { DashboardSummary, Announcement, PaginatedResponse } from "@/types";
 import { useAuthStore } from "@/store/useAuthStore";
 import { format, formatDistanceToNow } from "date-fns";
 import {
@@ -286,30 +286,6 @@ export default function DashboardPage() {
   });
   const pendingCount = pendingData?.total ?? 0;
 
-  // Student: fetch own attendance records for weekly chart
-  const startOfWeek = new Date();
-  startOfWeek.setDate(startOfWeek.getDate() - 6);
-  startOfWeek.setHours(0, 0, 0, 0);
-  const { data: studentRecords } = useQuery<PaginatedResponse<AttendanceRecord>>({
-    queryKey: ["student-dashboard-attendance", user?.id],
-    queryFn: async () => {
-      const res = await attendanceApi.getRecords({ date_from: startOfWeek.toISOString(), page_size: 200 });
-      return res.data;
-    },
-    enabled: user?.role === "student" && !!user?.id,
-  });
-
-  // Student: count today's attendance from own records
-  const studentTodayAttendance = (() => {
-    if (user?.role !== "student" || !studentRecords?.items) return 0;
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    return studentRecords.items.filter((r) => {
-      if (!r.time_in) return false;
-      return new Date(r.time_in) >= todayStart;
-    }).length;
-  })();
-
   const isEditor = user?.role === "admin" || user?.role === "director" || user?.role === "staff";
   const announcements = [...(announcementsData?.items ?? [])].sort((a, b) => {
     if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
@@ -346,12 +322,10 @@ export default function DashboardPage() {
     {
       key: "attendance",
       label: "Attendance Today",
-      value: role === "student" ? studentTodayAttendance : (summary?.attendance.today ?? 0),
+      value: summary?.attendance.today ?? 0,
       sub: role === "coach" && user?.sport_or_art
         ? `Scans recorded today · ${user.sport_or_art}`
-        : role === "student"
-          ? "Your scans today"
-          : "Scans recorded today",
+        : "Scans recorded today",
       icon: CheckCircle,
       color: "bg-green-500",
     },
@@ -392,27 +366,13 @@ export default function DashboardPage() {
       ]
     : [];
 
-  // Weekly attendance trend
+  // Weekly attendance trend (last 7 days mock based on today's data)
   const attendanceTrend = (() => {
     const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-    // Student: compute from real attendance records
-    if (role === "student" && studentRecords?.items) {
-      const dayCount = [0, 0, 0, 0, 0, 0, 0];
-      const now = new Date();
-      for (const rec of studentRecords.items) {
-        if (!rec.time_in) continue;
-        const d = new Date(rec.time_in);
-        const diffDays = Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
-        if (diffDays < 0 || diffDays > 6) continue;
-        const dayIdx = (d.getDay() + 6) % 7; // Mon=0 … Sun=6
-        dayCount[dayIdx]++;
-      }
-      return days.map((day, i) => ({ day, scans: dayCount[i] }));
-    }
-    // Others: mock based on summary data
+    const today = new Date().getDay();
     return days.map((d, i) => ({
       day: d,
-      scans: i <= (new Date().getDay() === 0 ? 6 : new Date().getDay() - 1) ? Math.floor(Math.random() * (summary?.attendance.today || 5) + 2) : 0,
+      scans: i <= (today === 0 ? 6 : today - 1) ? Math.floor(Math.random() * (summary?.attendance.today || 5) + 2) : 0,
     }));
   })();
 
@@ -427,17 +387,8 @@ export default function DashboardPage() {
 
       <div className="space-y-6">
         <div>
-          {role === "student" ? (
-            <>
-              <h1 className="text-2xl font-bold text-gray-900">Welcome, {user?.first_name || "Welcome"}!</h1>
-              <p className="text-sm text-gray-500 mt-1">Stay updated with your attendance, OSCA announcements, and account information.</p>
-            </>
-          ) : (
-            <>
-              <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-              <p className="text-sm text-gray-500 mt-1">OSCA Attendance & Inventory Overview</p>
-            </>
-          )}
+          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+          <p className="text-sm text-gray-500 mt-1">OSCA Attendance & Inventory Overview</p>
         </div>
 
         {/* Stat cards */}

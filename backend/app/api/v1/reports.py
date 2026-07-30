@@ -181,14 +181,12 @@ async def _fetch_attendance_logs(
             "id": str(record.id),
             "student_name": user.full_name,
             "student_id": user.student_id or "",
-            "student_role": user.role.value if hasattr(user.role, 'value') else str(user.role),
             "student_email": user.email,
             "session_name": session.name,
             "sport_or_art": session.sport_or_art or "",
             "activity_type": session.activity_type.value,
             "time_in": record.time_in.isoformat() if record.time_in else "",
             "time_out": record.time_out.isoformat() if record.time_out else "",
-            "attendance_date": record.time_in.strftime("%Y-%m-%d") if record.time_in else "",
             "duration_minutes": record.duration_minutes,
             "status": record.status or "",
             "confidence": record.time_in_confidence,
@@ -201,14 +199,16 @@ def _build_attendance_csv(rows: list[dict]) -> str:
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow([
-        "Full Name", "Student ID", "Role", "Sport / Art",
-        "Attendance Status", "Time In", "Time Out", "Attendance Date",
+        "Student Name", "Student ID", "Email", "Session", "Sport/Art",
+        "Activity", "Time In", "Time Out", "Duration (min)", "Status",
+        "Confidence", "Complete",
     ])
     for r in rows:
         writer.writerow([
-            r["student_name"], r["student_id"], r["student_role"],
-            r["sport_or_art"], r["status"], r["time_in"], r["time_out"],
-            r["attendance_date"],
+            r["student_name"], r["student_id"], r["student_email"],
+            r["session_name"], r["sport_or_art"], r["activity_type"],
+            r["time_in"], r["time_out"], r["duration_minutes"],
+            r["status"], r["confidence"], "Yes" if r["is_complete"] else "No",
         ])
     output.seek(0)
     return output.getvalue()
@@ -220,8 +220,9 @@ def _build_attendance_xlsx(rows: list[dict]) -> bytes:
     ws.title = "Attendance Logs"
 
     headers = [
-        "Full Name", "Student ID", "Role", "Sport / Art",
-        "Attendance Status", "Time In", "Time Out", "Attendance Date",
+        "Student Name", "Student ID", "Email", "Session", "Sport/Art",
+        "Activity", "Time In", "Time Out", "Duration (min)", "Status",
+        "Confidence", "Complete",
     ]
     for col, h in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col, value=h)
@@ -231,12 +232,16 @@ def _build_attendance_xlsx(rows: list[dict]) -> bytes:
     for i, r in enumerate(rows, 2):
         ws.cell(row=i, column=1, value=r["student_name"])
         ws.cell(row=i, column=2, value=r["student_id"])
-        ws.cell(row=i, column=3, value=r["student_role"])
-        ws.cell(row=i, column=4, value=r["sport_or_art"])
-        ws.cell(row=i, column=5, value=r["status"])
-        ws.cell(row=i, column=6, value=r["time_in"])
-        ws.cell(row=i, column=7, value=r["time_out"])
-        ws.cell(row=i, column=8, value=r["attendance_date"])
+        ws.cell(row=i, column=3, value=r["student_email"])
+        ws.cell(row=i, column=4, value=r["session_name"])
+        ws.cell(row=i, column=5, value=r["sport_or_art"])
+        ws.cell(row=i, column=6, value=r["activity_type"])
+        ws.cell(row=i, column=7, value=r["time_in"])
+        ws.cell(row=i, column=8, value=r["time_out"])
+        ws.cell(row=i, column=9, value=r["duration_minutes"])
+        ws.cell(row=i, column=10, value=r["status"])
+        ws.cell(row=i, column=11, value=r["confidence"])
+        ws.cell(row=i, column=12, value="Yes" if r["is_complete"] else "No")
 
     output = io.BytesIO()
     wb.save(output)
@@ -251,12 +256,13 @@ def _build_attendance_html(rows: list[dict], title: str, period: str) -> str:
         <tr>
             <td>{r['student_name']}</td>
             <td>{r['student_id']}</td>
-            <td>{r['student_role']}</td>
+            <td>{r['session_name']}</td>
             <td>{r['sport_or_art']}</td>
-            <td>{r['status']}</td>
+            <td>{r['activity_type']}</td>
             <td>{r['time_in']}</td>
             <td>{r['time_out']}</td>
-            <td>{r['attendance_date']}</td>
+            <td>{r['duration_minutes'] or '-'}</td>
+            <td>{r['status']}</td>
         </tr>"""
 
     return f"""
@@ -272,7 +278,7 @@ def _build_attendance_html(rows: list[dict], title: str, period: str) -> str:
         <h1>OSCA — {title}</h1>
         <p>{period} | Records: {len(rows)} | Generated: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}</p>
         <table>
-            <tr><th>Name</th><th>ID</th><th>Role</th><th>Sport/Art</th><th>Status</th><th>Time In</th><th>Time Out</th><th>Date</th></tr>
+            <tr><th>Name</th><th>ID</th><th>Session</th><th>Sport/Art</th><th>Activity</th><th>Time In</th><th>Time Out</th><th>Duration</th><th>Status</th></tr>
             {rows_html}
         </table>
     </body></html>"""
