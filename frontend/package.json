@@ -19,6 +19,7 @@
     "axios": "1.7.9",
     "clsx": "2.1.1",
     "date-fns": "4.1.0",
+    "dom-to-image-more": "^3.10.2",
     "framer-motion": "^12.42.2",
     "js-cookie": "3.0.5",
     "lucide-react": "0.474.0",

@@ -48,9 +48,9 @@ export default function LoginPage() {
         {/* Back to Main Website */}
         <Link
           href="/"
-          className="absolute top-6 left-6 z-20 inline-flex items-center gap-2 text-xs font-semibold text-white/80 hover:text-white transition-colors"
+          className="group absolute top-6 left-6 z-20 inline-flex items-center gap-2 text-xs font-semibold text-white/80 hover:text-white transition-all duration-300 ease-out"
         >
-          <ArrowLeft size={15} />
+          <ArrowLeft size={15} className="transition-transform duration-300 ease-out group-hover:-translate-x-1" />
           Back to Main Website
         </Link>
 

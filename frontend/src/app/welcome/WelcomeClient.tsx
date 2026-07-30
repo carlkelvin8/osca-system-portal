@@ -19,7 +19,7 @@ const NEWS_ITEMS = [
     title: "Community Outreach: Supporting Assoc. Prof. Joselito N. Bacani",
     date: "July 2026",
     excerpt:
-      "The OSCA community is rallying behind Assoc. Prof. Joselito N. Bacani, who is currently undergoing medical treatment. See the full donation poster for how you can help.",
+"The OSCA community is raising support for Assoc. Prof. Joselito N. Bacani, who is currently undergoing medical treatment. Please see the donation poster for details on how you can help.",
     image: "/bacani-fundraiser.jpg",
     href: "https://www.facebook.com/share/p/1ET8EMjQvw/",
   },

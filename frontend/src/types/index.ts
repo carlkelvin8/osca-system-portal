@@ -39,9 +39,10 @@ export interface User {
   gender: string | null;
   employee_id: string | null;
   department: string | null;
+  assigned_sport: string | null;
+  sport_or_art: string | null;
   emergency_contact_name: string | null;
   emergency_contact_number: string | null;
-  sport_or_art: string | null;
   is_active: boolean;
   is_face_enrolled: boolean;
   biometric_consent: boolean;
@@ -232,6 +233,7 @@ export interface EquipmentRequest {
   id: string;
   requester_id: string;
   requester_name: string;
+  requester_role: string;
   status: RequestStatus;
   expected_return: string;
   notes: string | null;
@@ -241,7 +243,18 @@ export interface EquipmentRequest {
   approved_at: string | null;
   rejection_reason: string | null;
   is_expired: boolean;
+  return_qr_code: string | null;
+  return_qr_status: string | null;
+  requester_active_borrows: RequesterActiveBorrow[];
   items: EquipmentRequestItem[];
+}
+
+export interface RequesterActiveBorrow {
+  id: string;
+  status: string;
+  borrowed_at: string;
+  expected_return: string;
+  items: BorrowTransactionItem[];
 }
 
 // ── Staff Borrow / Scanner Types ──────────────────────────────────────────────
@@ -263,10 +276,11 @@ export interface ScannedUserSanction {
 
 export interface ScannedUserBorrow {
   id: string;
+  transaction_qr_code: string | null;
   status: string;
   borrowed_at: string;
   expected_return: string;
-  items_count: number;
+  items: { equipment_name: string; quantity: number }[];
 }
 
 export interface ScanBorrowingIDResponse {
@@ -291,6 +305,7 @@ export interface TransactionQRRead {
   borrowed_at: string;
   expected_return: string;
   notes: string | null;
+  qr_status: string;
 }
 
 // ── Announcements ─────────────────────────────────────────────────────────────

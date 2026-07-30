@@ -9,17 +9,15 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { inventoryApi } from "@/lib/api";
 import {
-  CheckCircle2, XCircle, Clock, Plus, X, Loader2, Package, QrCode, ScanLine, WifiOff,
+  CheckCircle2, XCircle, Clock, Plus, X, Loader2, Package, QrCode, ScanLine, WifiOff, AlertTriangle,
 } from "lucide-react";
 import type {
-  EquipmentRequest, PaginatedResponse, RequestStatus, Equipment,
+  EquipmentRequest, PaginatedResponse, RequestStatus, Equipment, BorrowTransaction,
 } from "@/types";
 import { useAuthStore } from "@/store/useAuthStore";
 import { format } from "date-fns";
 import { equipmentCache } from "@/lib/offlineStore";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
-
-const REQUEST_QR_EXPIRY_MS = 60 * 60 * 1000;
 
 // ── Status badge helper ────────────────────────────────────────────────────────
 
@@ -36,49 +34,61 @@ function getRequestStatus(req: EquipmentRequest): string {
   return req.status;
 }
 
-// ── QR Code Display Modal ────────────────────────────────────────────────────
+// ── Return QR Code Display Modal ────────────────────────────────────────────
 
-function QRCodeModal({ requestId, requestedAt, onClose }: { requestId: string; requestedAt: string; onClose: () => void }) {
+const returnQrStatusConfig: Record<string, { label: string; className: string }> = {
+  active:  { label: "Active",  className: "bg-green-100 text-green-800 border border-green-300" },
+  expired: { label: "Expired", className: "bg-red-100 text-red-800 border border-red-300" },
+  used:    { label: "Used",    className: "bg-gray-100 text-gray-600 border border-gray-300" },
+};
+
+function ReturnQRModal({ request, onClose }: { request: EquipmentRequest; onClose: () => void }) {
+  const qrStatus = request.return_qr_status ?? "active";
+  const statusInfo = returnQrStatusConfig[qrStatus] ?? returnQrStatusConfig.active;
   const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [remaining, setRemaining] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    inventoryApi.getRequestQR(requestId).then((res) => {
-      if (cancelled) return;
-      const url = URL.createObjectURL(new Blob([res.data], { type: "image/png" }));
-      setQrUrl(url);
-      setLoading(false);
-    }).catch(() => {
-      if (!cancelled) setLoading(false);
-    });
+    const fetchQR = async () => {
+      try {
+        const res = await inventoryApi.getRequestQR(request.id);
+        if (cancelled) return;
+        const url = URL.createObjectURL(new Blob([res.data], { type: "image/png" }));
+        setQrUrl(url);
+      } catch {
+        // ignore
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    fetchQR();
     return () => { cancelled = true; };
-  }, [requestId]);
+  }, [request.id]);
 
   useEffect(() => {
     return () => { if (qrUrl) URL.revokeObjectURL(qrUrl); };
   }, [qrUrl]);
 
   useEffect(() => {
-    const iso = requestedAt.includes("Z") || requestedAt.includes("+") ? requestedAt : requestedAt + "Z";
-    const requested = new Date(iso).getTime();
-    const expiresAt = requested + REQUEST_QR_EXPIRY_MS;
-
+    const expectedReturn = new Date(request.expected_return).getTime();
     const tick = () => {
-      const left = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
+      const left = Math.max(0, Math.floor((expectedReturn - Date.now()) / 1000));
       setRemaining(left);
     };
     tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [requestedAt]);
+    if (qrStatus === "active") {
+      const id = setInterval(tick, 1000);
+      return () => clearInterval(id);
+    }
+  }, [request.expected_return, qrStatus]);
 
-  const ready = remaining !== null;
   const minutes = Math.floor((remaining ?? 0) / 60);
   const seconds = (remaining ?? 0) % 60;
-  const isExpired = ready && remaining !== null && remaining <= 0;
-  const isUrgent = remaining !== null && remaining > 0 && remaining <= 300;
+  const isActive = qrStatus === "active";
+  const isExpired = qrStatus === "expired";
+  const isUsed = qrStatus === "used";
 
   return (
     <div
@@ -87,39 +97,72 @@ function QRCodeModal({ requestId, requestedAt, onClose }: { requestId: string; r
     >
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-gray-900">Request QR Code</h2>
+          <h2 className="text-lg font-bold text-gray-900">Return QR Code</h2>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
             <X size={18} />
           </button>
         </div>
-        <p className="text-sm text-gray-500">
-          Show this QR code to the OSCA Staff to approve your request.
-        </p>
-        <div className="flex items-center justify-center py-4">
-          {loading || !ready ? (
+
+        {/* QR Status */}
+        <div className="flex items-center justify-center gap-2">
+          <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${statusInfo.className}`}>
+            {statusInfo.label}
+          </span>
+        </div>
+
+        {/* QR Code Image */}
+        <div className="flex items-center justify-center py-2">
+          {loading ? (
             <Loader2 size={40} className="animate-spin text-gray-300" />
-          ) : qrUrl && !isExpired ? (
-            <img src={qrUrl} alt="Request QR Code" className="w-48 h-48" />
+          ) : qrUrl && isActive ? (
+            <img src={qrUrl} alt="Return QR Code" className="w-48 h-48" />
           ) : isExpired ? (
             <div className="w-48 h-48 flex flex-col items-center justify-center bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
               <Clock size={32} className="text-gray-400 mb-2" />
               <p className="text-sm font-medium text-gray-600">QR Expired</p>
+              <p className="text-xs text-gray-400 mt-1">Expected Return time has passed.</p>
+            </div>
+          ) : isUsed ? (
+            <div className="w-48 h-48 flex flex-col items-center justify-center bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
+              <CheckCircle2 size={32} className="text-gray-400 mb-2" />
+              <p className="text-sm font-medium text-gray-600">QR Used</p>
+              <p className="text-xs text-gray-400 mt-1">This QR has already been scanned for return.</p>
             </div>
           ) : (
             <p className="text-sm text-red-500">Failed to load QR code</p>
           )}
         </div>
-        {!isExpired ? (
-          <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium ${
-            isUrgent ? "bg-red-100 text-red-700" : "bg-blue-50 text-blue-700"
-          }`}>
+
+        {/* Expected Return */}
+        <div className="text-sm text-gray-500">
+          Expected Return: <span className="font-medium text-gray-700">
+            {format(new Date(request.expected_return), "MMM d, yyyy · h:mm a")}
+          </span>
+        </div>
+
+        {/* Countdown for active QR */}
+        {isActive && (
+          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
             <Clock size={12} />
-            Expires in {String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}
+            {remaining !== null && remaining > 0
+              ? `Expires in ${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`
+              : "Expiring now..."}
           </div>
-        ) : (
-          <p className="text-xs text-red-600">This QR code has expired. Please submit a new request.</p>
         )}
-        <p className="text-xs text-gray-400">Request ID: {requestId.slice(0, 8)}…</p>
+
+        {/* Expired message */}
+        {isExpired && (
+          <p className="text-xs text-red-600">
+            This Return QR Code has expired because the Expected Return time has passed.
+          </p>
+        )}
+
+        {/* Description */}
+        {isActive && (
+          <p className="text-xs text-gray-400">
+            Present this QR Code when returning the borrowed equipment.
+          </p>
+        )}
       </div>
     </div>
   );
@@ -490,6 +533,28 @@ function NewRequestModal({ onClose }: NewRequestModalProps) {
   });
   const availableEquipment = equipmentData?.items ?? [];
 
+  const { data: activeBorrows } = useQuery<PaginatedResponse<BorrowTransaction>>({
+    queryKey: ["my-active-borrows"],
+    queryFn: async () => {
+      const res = await inventoryApi.listTransactions({ status: "active", page_size: 50 });
+      return res.data;
+    },
+  });
+
+  const { data: overdueBorrows } = useQuery<PaginatedResponse<BorrowTransaction>>({
+    queryKey: ["my-overdue-borrows"],
+    queryFn: async () => {
+      const res = await inventoryApi.listTransactions({ status: "overdue", page_size: 50 });
+      return res.data;
+    },
+  });
+
+  const existingBorrows: BorrowTransaction[] = [
+    ...(activeBorrows?.items ?? []),
+    ...(overdueBorrows?.items ?? []),
+  ];
+  const hasExistingBorrows = existingBorrows.length > 0;
+
   const addItem = (eq: Equipment) => {
     if (items.find((i) => i.equipment_id === eq.id)) return;
     setItems((prev) => [...prev, { equipment_id: eq.id, quantity: 1, equipment_name: eq.name }]);
@@ -544,6 +609,59 @@ function NewRequestModal({ onClose }: NewRequestModalProps) {
           </button>
         </div>
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+          {/* Active borrows warning banner */}
+          {hasExistingBorrows && (
+            <div className="space-y-3">
+              <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-amber-800">
+                    You currently have existing borrowed equipment or overdue returns.
+                  </p>
+                  <p className="text-xs text-amber-700 mt-0.5">
+                    Your new request will still require Staff/Admin approval.
+                  </p>
+                </div>
+              </div>
+              <div className="border border-amber-200 rounded-lg overflow-hidden">
+                <table className="w-full text-xs">
+                  <thead className="bg-amber-50">
+                    <tr>
+                      <th className="px-3 py-1.5 text-left font-medium text-amber-800">Equipment</th>
+                      <th className="px-3 py-1.5 text-center font-medium text-amber-800">Qty</th>
+                      <th className="px-3 py-1.5 text-left font-medium text-amber-800">Borrowed</th>
+                      <th className="px-3 py-1.5 text-left font-medium text-amber-800">Expected Return</th>
+                      <th className="px-3 py-1.5 text-center font-medium text-amber-800">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-amber-100">
+                    {existingBorrows.map((tx) =>
+                      tx.items.map((item) => (
+                        <tr key={`${tx.id}-${item.id}`}>
+                          <td className="px-3 py-1.5 text-gray-700">{item.equipment_name}</td>
+                          <td className="px-3 py-1.5 text-center text-gray-600">{item.quantity}</td>
+                          <td className="px-3 py-1.5 text-gray-600 whitespace-nowrap">
+                            {format(new Date(tx.borrowed_at), "MMM d, yyyy")}
+                          </td>
+                          <td className="px-3 py-1.5 text-gray-600 whitespace-nowrap">
+                            {format(new Date(tx.expected_return), "MMM d, yyyy")}
+                          </td>
+                          <td className="px-3 py-1.5 text-center">
+                            <span className={`inline-block px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
+                              tx.status === "overdue" ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"
+                            }`}>
+                              {tx.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {/* Equipment selector */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -758,6 +876,150 @@ function CancelConfirmModal({ requestId, onClose }: { requestId: string; onClose
   );
 }
 
+// ── View Details Modal ─────────────────────────────────────────────────────────
+
+function ViewDetailsModal({ request, onClose }: { request: EquipmentRequest; onClose: () => void }) {
+  const displayStatus = getRequestStatus(request);
+  const { label, className, icon: StatusIcon } = statusConfig[displayStatus];
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold text-gray-900">Request Details</h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="space-y-3 text-sm">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-xs text-gray-400">Request Number</p>
+              <p className="font-mono font-medium text-gray-800">REQ-{request.id.slice(0, 8).toUpperCase()}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-400">Current Status</p>
+              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${className}`}>
+                <StatusIcon size={11} />
+                {label}
+              </span>
+            </div>
+          </div>
+
+          <div className="border-t border-gray-100 pt-3">
+            <p className="text-xs text-gray-400 mb-1">Requestor</p>
+            <p className="font-medium text-gray-800">{request.requester_name}</p>
+            <p className="text-xs text-gray-500 capitalize">{(request.requester_role ?? "").replace("_", " ") || "—"}</p>
+          </div>
+
+          {/* Active / Overdue Borrows */}
+          {request.requester_active_borrows.length > 0 && (
+            <div className="border-t border-gray-100 pt-3">
+              <p className="text-xs text-gray-400 mb-2 flex items-center gap-1">
+                <AlertTriangle size={11} className="text-amber-500" />
+                Current Active / Overdue Borrows
+              </p>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-gray-100">
+                    <th className="text-left py-1 text-gray-500 font-medium">Equipment</th>
+                    <th className="text-center py-1 text-gray-500 font-medium">Qty</th>
+                    <th className="text-left py-1 text-gray-500 font-medium">Borrowed</th>
+                    <th className="text-left py-1 text-gray-500 font-medium">Return By</th>
+                    <th className="text-center py-1 text-gray-500 font-medium">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {request.requester_active_borrows.map((tx) =>
+                    tx.items.map((item) => (
+                      <tr key={`${tx.id}-${item.id}`}>
+                        <td className="py-1 text-gray-700">{item.equipment_name}</td>
+                        <td className="py-1 text-center text-gray-600">{item.quantity}</td>
+                        <td className="py-1 text-gray-600 whitespace-nowrap">
+                          {format(new Date(tx.borrowed_at), "MMM d, yyyy")}
+                        </td>
+                        <td className="py-1 text-gray-600 whitespace-nowrap">
+                          {format(new Date(tx.expected_return), "MMM d, yyyy")}
+                        </td>
+                        <td className="py-1 text-center">
+                          <span className={`inline-block px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
+                            tx.status === "overdue" ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"
+                          }`}>
+                            {tx.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div className="border-t border-gray-100 pt-3">
+            <p className="text-xs text-gray-400 mb-2">Equipment Requested</p>
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-gray-100">
+                  <th className="text-left py-1.5 text-gray-500 font-medium">Equipment</th>
+                  <th className="text-center py-1.5 text-gray-500 font-medium">Quantity</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {request.items.map((item) => (
+                  <tr key={item.id}>
+                    <td className="py-1.5 text-gray-700">{item.equipment_name}</td>
+                    <td className="py-1.5 text-center text-gray-600">{item.quantity}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="border-t border-gray-100 pt-3 grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-xs text-gray-400">Request Date</p>
+              <p className="text-gray-700">{format(new Date(request.requested_at), "MMM d, yyyy · h:mm a")}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-400">Expected Return</p>
+              <p className="text-gray-700">{format(new Date(request.expected_return), "MMM d, yyyy · h:mm a")}</p>
+            </div>
+          </div>
+
+          {request.notes && (
+            <div className="border-t border-gray-100 pt-3">
+              <p className="text-xs text-gray-400">Remarks</p>
+              <p className="text-gray-700">{request.notes}</p>
+            </div>
+          )}
+
+          {request.status === "rejected" && request.rejection_reason && (
+            <div className="border-t border-gray-100 pt-3">
+              <p className="text-xs text-gray-400">Rejection Reason</p>
+              <p className="text-red-600">{request.rejection_reason}</p>
+            </div>
+          )}
+
+          {request.status === "approved" && request.approved_by_name && (
+            <div className="border-t border-gray-100 pt-3">
+              <p className="text-xs text-gray-400">Approved By</p>
+              <p className="text-gray-700">{request.approved_by_name}</p>
+              {request.approved_at && (
+                <p className="text-xs text-gray-400">{format(new Date(request.approved_at), "MMM d, yyyy · h:mm a")}</p>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function EquipmentRequestsPage() {
@@ -767,8 +1029,8 @@ export default function EquipmentRequestsPage() {
   const [statusFilter, setStatusFilter] = useState<RequestStatus | "">("");
   const [showNewRequest, setShowNewRequest] = useState(false);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
-  const [qrViewId, setQrViewId] = useState<string | null>(null);
-  const [qrViewRequestedAt, setQrViewRequestedAt] = useState<string>("");
+  const [viewingRequest, setViewingRequest] = useState<EquipmentRequest | null>(null);
+  const [returnQrView, setReturnQrView] = useState<EquipmentRequest | null>(null);
   const [showScanner, setShowScanner] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
 
@@ -786,9 +1048,11 @@ export default function EquipmentRequestsPage() {
   });
 
   const { mutate: approveRequest } = useMutation({
-    mutationFn: (id: string) => inventoryApi.approveRequest(id),
+    mutationFn: (id: string) => inventoryApi.approveRequest(id, { create_transaction: false }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["equipment-requests"] }),
   });
+
+  const [viewingId, setViewingId] = useState<string | null>(null);
 
   const totalPages = data?.pages ?? 1;
 
@@ -796,7 +1060,9 @@ export default function EquipmentRequestsPage() {
     <>
       {showNewRequest && <NewRequestModal onClose={() => setShowNewRequest(false)} />}
       {rejectingId && <RejectModal requestId={rejectingId} onClose={() => setRejectingId(null)} />}
-      {qrViewId && <QRCodeModal requestId={qrViewId} requestedAt={qrViewRequestedAt} onClose={() => setQrViewId(null)} />}
+      {returnQrView && <ReturnQRModal request={returnQrView} onClose={() => setReturnQrView(null)} />}
+      {viewingRequest && <ViewDetailsModal request={viewingRequest} onClose={() => setViewingRequest(null)} />}
+      {returnQrView && <ReturnQRModal request={returnQrView} onClose={() => setReturnQrView(null)} />}
       {showScanner && (
         <QRScannerModal
           onClose={() => setShowScanner(false)}
@@ -926,13 +1192,20 @@ export default function EquipmentRequestsPage() {
                     </td>
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-2">
-                        {/* Requester: Show QR for pending non-expired requests */}
-                        {isRequester && req.status === "pending" && !req.is_expired && (
+                        {/* View Details — always visible */}
+                        <button
+                          onClick={() => setViewingRequest(req)}
+                          className="flex items-center gap-1 px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium"
+                        >
+                          <Package size={12} /> View Details
+                        </button>
+                        {/* Requester: Show Return QR for approved requests with QR */}
+                        {isRequester && req.status === "approved" && req.return_qr_code && (
                           <button
-                            onClick={() => { setQrViewId(req.id); setQrViewRequestedAt(req.requested_at); }}
+                            onClick={() => setReturnQrView(req)}
                             className="flex items-center gap-1 px-3 py-1 text-xs bg-[#1E3A5F]/10 text-[#1E3A5F] rounded-lg hover:bg-[#1E3A5F]/20 transition font-medium"
                           >
-                            <QrCode size={12} /> Show QR
+                            <QrCode size={12} /> Show Return QR
                           </button>
                         )}
                         {/* Requester: Cancel own pending non-expired requests */}
@@ -944,7 +1217,7 @@ export default function EquipmentRequestsPage() {
                             <XCircle size={12} /> Cancel
                           </button>
                         )}
-                        {/* Approver: Approve / Reject for pending non-expired requests */}
+                        {/* Approver: Approve + Reject for pending non-expired requests */}
                         {isApprover && req.status === "pending" && !req.is_expired && (
                           <>
                             <button
@@ -960,6 +1233,12 @@ export default function EquipmentRequestsPage() {
                               <XCircle size={12} /> Reject
                             </button>
                           </>
+                        )}
+                        {/* Approved: show read-only badge */}
+                        {isApprover && displayStatus === "approved" && (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-green-50 text-green-700 rounded-lg font-medium">
+                            <CheckCircle2 size={11} /> Approved
+                          </span>
                         )}
                       </div>
                     </td>

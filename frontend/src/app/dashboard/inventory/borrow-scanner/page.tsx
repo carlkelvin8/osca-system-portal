@@ -318,7 +318,7 @@ export default function BorrowScannerPage() {
                 {identity.current_borrows.map((b) => (
                   <div key={b.id} className="flex items-center justify-between text-xs bg-blue-50 px-3 py-2 rounded-lg">
                     <span className="text-gray-600">
-                      {b.items_count} item(s) — Due {format(new Date(b.expected_return), "MMM d, yyyy")}
+                      {b.items.length} item(s) — Due {format(new Date(b.expected_return), "MMM d, yyyy")}
                     </span>
                     <span className={`font-medium ${
                       b.status === "overdue" ? "text-red-600" : "text-green-600"
@@ -401,10 +401,10 @@ export default function BorrowScannerPage() {
                 <h3 className="text-sm font-bold">Equipment Released</h3>
               </div>
               <p className="text-xs text-green-600">
-                Transaction QR: <span className="font-mono font-bold">{releaseResult.txnQr}</span>
+                Return QR: <span className="font-mono font-bold">{releaseResult.txnQr}</span>
               </p>
               <p className="text-xs text-gray-500">
-                Scan this <strong>Transaction QR (TXN-)</strong> later to process the return.
+                Scan this <strong>Return QR (TXN-)</strong> later to process the return.
               </p>
               <button
                 onClick={() => {

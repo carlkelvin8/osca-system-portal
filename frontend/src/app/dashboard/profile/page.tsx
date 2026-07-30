@@ -1,19 +1,32 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/store/useAuthStore";
 import { inventoryApi, usersApi } from "@/lib/api";
-import { User as UserIcon, Mail, Shield, Calendar, Activity, QrCode, Camera, Loader2 } from "lucide-react";
+import {
+  User as UserIcon,
+  Mail,
+  Shield,
+  Calendar,
+  Activity,
+  Camera,
+  Loader2,
+  Download,
+  Printer,
+} from "lucide-react";
 import { format } from "date-fns";
 import QRCode from "qrcode";
 import { Avatar } from "@/components/ui/Avatar";
+import DigitalID from "@/components/ui/DigitalID";
 
 export default function ProfilePage() {
   const { user } = useAuthStore();
   const qc = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const digitalIdRef = useRef<HTMLDivElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const hasBorrowingQR = user?.role === "coach" || user?.role === "pe_instructor";
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
 
@@ -40,15 +53,35 @@ export default function ProfilePage() {
     setUploading(true);
     try {
       const res = await usersApi.uploadProfilePicture(user.id, file);
-      // Update the auth store with the new profile picture URL
       useAuthStore.setState({ user: { ...user, profile_picture_url: res.data.profile_picture_url } });
       qc.invalidateQueries({ queryKey: ["users"] });
     } catch {
-      // silently fail — user can retry
+      // silently fail
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
+  };
+
+  const handleDownload = async () => {
+    if (!digitalIdRef.current) return;
+    setDownloading(true);
+    try {
+      const { toPng } = await import("dom-to-image-more");
+      const dataUrl = await toPng(digitalIdRef.current, { quality: 1 });
+      const link = document.createElement("a");
+      link.download = `digital-id-${user?.full_name.replace(/\s+/g, "-").toLowerCase()}.png`;
+      link.href = dataUrl;
+      link.click();
+    } catch {
+      // silently fail
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const handlePrint = () => {
+    window.print();
   };
 
   if (!user) return null;
@@ -68,6 +101,8 @@ export default function ProfilePage() {
     { label: "Course", value: user.course, icon: UserIcon },
     { label: "Year Level", value: user.year_level, icon: UserIcon },
     { label: "Student ID", value: user.student_id, icon: UserIcon },
+    { label: "Employee ID", value: user.employee_id, icon: UserIcon },
+    { label: "Department", value: user.department, icon: UserIcon },
     {
       label: "Member Since",
       value: user.created_at ? format(new Date(user.created_at), "MMMM d, yyyy") : null,
@@ -82,7 +117,6 @@ export default function ProfilePage() {
     },
   ];
 
-  // Only show rows that have a value
   const visibleRows = infoRows.filter((r) => r.value);
 
   return (
@@ -94,11 +128,9 @@ export default function ProfilePage() {
 
       {/* Profile card */}
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-        {/* Header banner */}
         <div className="h-24 bg-gradient-to-r from-[#1E3A5F] to-[#2563eb]" />
 
         <div className="px-6 pb-6">
-          {/* Avatar with upload */}
           <div className="-mt-12 mb-4 relative inline-block">
             <Avatar
               src={user.profile_picture_url}
@@ -137,6 +169,52 @@ export default function ProfilePage() {
         </div>
       </div>
 
+      {/* Digital ID — Coach / PE Instructor only */}
+      {hasBorrowingQR && (
+        <div className="flex flex-col items-center gap-4">
+          {qrDataUrl && borrowingId ? (
+            <>
+              <DigitalID
+                ref={digitalIdRef}
+                user={user}
+                qrDataUrl={qrDataUrl}
+                borrowingQrCode={borrowingId.qr_code}
+              />
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleDownload}
+                  disabled={downloading}
+                  className="flex items-center gap-2 px-4 py-2 text-sm bg-[#0d1f3c] text-white rounded-lg hover:bg-[#16304f] transition disabled:opacity-50 font-medium"
+                >
+                  {downloading ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <Download size={14} />
+                  )}
+                  Download Digital ID
+                </button>
+                <button
+                  onClick={handlePrint}
+                  className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium"
+                >
+                  <Printer size={14} />
+                  Print Digital ID
+                </button>
+              </div>
+            </>
+          ) : loadingBid ? (
+            <div className="flex flex-col items-center gap-2 py-8">
+              <Loader2 size={24} className="animate-spin text-gray-400" />
+              <p className="text-sm text-gray-400">Generating your Digital ID&hellip;</p>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400 text-center py-4">
+              Unable to load Digital ID. Please try again later.
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Info table */}
       <div className="bg-white rounded-xl shadow-sm divide-y divide-gray-100">
         {visibleRows.map((row) => {
@@ -150,48 +228,6 @@ export default function ProfilePage() {
           );
         })}
       </div>
-
-      {/* Borrowing QR — Coach / PE Instructor only */}
-      {hasBorrowingQR && (
-        <div className="bg-white rounded-xl shadow-sm p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <QrCode size={18} className="text-[#1E3A5F]" />
-            <h2 className="text-sm font-semibold text-gray-900">Borrowing ID QR Code</h2>
-          </div>
-          {qrDataUrl ? (
-            <div className="flex flex-col items-center gap-3">
-              <img src={qrDataUrl} alt="Borrowing QR Code" className="w-40 h-40 rounded-lg border border-gray-100" />
-              <p className="text-xs text-gray-500 text-center">
-                Present this QR code when borrowing equipment from the OSCA office.
-              </p>
-              <button
-                onClick={() => {
-                  const win = window.open("", "_blank", "width=400,height=500");
-                  win?.document.write(
-                    `<html><body style="text-align:center;padding:20px;font-family:sans-serif">
-                    <h2>Borrowing ID — ${user.full_name}</h2>
-                    <img src="${qrDataUrl}" style="width:200px"/>
-                    <p style="font-size:12px;color:#666">${user.role.replace("_"," ").toUpperCase()} · ${user.sport_or_art ?? ""}</p>
-                    <script>window.print()</script></body></html>`
-                  );
-                }}
-                className="px-4 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50 transition"
-              >
-                Print QR
-              </button>
-            </div>
-          ) : loadingBid ? (
-            <div className="flex flex-col items-center gap-2 py-4">
-              <Loader2 size={20} className="animate-spin text-gray-400" />
-              <p className="text-sm text-gray-400">Generating your Digital ID…</p>
-            </div>
-          ) : (
-            <p className="text-sm text-gray-400 text-center py-4">
-              Unable to load Digital ID. Please try again later.
-            </p>
-          )}
-        </div>
-      )}
 
       {/* Status badges */}
       <div className="flex flex-wrap gap-3">

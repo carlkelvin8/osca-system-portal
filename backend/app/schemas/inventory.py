@@ -115,6 +115,23 @@ class BorrowTransactionItemRead(OSCABaseModel):
     notes: str | None
 
 
+def _compute_return_qr_status(
+    expected_return: datetime,
+    qr_invalidated: bool,
+    status: TransactionStatus,
+) -> str:
+    """Return 'active', 'expired', or 'used'."""
+    if qr_invalidated or status in (TransactionStatus.RETURNED, TransactionStatus.PARTIAL_RETURN):
+        return "used"
+    now = datetime.now(timezone.utc)
+    er = expected_return
+    if er.tzinfo is None:
+        er = er.replace(tzinfo=timezone.utc)
+    if now > er:
+        return "expired"
+    return "active"
+
+
 class BorrowTransactionRead(OSCABaseModel):
     id: uuid.UUID
     instructor_id: uuid.UUID
@@ -127,6 +144,7 @@ class BorrowTransactionRead(OSCABaseModel):
     notes: str | None
     transaction_qr_code: str | None = None
     transaction_qr_invalidated: bool = False
+    return_qr_status: str = "active"
     items: list[BorrowTransactionItemRead]
 
 
@@ -172,6 +190,7 @@ class EquipmentRequestRead(OSCABaseModel):
     id: uuid.UUID
     requester_id: uuid.UUID
     requester_name: str = ""
+    requester_role: str = ""
     status: RequestStatus
     expected_return: datetime
     notes: str | None
@@ -180,6 +199,9 @@ class EquipmentRequestRead(OSCABaseModel):
     approved_by_name: str = ""
     approved_at: datetime | None
     rejection_reason: str | None
+    return_qr_code: str | None = None
+    return_qr_status: str | None = None
+    requester_active_borrows: list["RequesterActiveBorrow"] = []
     items: list[EquipmentRequestItemRead]
 
     @computed_field  # type: ignore[prop-decorator]
@@ -193,8 +215,18 @@ class EquipmentRequestRead(OSCABaseModel):
         return now > expiry
 
 
+class RequesterActiveBorrow(OSCABaseModel):
+    """Simplified borrow info shown on EquipmentRequestRead for awareness."""
+    id: uuid.UUID
+    status: str
+    borrowed_at: datetime
+    expected_return: datetime
+    items: list[BorrowTransactionItemRead] = []
+
+
 class ApproveRequestBody(OSCABaseModel):
     notes: str | None = None
+    create_transaction: bool = True
 
 
 class RejectRequestBody(OSCABaseModel):
@@ -268,6 +300,7 @@ class TransactionQRRead(OSCABaseModel):
     borrowed_at: datetime
     expected_return: datetime
     notes: str | None
+    qr_status: str = "active"
 
 
 class TransactionReleaseRequest(OSCABaseModel):
