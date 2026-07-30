@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Webcam from "react-webcam";
 import { useFacialRecognition } from "@/hooks/useFacialRecognition";
 import { attendanceApi } from "@/lib/api";
@@ -25,6 +25,7 @@ export default function StudentScanPage({
 }) {
   const { sessionId } = use(params);
   const { user } = useAuthStore();
+  const queryClient = useQueryClient();
 
   const [scanType, setScanType] = useState<"time_in" | "time_out">("time_in");
   const [feedback, setFeedback] = useState<{
@@ -60,6 +61,11 @@ export default function StudentScanPage({
         message: scanType === "time_in" ? "Time-In Recorded!" : "Time-Out Recorded!",
         name: result.matched_user_name ?? undefined,
       });
+      if (scanType === "time_out") {
+        queryClient.invalidateQueries({ queryKey: ["my-attendance"] });
+        queryClient.invalidateQueries({ queryKey: ["attendance-records"] });
+        queryClient.invalidateQueries({ queryKey: ["student-dashboard-attendance"] });
+      }
       setTimeout(() => setFeedback(null), 5000);
     },
     onFailure: (result: FaceScanResponse) => {

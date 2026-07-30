@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { staffBorrowApi } from "@/lib/api";
+import { staffBorrowApi, inventoryApi } from "@/lib/api";
 import {
   ScanLine,
   Loader2,
@@ -38,6 +38,8 @@ export default function BorrowScannerPage() {
   const [step, setStep] = useState<ScanStep>("idle");
   const [identity, setIdentity] = useState<ScanBorrowingIDResponse | null>(null);
   const [transaction, setTransaction] = useState<TransactionQRRead | null>(null);
+  const [selectedRequest, setSelectedRequest] = useState<EquipmentRequest | null>(null);
+  const [releaseResult, setReleaseResult] = useState<{ txnQr: string; requestId: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Scanner state
@@ -150,11 +152,34 @@ export default function BorrowScannerPage() {
     },
   });
 
+  const { mutate: releaseRequest, isPending: isReleasingRequest } = useMutation({
+    mutationFn: (requestId: string) => inventoryApi.approveRequest(requestId, {}),
+    onSuccess: (res) => {
+      const txn = (res.data as { transaction_qr_code?: string });
+      setReleaseResult({
+        txnQr: txn?.transaction_qr_code ?? "TXN-...",
+        requestId: selectedRequest?.id ?? "",
+      });
+      queryClient.invalidateQueries({ queryKey: ["inventory-transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory-requests"] });
+      setSelectedRequest(null);
+    },
+    onError: (err: unknown) => {
+      const msg =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
+        "Failed to release request.";
+      setError(msg);
+      setSelectedRequest(null);
+    },
+  });
+
   const reset = () => {
     setStep("idle");
     setIdentity(null);
     setTransaction(null);
     setError(null);
+    setReleaseResult(null);
+    setSelectedRequest(null);
     setScanning(false);
     stopScanning();
   };
@@ -306,20 +331,90 @@ export default function BorrowScannerPage() {
             </div>
           )}
 
-          {/* Pending Requests */}
-          {identity.pending_requests.length > 0 && (
+          {/* Pending Requests — clickable for release */}
+          {identity.pending_requests.length > 0 && !selectedRequest && !releaseResult && (
             <div>
               <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1">
                 <Clock size={14} /> Pending Requests ({identity.pending_requests.length})
               </h3>
+              <p className="text-xs text-gray-400 mb-2">Click a request to review and release equipment.</p>
               <div className="space-y-1">
                 {identity.pending_requests.map((r) => (
-                  <div key={r.id} className="text-xs bg-yellow-50 px-3 py-2 rounded-lg flex items-center justify-between">
-                    <span className="text-gray-600">{r.items.map((i) => i.equipment_name).join(", ")}</span>
-                    <span className="text-yellow-700">{format(new Date(r.requested_at), "MMM d")}</span>
-                  </div>
+                  <button
+                    key={r.id}
+                    onClick={() => setSelectedRequest(r)}
+                    className="w-full text-left text-xs bg-yellow-50 hover:bg-yellow-100 px-3 py-2 rounded-lg flex items-center justify-between transition cursor-pointer border border-transparent hover:border-yellow-300"
+                  >
+                    <span className="text-gray-700 font-medium">{r.items.map((i) => i.equipment_name).join(", ")}</span>
+                    <span className="text-yellow-700 shrink-0 ml-2">{format(new Date(r.requested_at), "MMM d")}</span>
+                  </button>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Selected Request — detail & release */}
+          {selectedRequest && !releaseResult && (
+            <div className="border border-blue-200 rounded-xl p-4 bg-blue-50/50 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-gray-900">Request Details</h3>
+                <button onClick={() => setSelectedRequest(null)} className="text-xs text-gray-400 hover:text-gray-600">
+                  <X size={14} />
+                </button>
+              </div>
+              <div className="text-xs space-y-1">
+                <p><span className="text-gray-500">Expected Return:</span> {format(new Date(selectedRequest.expected_return), "MMM d, yyyy · h:mm a")}</p>
+                {selectedRequest.notes && <p><span className="text-gray-500">Notes:</span> {selectedRequest.notes}</p>}
+              </div>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-blue-100">
+                    <th className="text-left py-1.5 text-gray-500 font-medium">Equipment</th>
+                    <th className="text-center py-1.5 text-gray-500 font-medium">Qty</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-blue-50">
+                  {selectedRequest.items.map((item) => (
+                    <tr key={item.id}>
+                      <td className="py-1.5 text-gray-800">{item.equipment_name}</td>
+                      <td className="py-1.5 text-center text-gray-600">{item.quantity}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <button
+                onClick={() => releaseRequest(selectedRequest.id)}
+                disabled={isReleasingRequest}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition disabled:opacity-50 font-medium"
+              >
+                {isReleasingRequest ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+                Release Equipment
+              </button>
+            </div>
+          )}
+
+          {/* Release Success — show TXN QR */}
+          {releaseResult && (
+            <div className="border border-green-200 rounded-xl p-4 bg-green-50 space-y-2">
+              <div className="flex items-center gap-2 text-green-700">
+                <CheckCircle2 size={18} />
+                <h3 className="text-sm font-bold">Equipment Released</h3>
+              </div>
+              <p className="text-xs text-green-600">
+                Transaction QR: <span className="font-mono font-bold">{releaseResult.txnQr}</span>
+              </p>
+              <p className="text-xs text-gray-500">
+                Scan this <strong>Transaction QR (TXN-)</strong> later to process the return.
+              </p>
+              <button
+                onClick={() => {
+                  setReleaseResult(null);
+                  setSelectedRequest(null);
+                }}
+                className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+              >
+                Dismiss
+              </button>
             </div>
           )}
 
@@ -386,6 +481,24 @@ export default function BorrowScannerPage() {
               <p className="text-sm">
                 <span className="text-gray-500">Expected Return:</span>{" "}
                 {format(new Date(transaction.expected_return), "MMM d, yyyy · h:mm a")}
+              </p>
+              <p className="text-sm">
+                <span className="text-gray-500">Remaining Time:</span>{" "}
+                {(() => {
+                  const now = new Date();
+                  const expected = new Date(transaction.expected_return);
+                  if (transaction.status === "returned") return <span className="text-blue-600">Completed</span>;
+                  if (now > expected) {
+                    const diff = now.getTime() - expected.getTime();
+                    const hours = Math.floor(diff / 3600000);
+                    const mins = Math.floor((diff % 3600000) / 60000);
+                    return <span className="text-red-600 font-medium">Late Return — {hours}h {mins}m overdue</span>;
+                  }
+                  const diff = expected.getTime() - now.getTime();
+                  const days = Math.floor(diff / 86400000);
+                  const hours = Math.floor((diff % 86400000) / 3600000);
+                  return <span className="text-green-600">{days > 0 ? `${days}d ` : ""}{hours}h remaining</span>;
+                })()}
               </p>
               {transaction.notes && (
                 <p className="text-sm">

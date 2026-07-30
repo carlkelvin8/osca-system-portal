@@ -495,6 +495,10 @@ async def approve_equipment_request(
             quantity=ri.quantity,
         ))
 
+    # Generate Dynamic Transaction QR Code for return
+    transaction_qr = f"TXN-{transaction.id.hex[:12].upper()}"
+    transaction.transaction_qr_code = transaction_qr
+
     now = datetime.now(UTC)
     req.status = RequestStatus.APPROVED
     req.approved_by_id = current_user.id

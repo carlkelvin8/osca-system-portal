@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { motion } from "framer-motion";
+import { UserPlus, Calendar, Trophy, Building2, Palette, Users, ExternalLink, ArrowRight } from "lucide-react";
 
 /* ═══ HERO CAROUSEL IMAGES ═══ */
 const HERO_SLIDES = [
@@ -12,17 +13,25 @@ const HERO_SLIDES = [
   { src: "/osca_pic3.jpg", alt: "OSCA Cultural Performances" },
 ];
 
-/* ═══ NAV LINKS ═══ */
-const LEFT_LINKS = [
-  { label: "Home", href: "/" },
-  { label: "Sports", href: "/sports" },
-  { label: "Schedules", href: "/schedules" },
+/* ═══ NEWS ITEMS ═══ */
+const NEWS_ITEMS = [
+  {
+    title: "Community Outreach: Supporting Assoc. Prof. Joselito N. Bacani",
+    date: "July 2026",
+    excerpt:
+      "The OSCA community is rallying behind Assoc. Prof. Joselito N. Bacani, who is currently undergoing medical treatment. See the full donation poster for how you can help.",
+    image: "/bacani-fundraiser.jpg",
+    href: "https://www.facebook.com/share/p/1ET8EMjQvw/",
+  },
 ];
-const RIGHT_LINKS = [
-  { label: "News", href: "/news" },
-  { label: "Teams", href: "/teams" },
-  { label: "Join Us", href: "/register" },
-  { label: "About", href: "/about" },
+
+/* ═══ NAV LINKS ═══ */
+const NAV_LINKS = [
+  { label: "Home", section: "home" },
+  { label: "About", section: "about" },
+  { label: "Sports", section: "sports" },
+  { label: "News", section: "news" },
+  { label: "Contact", section: "contact" },
 ];
 
 /* ═══ MAIN PAGE ═══ */
@@ -31,6 +40,33 @@ export default function WelcomeClient() {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // ── IntersectionObserver for active nav ──
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            const section = NAV_LINKS.find((l) => l.section === entry.target.id);
+            if (section) setActive(section.label);
+          }
+        }
+      },
+      { rootMargin: "-80px 0px -50% 0px", threshold: 0 }
+    );
+
+    const sections = NAV_LINKS.map((l) => document.getElementById(l.section)).filter(Boolean);
+    sections.forEach((el) => el && observer.observe(el));
+    return () => observer.disconnect();
+  }, []);
+
+  const scrollTo = (sectionId: string) => {
+    const el = document.getElementById(sectionId);
+    if (el) {
+      setActive(NAV_LINKS.find((l) => l.section === sectionId)?.label || "Home");
+      el.scrollIntoView({ behavior: "smooth" });
+    }
+  };
 
   const goTo = useCallback((idx: number) => {
     setCurrentSlide(idx);
@@ -60,39 +96,21 @@ export default function WelcomeClient() {
      {/* ─── NAVBAR (crest style) ─── */}
 <nav style={{ background: "#0d1f3c", borderTop: "3px solid #C9A84C", borderBottom: "3px solid #C9A84C", position: "sticky", top: 0, zIndex: 100 }}>
   <div style={{ maxWidth: 1280, margin: "0 auto", padding: "10px 24px 10px 8px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-    <div style={{ display: "flex", alignItems: "center", gap: 28 }}>
-      <Link href="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
-        <div style={{ width: 44, height: 44, borderRadius: "50%", border: "2px solid #C9A84C", overflow: "hidden", background: "#132a4d", flexShrink: 0 }}>
-          <Image src="/osca-logo.png" alt="OSCA Crest" width={44} height={44} style={{ objectFit: "cover", width: "100%", height: "100%" }} priority />
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.25 }}>
-          <span style={{ fontSize: 14, fontWeight: 800, color: "#fff" }}>OSCA Management System</span>
-          <span style={{ fontSize: 10, fontWeight: 500, color: "#C9A84C" }}>NAAP · Villamor Campus</span>
-        </div>
-      </Link>
-
-      <div style={{ display: "flex", gap: 22 }}>
-        {LEFT_LINKS.map((link) => (
-          <button
-            key={link.label}
-            onClick={() => setActive(link.label)}
-            style={{
-              background: "none", border: "none", cursor: "pointer",
-              fontSize: 12, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase",
-              color: active === link.label ? "#C9A84C" : "rgba(255,255,255,0.85)",
-            }}
-          >
-            {link.label}
-          </button>
-        ))}
+    <Link href="/" style={{ display: "flex", alignItems: "center", gap: 6, textDecoration: "none" }}>
+      <div style={{ width: 44, height: 44, borderRadius: "50%", border: "2px solid #C9A84C", overflow: "hidden", background: "#132a4d", flexShrink: 0 }}>
+        <Image src="/osca-logo.png" alt="OSCA Crest" width={44} height={44} style={{ objectFit: "cover", width: "100%", height: "100%" }} priority />
       </div>
-    </div>
+      <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.25 }}>
+        <span style={{ fontSize: 14, fontWeight: 800, color: "#fff" }}>OSCA Management System</span>
+        <span style={{ fontSize: 10, fontWeight: 500, color: "#C9A84C" }}>NAAP · Villamor Campus</span>
+      </div>
+    </Link>
 
     <div style={{ display: "flex", gap: 22, alignItems: "center" }}>
-      {RIGHT_LINKS.map((link) => (
+      {NAV_LINKS.map((link) => (
         <button
           key={link.label}
-          onClick={() => setActive(link.label)}
+          onClick={() => scrollTo(link.section)}
           style={{
             background: "none", border: "none", cursor: "pointer",
             fontSize: 12, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase",
@@ -107,10 +125,10 @@ export default function WelcomeClient() {
       </Link>
     </div>
   </div>
-</nav>
+ </nav>
 
       {/* ─── HERO CAROUSEL ─── */}
-      <section
+      <section id="home"
         onMouseEnter={() => setIsPaused(true)}
         onMouseLeave={() => setIsPaused(false)}
         style={{
@@ -276,8 +294,137 @@ export default function WelcomeClient() {
         </div>
       </section>
 
+      {/* ─── DASHBOARD (3‑COLUMN) ─── */}
+      <section style={{ maxWidth: 1280, margin: "0 auto", padding: "8px 24px 0" }}>
+        <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+          style={{ display: "grid", gridTemplateColumns: "260px 1fr 260px", gap: 22, alignItems: "start" }}>
+
+          {/* ── LEFT COLUMN ── */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+
+            {/* Announcements Mini Carousel */}
+            <AnnouncementsCarousel />
+
+            {/* Open for Tryouts Card */}
+            <div style={{ borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+              <div style={{ borderTop: "3px solid #C9A84C", padding: 20, background: "#fff" }}>
+                <h3 style={{ fontSize: 14, fontWeight: 800, color: "#0d1f3c", marginBottom: 8 }}>Open for Tryouts</h3>
+                <p style={{ fontSize: 12, color: "#5b6472", lineHeight: 1.6, marginBottom: 16 }}>
+                  Showcase your talent and represent NAAP in various sports and cultural events.
+                </p>
+                <Link href="/register"
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 20px", fontSize: 11, fontWeight: 700, color: "#0d1f3c", background: "#C9A84C", borderRadius: 6, textDecoration: "none", textTransform: "uppercase" }}>
+                  Sign Up Now <ArrowRight size={13} />
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          {/* ── CENTER COLUMN ── */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+            {/* Quick Links Panel */}
+            <div style={{ borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+              <div style={{ background: "#0d1f3c", padding: "14px 20px" }}>
+                <h3 style={{ fontSize: 12, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: "0.08em" }}>Quick Links</h3>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, padding: 16, background: "#fff" }}>
+                {[
+                  { label: "Player Registration", icon: UserPlus, href: "/register" },
+                  { label: "Event Calendar", icon: Calendar, href: "#" },
+                  { label: "Results & Standings", icon: Trophy, href: "#" },
+                  { label: "Facility Booking", icon: Building2, href: "#" },
+                  { label: "Cultural Programs", icon: Palette, href: "#" },
+                  { label: "Membership Portal", icon: Users, href: "#" },
+                ].map((link, i) => {
+                  const Icon = link.icon;
+                  return (
+                    <a key={i} href={link.href}
+                      style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "14px 8px", borderRadius: 10, background: "#fafafa", border: "1px solid transparent", textDecoration: "none", color: "#0d1f3c", transition: "all 0.2s", cursor: "pointer" }}
+                      onMouseEnter={(e) => { const el = e.currentTarget; el.style.borderColor = "#C9A84C"; el.style.background = "rgba(201,168,76,0.08)"; }}
+                      onMouseLeave={(e) => { const el = e.currentTarget; el.style.borderColor = "transparent"; el.style.background = "#fafafa"; }}
+                    >
+                      <Icon size={20} style={{ color: "#C9A84C" }} />
+                      <span style={{ fontSize: 10, fontWeight: 700, textAlign: "center", textTransform: "uppercase", letterSpacing: "0.03em", lineHeight: 1.3 }}>{link.label}</span>
+                    </a>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Message Card */}
+            <div style={{ borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+              <div style={{ position: "relative", height: 180, overflow: "hidden", background: "#e7eaf0" }}>
+                <Image src="/osca_pic.jpg" alt="OSCA" fill style={{ objectFit: "cover" }} />
+                <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "50%", background: "linear-gradient(transparent, rgba(13,31,60,0.7))" }} />
+                <div style={{ position: "absolute", bottom: 12, left: 12, display: "inline-block", padding: "5px 14px", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#0d1f3c", background: "#C9A84C", borderRadius: 50 }}>
+                  Message
+                </div>
+              </div>
+              <div style={{ padding: "14px 20px 20px", background: "#fff" }}>
+                <p style={{ fontSize: 12, color: "#5b6472", lineHeight: 1.7, fontStyle: "italic" }}>
+                  "Welcome to the OSCA Management System — your gateway to sports and cultural excellence at NAAP."
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* ── RIGHT COLUMN ── */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+            {/* Follow Us Card */}
+            <div style={{ borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+              <div style={{ background: "#0d1f3c", padding: "14px 20px" }}>
+                <h3 style={{ fontSize: 12, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: "0.08em" }}>Follow Us</h3>
+              </div>
+              <div style={{ padding: 20, background: "#fff", display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                  <div style={{ width: 56, height: 56, borderRadius: "50%", border: "2px solid #C9A84C", overflow: "hidden", background: "#132a4d", flexShrink: 0 }}>
+                    <Image src="/osca-logo.png" alt="OSCA" width={56} height={56} style={{ objectFit: "cover", width: "100%", height: "100%" }} />
+                  </div>
+                  <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
+                    <p style={{ fontSize: 10, fontWeight: 600, color: "#0d1f3c", lineHeight: 1.3 }}>NAAP- Office of Sports and Cultural Affairs</p>
+                  </div>
+                </div>
+                <a href="https://www.facebook.com/profile.php?id=61555726719574" target="_blank" rel="noopener noreferrer"
+                  style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "9px 22px", fontSize: 11, fontWeight: 700, color: "#fff", background: "#1877F2", borderRadius: 6, textDecoration: "none", textTransform: "uppercase" }}>
+                  <ExternalLink size={13} /> Facebook Page
+                </a>
+                <p style={{ fontSize: 11, color: "#5b6472", textAlign: "center", fontWeight: 600 }}>FIND US ON FACEBOOK</p>
+              </div>
+            </div>
+
+            {/* Find Your Team Card */}
+            <div style={{ borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+              <div style={{ background: "#0d1f3c", padding: "14px 20px" }}>
+                <h3 style={{ fontSize: 12, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: "0.08em" }}>Find Your Team</h3>
+              </div>
+              <div style={{ padding: 20, background: "#fff" }}>
+                <p style={{ fontSize: 12, color: "#5b6472", lineHeight: 1.7, marginBottom: 16 }}>
+                  Choose your track and become part of a team that matches your passion.
+                </p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  <a href="/register?track=sports" style={{ padding: "10px", fontSize: 11, fontWeight: 700, color: "#0d1f3c", background: "#C9A84C", borderRadius: 6, textDecoration: "none", textTransform: "uppercase", textAlign: "center" }}>
+                    Sports Track
+                  </a>
+                  <a href="/register?track=culture" style={{ padding: "10px", fontSize: 11, fontWeight: 700, color: "#fff", background: "#0d1f3c", borderRadius: 6, textDecoration: "none", textTransform: "uppercase", textAlign: "center" }}>
+                    Cultural Track
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            {/* Motivation Banner */}
+            <div style={{ padding: "28px 20px", borderRadius: 12, background: "linear-gradient(135deg, #1d4ed8, #0d1f3c)", textAlign: "center" }}>
+              <p style={{ fontSize: 16, fontWeight: 900, color: "#fff", lineHeight: 1.4, letterSpacing: "0.02em" }}>
+                EXCELLENCE<br />HAS NO LIMITS
+              </p>
+            </div>
+          </div>
+
+        </motion.div>
+      </section>
+
       {/* ─── VISION & MISSION ─── */}
-      <section style={{ padding: "60px 24px", maxWidth: 1100, margin: "0 auto" }}>
+      <section id="about" style={{ padding: "60px 24px", maxWidth: 1100, margin: "0 auto" }}>
         <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} style={{ textAlign: "center", marginBottom: 40 }}>
           <span style={{ display: "inline-block", padding: "5px 16px", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#0d1f3c", background: "rgba(201,168,76,0.15)", borderRadius: 50, marginBottom: 14 }}>About OSCA</span>
           <h2 style={{ fontSize: "clamp(22px, 3.5vw, 32px)", fontWeight: 800, color: "#0d1f3c" }}>Who We Are</h2>
@@ -302,7 +449,7 @@ export default function WelcomeClient() {
       </section>
 
       {/* ─── OSCA PERSONNEL ─── */}
-      <section style={{ padding: "60px 24px", maxWidth: 1100, margin: "0 auto", background: "#fafafa" }}>
+      <section id="sports" style={{ padding: "60px 24px", maxWidth: 1100, margin: "0 auto", background: "#fafafa" }}>
         <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} style={{ textAlign: "center", marginBottom: 40 }}>
           <span style={{ display: "inline-block", padding: "5px 16px", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#0d1f3c", background: "rgba(201,168,76,0.15)", borderRadius: 50, marginBottom: 14 }}>OSCA Personnel</span>
           <h2 style={{ fontSize: "clamp(22px, 3.5vw, 32px)", fontWeight: 800, color: "#0d1f3c" }}>Our Team</h2>
@@ -378,8 +525,55 @@ export default function WelcomeClient() {
         </motion.div>
       </section>
 
+      {/* ─── LATEST NEWS & ANNOUNCEMENTS ─── */}
+      <section id="news" style={{ padding: "60px 24px", maxWidth: 1100, margin: "0 auto" }}>
+        <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} style={{ textAlign: "center", marginBottom: 40 }}>
+          <span style={{ display: "inline-block", padding: "5px 16px", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#0d1f3c", background: "rgba(201,168,76,0.15)", borderRadius: 50, marginBottom: 14 }}>Latest News</span>
+          <h2 style={{ fontSize: "clamp(22px, 3.5vw, 32px)", fontWeight: 800, color: "#0d1f3c" }}>News & Announcements</h2>
+        </motion.div>
+
+        {NEWS_ITEMS.length === 0 ? (
+          <p style={{ textAlign: "center", fontSize: 14, color: "#5b6472", padding: "40px 0" }}>No announcements available.</p>
+        ) : (
+          <>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 20 }}>
+              {NEWS_ITEMS.map((item, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.1 }}
+                >
+                  <a href={item.href} target="_blank" rel="noopener noreferrer"
+                    style={{ display: "block", borderRadius: 10, overflow: "hidden", background: "#fff", border: "1px solid #e7eaf0", textDecoration: "none", transition: "box-shadow 0.2s, transform 0.2s", cursor: "pointer" }}
+                    onMouseEnter={(e) => { const el = e.currentTarget; el.style.boxShadow = "0 4px 20px rgba(0,0,0,0.08)"; el.style.transform = "translateY(-2px)"; }}
+                    onMouseLeave={(e) => { const el = e.currentTarget; el.style.boxShadow = "none"; el.style.transform = "none"; }}
+                  >
+                    <div style={{ position: "relative", height: 160, overflow: "hidden", background: "#e7eaf0" }}>
+                      <Image src={item.image} alt={item.title} fill style={{ objectFit: "cover" }} />
+                    </div>
+                    <div style={{ padding: "16px 18px 18px" }}>
+                      <span style={{ display: "inline-block", fontSize: 10, fontWeight: 700, color: "#C9A84C", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>{item.date}</span>
+                      <h3 style={{ fontSize: 14, fontWeight: 800, color: "#0d1f3c", lineHeight: 1.4, marginBottom: 8 }}>{item.title}</h3>
+                      <p style={{ fontSize: 12, color: "#5b6472", lineHeight: 1.7 }}>{item.excerpt}</p>
+                    </div>
+                  </a>
+                </motion.div>
+              ))}
+            </div>
+
+            <motion.div initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} style={{ textAlign: "center", marginTop: 32 }}>
+              <Link href="/login" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "12px 28px", fontSize: 12, fontWeight: 700, color: "#fff", background: "#1d4ed8", borderRadius: 6, textDecoration: "none", textTransform: "uppercase" }}>
+                View Announcements <ArrowRight size={14} />
+              </Link>
+            </motion.div>
+          </>
+        )}
+      </section>
+
       {/* ─── CONTACT ─── */}
-      <section style={{ padding: "56px 24px", maxWidth: 600, margin: "0 auto", textAlign: "center" }}>
+      <section id="contact" style={{ padding: "56px 24px", maxWidth: 600, margin: "0 auto", textAlign: "center" }}>
         <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}>
           <span style={{ display: "inline-block", padding: "5px 16px", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#0d1f3c", background: "rgba(201,168,76,0.15)", borderRadius: 50, marginBottom: 16 }}>Contact</span>
           <h2 style={{ fontSize: 22, fontWeight: 800, color: "#0d1f3c", marginBottom: 20 }}>OFFICE INFORMATION</h2>
@@ -404,6 +598,43 @@ export default function WelcomeClient() {
           </div>
         </div>
       </footer>
+    </div>
+  );
+}
+
+/* ═══ ANNOUNCEMENTS MINI CAROUSEL ═══ */
+const ANNOUNCEMENTS = [
+  { title: "Basketball & Volleyball Tryouts", date: "March 15, 2026", excerpt: "Tryouts for the NAAP men's and women's basketball and volleyball teams are now open for all students." },
+  { title: "OSCA Choir Auditions", date: "March 22, 2026", excerpt: "Showcase your vocal talent! Auditions for the OSCA Chorale are open to all grade levels." },
+  { title: "Annual Sports Fest Schedule", date: "April 5–12, 2026", excerpt: "The week-long annual sports festival featuring inter-department competitions in various disciplines." },
+];
+
+function AnnouncementsCarousel() {
+  const [idx, setIdx] = useState(0);
+
+  useEffect(() => {
+    const t = setInterval(() => setIdx((p) => (p + 1) % ANNOUNCEMENTS.length), 4500);
+    return () => clearInterval(t);
+  }, []);
+
+  const a = ANNOUNCEMENTS[idx];
+
+  return (
+    <div style={{ borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+      <div style={{ background: "#0d1f3c", padding: "14px 20px" }}>
+        <h3 style={{ fontSize: 12, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: "0.08em" }}>Announcements</h3>
+      </div>
+      <div style={{ padding: 20, background: "#fff", minHeight: 120 }}>
+        <p style={{ fontSize: 13, fontWeight: 700, color: "#0d1f3c", marginBottom: 4 }}>{a.title}</p>
+        <p style={{ fontSize: 11, color: "#C9A84C", fontWeight: 600, marginBottom: 8 }}>{a.date}</p>
+        <p style={{ fontSize: 12, color: "#5b6472", lineHeight: 1.6 }}>{a.excerpt}</p>
+      </div>
+      <div style={{ display: "flex", justifyContent: "center", gap: 8, padding: "0 20px 14px", background: "#fff" }}>
+        {ANNOUNCEMENTS.map((_, i) => (
+          <button key={i} onClick={() => setIdx(i)} aria-label={`Announcement ${i + 1}`}
+            style={{ width: i === idx ? 20 : 8, height: 8, borderRadius: 4, border: "none", background: i === idx ? "#C9A84C" : "#d9dce2", cursor: "pointer", padding: 0, transition: "all 0.3s ease" }} />
+        ))}
+      </div>
     </div>
   );
 }
