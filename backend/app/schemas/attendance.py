@@ -60,6 +60,8 @@ class AttendanceRecordRead(OSCABaseModel):
     id: uuid.UUID
     student_id: uuid.UUID
     session_id: uuid.UUID
+    session_name: str = ""
+    session_sport_or_art: str | None = None
     student_name: str = ""
     student_number: str | None = None
     time_in: datetime | None

@@ -77,20 +77,39 @@ export default function SessionMonitorPage({
 
   const isLoading = sessionLoading || recordsLoading || studentsLoading;
 
-  // Build player rows: cross-reference students with records
-  const playerRows: PlayerRow[] = (studentsData?.items ?? []).map((student) => {
-    const record =
-      recordsData?.items.find((r) => r.student_id === student.id) ?? null;
-    let status: AttendanceStatus = "absent";
-    if (record?.time_in) {
-      status = record.status === "late" ? "late" : "present";
-    }
-    return {
-      user: student,
-      record,
-      status,
-    };
-  });
+  // Build player rows: prefer students list, fall back to records for name
+  const playerRows: PlayerRow[] = [];
+  const students = studentsData?.items ?? [];
+  const records = recordsData?.items ?? [];
+
+  if (students.length > 0) {
+    students.forEach((student) => {
+      const record = records.find((r) => r.student_id === student.id) ?? null;
+      let status: AttendanceStatus = "absent";
+      if (record?.time_in) {
+        status = record.status === "late" ? "late" : "present";
+      }
+      playerRows.push({ user: student, record, status });
+    });
+  } else if (records.length > 0) {
+    records.forEach((record) => {
+      let status: AttendanceStatus = "absent";
+      if (record.time_in) {
+        status = record.status === "late" ? "late" : "present";
+      }
+      playerRows.push({
+        user: {
+          id: record.student_id,
+          first_name: "",
+          last_name: "",
+          student_id: record.student_number,
+          sport_or_art: null,
+        },
+        record,
+        status,
+      });
+    });
+  }
 
   // Summary counts
   const presentCount = playerRows.filter((r) => r.status === "present").length;
@@ -223,7 +242,9 @@ export default function SessionMonitorPage({
                   }`}
                 >
                   <td className="px-4 py-3 font-medium text-gray-900">
-                    {user.last_name}, {user.first_name}
+                    {user.first_name
+                      ? `${user.last_name}, ${user.first_name}`
+                      : (record?.student_name || "—")}
                   </td>
                   <td className="px-4 py-3 text-gray-500 text-xs">
                     {user.student_id ?? "—"}
