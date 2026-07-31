@@ -234,8 +234,7 @@ export default function BorrowScannerPage() {
           </div>
           <h2 className="text-lg font-semibold text-gray-900 mb-2">Ready to Scan</h2>
           <p className="text-sm text-gray-500 mb-6 max-w-sm mx-auto">
-            Scan a <strong>Static QR (Borrowing ID)</strong> to identify a user, or a{" "}
-            <strong>Transaction QR (TXN-)</strong> to process a release or return.
+            Scan the borrower's ID to view account details and manage equipment transactions.
           </p>
           <button
             onClick={startScanner}
@@ -249,22 +248,14 @@ export default function BorrowScannerPage() {
       {/* Identity result */}
       {step === "identity" && identity && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-5">
-          <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
               <User size={20} className="text-[#1E3A5F]" /> Identified User
             </h2>
-            <div className="flex gap-2">
-              <button
-                onClick={startScanner}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs bg-[#1E3A5F]/10 text-[#1E3A5F] rounded-lg hover:bg-[#1E3A5F]/20 transition font-medium"
-              >
-                <ScanLine size={12} /> Scan Transaction QR
-              </button>
-              <button onClick={reset} className="text-xs text-gray-400 hover:text-gray-600 px-2">
-                <ArrowLeft size={16} /> Back
-              </button>
+            <button onClick={reset} className="text-xs text-gray-400 hover:text-gray-600 px-2">
+              <ArrowLeft size={16} /> Back
+            </button>
             </div>
-          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">

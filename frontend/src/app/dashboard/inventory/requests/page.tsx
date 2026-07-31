@@ -9,7 +9,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { inventoryApi } from "@/lib/api";
 import {
-  CheckCircle2, XCircle, Clock, Plus, X, Loader2, Package, QrCode, ScanLine, WifiOff, AlertTriangle, RotateCcw,
+  CheckCircle2, XCircle, Clock, Plus, X, Loader2, Package, QrCode, WifiOff, AlertTriangle, RotateCcw, Trash2,
 } from "lucide-react";
 import type {
   EquipmentRequest, PaginatedResponse, RequestStatus, Equipment, BorrowTransaction,
@@ -889,9 +889,71 @@ function CancelConfirmModal({ requestId, onClose }: { requestId: string; onClose
   );
 }
 
+// ── Delete Confirmation Modal ──────────────────────────────────────────────────
+
+function DeleteConfirmModal({ requestId, onClose }: { requestId: string; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const [error, setError] = useState<string | null>(null);
+
+  const { mutate, isPending } = useMutation({
+    mutationFn: () => inventoryApi.deleteRequest(requestId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["equipment-requests"] });
+      onClose();
+    },
+    onError: (err: unknown) => {
+      const msg =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
+        "Failed to delete request.";
+      setError(msg);
+    },
+  });
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
+        <h2 className="text-lg font-bold text-gray-900">Delete Request</h2>
+        <p className="text-sm text-gray-600">
+          Are you sure you want to permanently delete this equipment request? This action cannot be undone.
+        </p>
+        {error && <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
+        <div className="flex justify-end gap-3 pt-1">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition">
+            Keep Request
+          </button>
+          <button
+            onClick={() => mutate()}
+            disabled={isPending}
+            className="flex items-center gap-2 px-5 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition disabled:opacity-50 font-medium"
+          >
+            {isPending ? <><Loader2 size={14} className="animate-spin" /> Deleting…</> : "Yes, Delete Request"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── View Details Modal ─────────────────────────────────────────────────────────
 
-function ViewDetailsModal({ request, onClose }: { request: EquipmentRequest; onClose: () => void }) {
+function ViewDetailsModal({
+  request,
+  onClose,
+  isApprover,
+  onApprove,
+  onReject,
+  onDelete,
+}: {
+  request: EquipmentRequest;
+  onClose: () => void;
+  isApprover: boolean;
+  onApprove: (id: string) => void;
+  onReject: (id: string) => void;
+  onDelete: (id: string) => void;
+}) {
   const displayStatus = getRequestStatus(request);
   const { label, className, icon: StatusIcon } = statusConfig[displayStatus];
 
@@ -1028,6 +1090,34 @@ function ViewDetailsModal({ request, onClose }: { request: EquipmentRequest; onC
             </div>
           )}
         </div>
+
+        {isApprover && (
+          <div className="border-t border-gray-100 pt-4 flex items-center justify-end gap-2">
+            {request.status === "pending" && !request.is_expired ? (
+              <>
+                <button
+                  onClick={() => onReject(request.id)}
+                  className="flex items-center gap-1 px-4 py-2 text-sm bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition font-medium border border-red-200"
+                >
+                  <XCircle size={14} /> Reject
+                </button>
+                <button
+                  onClick={() => onApprove(request.id)}
+                  className="flex items-center gap-1 px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium"
+                >
+                  <CheckCircle2 size={14} /> Approve
+                </button>
+              </>
+            ) : request.status !== "pending" || request.is_expired ? (
+              <button
+                onClick={() => onDelete(request.id)}
+                className="flex items-center gap-1 px-4 py-2 text-sm bg-gray-50 text-gray-500 rounded-lg hover:bg-red-50 hover:text-red-600 transition font-medium border border-gray-200"
+              >
+                <Trash2 size={14} /> Delete Request
+              </button>
+            ) : null}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1048,6 +1138,7 @@ export default function EquipmentRequestsPage() {
   const [returnQrView, setReturnQrView] = useState<EquipmentRequest | null>(null);
   const [showScanner, setShowScanner] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const isRequester = user?.role === "coach" || user?.role === "pe_instructor";
   const isApprover = user?.role === "admin" || user?.role === "director" || user?.role === "staff";
@@ -1078,7 +1169,25 @@ export default function EquipmentRequestsPage() {
       {showNewRequest && <NewRequestModal onClose={() => setShowNewRequest(false)} />}
       {rejectingId && <RejectModal requestId={rejectingId} onClose={() => setRejectingId(null)} />}
       {returnQrView && <ReturnQRModal request={returnQrView} onClose={() => setReturnQrView(null)} />}
-      {viewingRequest && <ViewDetailsModal request={viewingRequest} onClose={() => setViewingRequest(null)} />}
+      {viewingRequest && (
+        <ViewDetailsModal
+          request={viewingRequest}
+          onClose={() => setViewingRequest(null)}
+          isApprover={isApprover}
+          onApprove={(id) => {
+            approveRequest(id);
+            setViewingRequest(null);
+          }}
+          onReject={(id) => {
+            setRejectingId(id);
+            setViewingRequest(null);
+          }}
+          onDelete={(id) => {
+            setDeletingId(id);
+            setViewingRequest(null);
+          }}
+        />
+      )}
       {showScanner && (
         <QRScannerModal
           onClose={() => setShowScanner(false)}
@@ -1089,6 +1198,7 @@ export default function EquipmentRequestsPage() {
         />
       )}
       {cancellingId && <CancelConfirmModal requestId={cancellingId} onClose={() => setCancellingId(null)} />}
+      {deletingId && <DeleteConfirmModal requestId={deletingId} onClose={() => setDeletingId(null)} />}
 
       <div className="space-y-6">
         <div className="flex items-center justify-between">
@@ -1134,14 +1244,6 @@ export default function EquipmentRequestsPage() {
               <option value="rejected">Rejected</option>
               <option value="cancelled">Cancelled</option>
             </select>
-            {isApprover && (
-              <button
-                onClick={() => setShowScanner(true)}
-                className="flex items-center gap-2 px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
-              >
-                <ScanLine size={16} /> Scan QR
-              </button>
-            )}
             {isRequester && (
               <button
                 onClick={() => setShowNewRequest(true)}
@@ -1154,7 +1256,8 @@ export default function EquipmentRequestsPage() {
         </div>
 
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[820px] text-sm">
             <thead className="bg-[#1E3A5F] text-white">
               <tr>
                 <th className="px-4 py-3 text-left font-medium">Requester</th>
@@ -1163,19 +1266,22 @@ export default function EquipmentRequestsPage() {
                 <th className="px-4 py-3 text-left font-medium">Requested At</th>
                 {isApprover && <th className="px-4 py-3 text-left font-medium">Approved By</th>}
                 <th className="px-4 py-3 text-center font-medium">Status</th>
-                <th className="px-4 py-3 text-center font-medium">Actions</th>
+                <th className="px-4 py-3 text-center font-medium w-[130px]">View Details</th>
+                {isRequester && <th className="px-4 py-3 text-center font-medium w-[130px]">Return QR</th>}
+                {isRequester && <th className="px-4 py-3 text-center font-medium w-[150px]">Actions</th>}
+                {isApprover && <th className="px-4 py-3 text-center font-medium w-[150px]">Actions</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {isLoading ? (
                 <tr>
-                    <td colSpan={isApprover ? 7 : 6} className="px-4 py-8 text-center text-gray-400">
+                    <td colSpan={isApprover ? 8 : 8} className="px-4 py-8 text-center text-gray-400">
                       <Loader2 size={20} className="animate-spin inline-block mr-2" />Loading…
                     </td>
                 </tr>
               ) : (data?.items ?? []).length === 0 ? (
                 <tr>
-                  <td colSpan={isApprover ? 7 : 6} className="px-4 py-10 text-center text-gray-400 text-sm">
+                  <td colSpan={isApprover ? 8 : 8} className="px-4 py-10 text-center text-gray-400 text-sm">
                     No requests found.
                   </td>
                 </tr>
@@ -1230,57 +1336,79 @@ export default function EquipmentRequestsPage() {
                         </p>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        {/* View Details — always visible */}
-                        <button
-                          onClick={() => setViewingRequest(req)}
-                          className="flex items-center gap-1 px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium"
-                        >
-                          <Package size={12} /> View Details
-                        </button>
-                        {/* Show Return QR for approved requests with active QR */}
-                        {req.status === "approved" && req.return_qr_code && req.return_qr_status !== "used" && (
+                    <td className="px-4 py-3 text-center w-[130px]">
+                      <button
+                        onClick={() => setViewingRequest(req)}
+                        className="inline-flex items-center gap-1 px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium"
+                      >
+                        <Package size={12} /> View Details
+                      </button>
+                    </td>
+                    {isRequester && (
+                      <td className="px-4 py-3 text-center w-[130px]">
+                        {req.status === "approved" && req.return_qr_code && req.return_qr_status !== "used" ? (
                           <button
                             onClick={() => setReturnQrView(req)}
-                            className="flex items-center gap-1 px-3 py-1 text-xs bg-[#1E3A5F]/10 text-[#1E3A5F] rounded-lg hover:bg-[#1E3A5F]/20 transition font-medium"
+                            className="inline-flex items-center gap-1 px-3 py-1 text-xs bg-[#1E3A5F]/10 text-[#1E3A5F] rounded-lg hover:bg-[#1E3A5F]/20 transition font-medium"
                           >
-                            <QrCode size={12} /> Show Return QR
+                            <QrCode size={12} /> Show QR
                           </button>
+                        ) : (
+                          <span className="text-gray-300">—</span>
                         )}
-                        {/* Requester: Cancel own pending non-expired requests */}
-                        {isRequester && req.status === "pending" && !req.is_expired && (
+                      </td>
+                    )}
+                    {isRequester && (
+                      <td className="px-4 py-3 text-center w-[150px]">
+                        {req.status === "pending" && !req.is_expired ? (
                           <button
                             onClick={() => setCancellingId(req.id)}
                             className="flex items-center gap-1 px-3 py-1 text-xs bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition font-medium border border-red-200"
                           >
                             <XCircle size={12} /> Cancel
                           </button>
+                        ) : (
+                          <span className="text-gray-300">—</span>
                         )}
-                        {/* Approver: Approve + Reject for pending non-expired requests */}
-                        {isApprover && req.status === "pending" && !req.is_expired && (
-                          <>
+                      </td>
+                    )}
+                    {isApprover && (
+                      <td className="px-4 py-3 text-center w-[150px]">
+                        <div className="flex items-center justify-center gap-2">
+                          {req.status === "pending" && !req.is_expired ? (
+                            <>
+                              <button
+                                onClick={() => approveRequest(req.id)}
+                                className="flex items-center gap-1 px-3 py-1 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium"
+                              >
+                                <CheckCircle2 size={12} /> Approve
+                              </button>
+                              <button
+                                onClick={() => setRejectingId(req.id)}
+                                className="flex items-center gap-1 px-3 py-1 text-xs bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition font-medium border border-red-200"
+                              >
+                                <XCircle size={12} /> Reject
+                              </button>
+                            </>
+                          ) : req.status !== "pending" || req.is_expired ? (
                             <button
-                              onClick={() => approveRequest(req.id)}
-                              className="flex items-center gap-1 px-3 py-1 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium"
+                              onClick={() => setDeletingId(req.id)}
+                              className="flex items-center gap-1 px-3 py-1 text-xs bg-gray-50 text-gray-500 rounded-lg hover:bg-red-50 hover:text-red-600 transition font-medium border border-gray-200"
                             >
-                              <CheckCircle2 size={12} /> Approve
+                              <Trash2 size={12} /> Delete
                             </button>
-                            <button
-                              onClick={() => setRejectingId(req.id)}
-                              className="flex items-center gap-1 px-3 py-1 text-xs bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition font-medium border border-red-200"
-                            >
-                              <XCircle size={12} /> Reject
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </td>
+                          ) : (
+                            <span className="text-gray-300">—</span>
+                          )}
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
             </tbody>
           </table>
+          </div>
         </div>
 
         {totalPages > 1 && (

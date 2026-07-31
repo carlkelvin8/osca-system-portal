@@ -28,9 +28,9 @@ const NEWS_ITEMS = [
 /* ═══ NAV LINKS ═══ */
 const NAV_LINKS = [
   { label: "Home", section: "home" },
+  { label: "News", section: "news" },
   { label: "About", section: "about" },
   { label: "Sports", section: "sports" },
-  { label: "News", section: "news" },
   { label: "Contact", section: "contact" },
 ];
 
@@ -423,6 +423,53 @@ export default function WelcomeClient() {
         </motion.div>
       </section>
 
+      {/* ─── LATEST NEWS & ANNOUNCEMENTS ─── */}
+      <section id="news" style={{ padding: "60px 24px", maxWidth: 1100, margin: "0 auto" }}>
+        <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} style={{ textAlign: "center", marginBottom: 40 }}>
+          <span style={{ display: "inline-block", padding: "5px 16px", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#0d1f3c", background: "rgba(201,168,76,0.15)", borderRadius: 50, marginBottom: 14 }}>Latest News</span>
+          <h2 style={{ fontSize: "clamp(22px, 3.5vw, 32px)", fontWeight: 800, color: "#0d1f3c" }}>News & Announcements</h2>
+        </motion.div>
+
+        {NEWS_ITEMS.length === 0 ? (
+          <p style={{ textAlign: "center", fontSize: 14, color: "#5b6472", padding: "40px 0" }}>No announcements available.</p>
+        ) : (
+          <>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 20 }}>
+              {NEWS_ITEMS.map((item, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.1 }}
+                >
+                  <a href={item.href} target="_blank" rel="noopener noreferrer"
+                    style={{ display: "block", borderRadius: 10, overflow: "hidden", background: "#fff", border: "1px solid #e7eaf0", textDecoration: "none", transition: "box-shadow 0.2s, transform 0.2s", cursor: "pointer" }}
+                    onMouseEnter={(e) => { const el = e.currentTarget; el.style.boxShadow = "0 4px 20px rgba(0,0,0,0.08)"; el.style.transform = "translateY(-2px)"; }}
+                    onMouseLeave={(e) => { const el = e.currentTarget; el.style.boxShadow = "none"; el.style.transform = "none"; }}
+                  >
+                    <div style={{ position: "relative", height: 160, overflow: "hidden", background: "#e7eaf0" }}>
+                      <Image src={item.image} alt={item.title} fill style={{ objectFit: "cover" }} />
+                    </div>
+                    <div style={{ padding: "16px 18px 18px" }}>
+                      <span style={{ display: "inline-block", fontSize: 10, fontWeight: 700, color: "#C9A84C", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>{item.date}</span>
+                      <h3 style={{ fontSize: 14, fontWeight: 800, color: "#0d1f3c", lineHeight: 1.4, marginBottom: 8 }}>{item.title}</h3>
+                      <p style={{ fontSize: 12, color: "#5b6472", lineHeight: 1.7 }}>{item.excerpt}</p>
+                    </div>
+                  </a>
+                </motion.div>
+              ))}
+            </div>
+
+            <motion.div initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} style={{ textAlign: "center", marginTop: 32 }}>
+              <Link href="/login" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "12px 28px", fontSize: 12, fontWeight: 700, color: "#fff", background: "#1d4ed8", borderRadius: 6, textDecoration: "none", textTransform: "uppercase" }}>
+                View Announcements <ArrowRight size={14} />
+              </Link>
+            </motion.div>
+          </>
+        )}
+      </section>
+
       {/* ─── VISION & MISSION ─── */}
       <section id="about" style={{ padding: "60px 24px", maxWidth: 1100, margin: "0 auto" }}>
         <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} style={{ textAlign: "center", marginBottom: 40 }}>
@@ -523,53 +570,6 @@ export default function WelcomeClient() {
             ))}
           </div>
         </motion.div>
-      </section>
-
-      {/* ─── LATEST NEWS & ANNOUNCEMENTS ─── */}
-      <section id="news" style={{ padding: "60px 24px", maxWidth: 1100, margin: "0 auto" }}>
-        <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} style={{ textAlign: "center", marginBottom: 40 }}>
-          <span style={{ display: "inline-block", padding: "5px 16px", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#0d1f3c", background: "rgba(201,168,76,0.15)", borderRadius: 50, marginBottom: 14 }}>Latest News</span>
-          <h2 style={{ fontSize: "clamp(22px, 3.5vw, 32px)", fontWeight: 800, color: "#0d1f3c" }}>News & Announcements</h2>
-        </motion.div>
-
-        {NEWS_ITEMS.length === 0 ? (
-          <p style={{ textAlign: "center", fontSize: 14, color: "#5b6472", padding: "40px 0" }}>No announcements available.</p>
-        ) : (
-          <>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 20 }}>
-              {NEWS_ITEMS.map((item, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: i * 0.1 }}
-                >
-                  <a href={item.href} target="_blank" rel="noopener noreferrer"
-                    style={{ display: "block", borderRadius: 10, overflow: "hidden", background: "#fff", border: "1px solid #e7eaf0", textDecoration: "none", transition: "box-shadow 0.2s, transform 0.2s", cursor: "pointer" }}
-                    onMouseEnter={(e) => { const el = e.currentTarget; el.style.boxShadow = "0 4px 20px rgba(0,0,0,0.08)"; el.style.transform = "translateY(-2px)"; }}
-                    onMouseLeave={(e) => { const el = e.currentTarget; el.style.boxShadow = "none"; el.style.transform = "none"; }}
-                  >
-                    <div style={{ position: "relative", height: 160, overflow: "hidden", background: "#e7eaf0" }}>
-                      <Image src={item.image} alt={item.title} fill style={{ objectFit: "cover" }} />
-                    </div>
-                    <div style={{ padding: "16px 18px 18px" }}>
-                      <span style={{ display: "inline-block", fontSize: 10, fontWeight: 700, color: "#C9A84C", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>{item.date}</span>
-                      <h3 style={{ fontSize: 14, fontWeight: 800, color: "#0d1f3c", lineHeight: 1.4, marginBottom: 8 }}>{item.title}</h3>
-                      <p style={{ fontSize: 12, color: "#5b6472", lineHeight: 1.7 }}>{item.excerpt}</p>
-                    </div>
-                  </a>
-                </motion.div>
-              ))}
-            </div>
-
-            <motion.div initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} style={{ textAlign: "center", marginTop: 32 }}>
-              <Link href="/login" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "12px 28px", fontSize: 12, fontWeight: 700, color: "#fff", background: "#1d4ed8", borderRadius: 6, textDecoration: "none", textTransform: "uppercase" }}>
-                View Announcements <ArrowRight size={14} />
-              </Link>
-            </motion.div>
-          </>
-        )}
       </section>
 
       {/* ─── CONTACT ─── */}

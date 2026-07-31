@@ -698,6 +698,48 @@ async def cancel_equipment_request(
     return await _build_request_read(req, db)
 
 
+@router.delete(
+    "/requests/{request_id}",
+    response_model=MessageResponse,
+    summary="Delete an equipment request (Admin / Director / Staff)",
+)
+async def delete_equipment_request(
+    request_id: uuid.UUID,
+    current_user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> MessageResponse:
+    if current_user.role not in _STAFF_BORROW_ROLES:
+        raise ForbiddenError("Only admin, director, and staff may delete requests.")
+
+    req = await db.get(EquipmentRequest, request_id)
+    if not req:
+        raise NotFoundError("EquipmentRequest", str(request_id))
+
+    if req.status == RequestStatus.APPROVED and req.return_qr_code:
+        tx_result = await db.execute(
+            select(BorrowTransaction).where(
+                BorrowTransaction.transaction_qr_code == req.return_qr_code
+            ).limit(1)
+        )
+        tx = tx_result.scalar_one_or_none()
+        if tx and tx.status != TransactionStatus.RETURNED:
+            raise ConflictError(
+                "Cannot delete an approved request while a borrow is in progress. Complete the return first."
+            )
+
+    db.add(AuditLog(
+        user_id=current_user.id,
+        action="EQUIPMENT_REQUEST_DELETED",
+        resource_type="EquipmentRequest",
+        resource_id=str(req.id),
+        status="success",
+        details={"status": req.status.value},
+    ))
+    await db.delete(req)
+    await db.commit()
+    return MessageResponse(message="Equipment request deleted.")
+
+
 # ── Admin Direct Borrow (bypasses request flow) ────────────────────────────────
 
 @router.post(
