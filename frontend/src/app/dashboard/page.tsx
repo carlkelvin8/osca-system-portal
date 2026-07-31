@@ -512,7 +512,6 @@ export default function DashboardPage() {
             <div className="space-y-4 max-h-[32rem] overflow-y-auto pr-1">
               {announcements.map((ann) => {
                 const tc = ann.tag ? tagConfig[ann.tag] : null;
-                const TagIcon = tc?.icon;
                 return (
                   <div key={ann.id} className={`group border rounded-xl overflow-hidden transition ${ann.pinned ? "border-amber-200 bg-amber-50/30" : "border-gray-100 bg-white"}`}>
                     {/* Header */}
@@ -534,7 +533,7 @@ export default function DashboardPage() {
                         )}
                         {tc && (
                           <span className={`flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${tc.bg} ${tc.text} border ${tc.border}`}>
-                            <TagIcon size={10} /> {tc.label}
+                            <tc.icon size={10} /> {tc.label}
                           </span>
                         )}
                         {isEditor && (

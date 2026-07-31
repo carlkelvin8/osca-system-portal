@@ -82,6 +82,16 @@ const navItems: NavItem[] = [
           label: "Equipment Requests",
           roles: ["admin", "director", "coach", "pe_instructor", "staff"],
         },
+        {
+          href: "/dashboard/inventory/borrow-scanner",
+          label: "Borrow Scanner",
+          roles: ["admin", "director", "staff"],
+        },
+        {
+          href: "/dashboard/inventory/return-scanner",
+          label: "Return Scanner",
+          roles: ["admin", "director", "staff"],
+        },
       ],
     },
     {

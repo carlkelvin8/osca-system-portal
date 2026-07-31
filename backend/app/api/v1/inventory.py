@@ -296,6 +296,9 @@ async def create_equipment_request(
         status="success",
         details={"items_count": len(body.items)},
     ))
+
+    await db.flush()
+    req.return_qr_code = f"TXN-{req.id.hex[:12].upper()}"
     await db.commit()
     await db.refresh(req)
     return await _build_request_read(req, db)
@@ -312,6 +315,8 @@ async def list_equipment_requests(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     status_filter: RequestStatus | None = Query(None, alias="status"),
+    date_from: datetime | None = Query(None),
+    date_to: datetime | None = Query(None),
 ) -> PaginatedResponse[EquipmentRequestRead]:
     query = select(EquipmentRequest)
     # Coaches / instructors see only their own
@@ -319,6 +324,16 @@ async def list_equipment_requests(
         query = query.where(EquipmentRequest.requester_id == current_user.id)
     if status_filter:
         query = query.where(EquipmentRequest.status == status_filter)
+    if date_from:
+        df = date_from
+        if df.tzinfo is None:
+            df = df.replace(tzinfo=UTC)
+        query = query.where(EquipmentRequest.requested_at >= df)
+    if date_to:
+        dt = date_to
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=UTC)
+        query = query.where(EquipmentRequest.requested_at <= dt)
 
     total = (await db.execute(select(func.count()).select_from(query.subquery()))).scalar_one()
     query = query.offset((page - 1) * page_size).limit(page_size).order_by(
@@ -439,14 +454,6 @@ async def approve_equipment_request(
     now = datetime.now(UTC)
 
     if body.create_transaction:
-        # Check 60-minute QR expiry
-        ra = req.requested_at
-        if ra.tzinfo is None:
-            ra = ra.replace(tzinfo=UTC)
-        expiry = ra + timedelta(minutes=REQUEST_QR_EXPIRY_MINUTES)
-        if now > expiry:
-            raise ConflictError("Request has expired. The QR code is only valid for 60 minutes after submission.")
-
         # Validate stock for each item
         items_result = await db.execute(
             select(EquipmentRequestItem).where(EquipmentRequestItem.request_id == req.id)
@@ -499,10 +506,9 @@ async def approve_equipment_request(
                 quantity=ri.quantity,
             ))
 
-        # Generate Return QR Code
+        # Generate Return QR Code (reuse the code generated at request time)
         await db.flush()
-        transaction_qr = f"TXN-{transaction.id.hex[:12].upper()}"
-        transaction.transaction_qr_code = transaction_qr
+        transaction.transaction_qr_code = req.return_qr_code or f"TXN-{transaction.id.hex[:12].upper()}"
 
         action = "EQUIPMENT_REQUEST_APPROVED"
     else:
@@ -596,10 +602,9 @@ async def release_equipment_request(
             quantity=ri.quantity,
         ))
 
-    # Generate Return QR Code
+    # Generate Return QR Code (reuse the code generated at request time)
     await db.flush()
-    transaction_qr = f"TXN-{transaction.id.hex[:12].upper()}"
-    transaction.transaction_qr_code = transaction_qr
+    transaction.transaction_qr_code = req.return_qr_code or f"TXN-{transaction.id.hex[:12].upper()}"
 
     now = datetime.now(UTC)
     req.status = RequestStatus.APPROVED
@@ -1166,14 +1171,18 @@ async def complete_transaction(
     )
     if qr_status == "used":
         raise ConflictError("This Return QR Code has already been used.")
-    if qr_status == "expired":
-        raise ConflictError("This Return QR Code has expired because the Expected Return time has passed.")
 
     if transaction.status not in (TransactionStatus.ACTIVE, TransactionStatus.OVERDUE):
         raise ConflictError(f"Transaction is already {transaction.status.value}.")
 
-    # Return all items
+    # A return is LATE if the Expected Return deadline has passed.
     now = datetime.now(UTC)
+    er = transaction.expected_return
+    if er.tzinfo is None:
+        er = er.replace(tzinfo=UTC)
+    was_overdue = now > er
+
+    # Return all items
     items_result = await db.execute(
         select(BorrowTransactionItem).where(BorrowTransactionItem.transaction_id == transaction.id)
     )
@@ -1185,6 +1194,15 @@ async def complete_transaction(
             if eq:
                 eq.available_quantity += item.quantity
 
+    # Record the late return for traceability
+    if was_overdue:
+        overdue_delta = now - er
+        overdue_days = max(0, overdue_delta.days)
+        overdue_hours = max(0, int(overdue_delta.seconds // 3600))
+        transaction.notes = (transaction.notes or "") + (
+            f"\n[Late return] Returned {overdue_days}d {overdue_hours}h after the Expected Return deadline."
+        )
+
     transaction.status = TransactionStatus.RETURNED
     transaction.returned_at = now
     transaction.transaction_qr_invalidated = True
@@ -1195,7 +1213,7 @@ async def complete_transaction(
         resource_type="BorrowTransaction",
         resource_id=str(transaction.id),
         status="success",
-        details={"qr_invalidated": True},
+        details={"qr_invalidated": True, "returned_late": was_overdue},
     ))
     await db.commit()
     await db.refresh(transaction)
@@ -1277,8 +1295,24 @@ async def _build_request_read(req: EquipmentRequest, db: AsyncSession) -> Equipm
         items=item_reads,
     )
 
-    # Attach Return QR info for approved requests
-    if req.status == RequestStatus.APPROVED:
+    # Attach Return QR info (generated at request creation; functional after approval)
+    if req.return_qr_code:
+        rr.return_qr_code = req.return_qr_code
+        if req.status == RequestStatus.APPROVED:
+            tx_result = await db.execute(
+                select(BorrowTransaction).where(
+                    BorrowTransaction.transaction_qr_code == req.return_qr_code
+                ).limit(1)
+            )
+            tx = tx_result.scalar_one_or_none()
+            if tx:
+                rr.return_qr_status = _compute_return_qr_status(
+                    tx.expected_return,
+                    tx.transaction_qr_invalidated,
+                    tx.status,
+                )
+    elif req.status == RequestStatus.APPROVED:
+        # Legacy requests created before return_qr_code existed
         tx_result = await db.execute(
             select(BorrowTransaction).where(
                 BorrowTransaction.instructor_id == req.requester_id,

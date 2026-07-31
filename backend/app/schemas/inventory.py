@@ -98,6 +98,8 @@ class BorrowTransactionCreate(OSCABaseModel):
     @classmethod
     def return_must_be_future(cls, v: datetime) -> datetime:
         from datetime import timezone
+        if v.tzinfo is None:
+            v = v.replace(tzinfo=timezone.utc)
         if v <= datetime.now(tz=timezone.utc):
             raise ValueError("expected_return must be in the future")
         return v
@@ -173,6 +175,8 @@ class EquipmentRequestCreate(OSCABaseModel):
     @classmethod
     def return_must_be_future(cls, v: datetime) -> datetime:
         from datetime import timezone
+        if v.tzinfo is None:
+            v = v.replace(tzinfo=timezone.utc)
         if v <= datetime.now(tz=timezone.utc):
             raise ValueError("expected_return must be in the future")
         return v
@@ -285,6 +289,8 @@ class StaffBorrowCreateRequest(OSCABaseModel):
     @classmethod
     def return_must_be_future(cls, v: datetime) -> datetime:
         from datetime import timezone
+        if v.tzinfo is None:
+            v = v.replace(tzinfo=timezone.utc)
         if v <= datetime.now(tz=timezone.utc):
             raise ValueError("expected_return must be in the future")
         return v

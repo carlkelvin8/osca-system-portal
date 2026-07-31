@@ -18,7 +18,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.execute("ALTER TYPE request_status_enum ADD VALUE 'cancelled'")
+    op.execute("ALTER TYPE request_status_enum ADD VALUE 'CANCELLED'")
 
 
 def downgrade() -> None:

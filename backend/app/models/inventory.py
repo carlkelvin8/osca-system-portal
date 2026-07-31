@@ -294,6 +294,7 @@ class EquipmentRequest(Base):
     )
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    return_qr_code: Mapped[str | None] = mapped_column(String(100), nullable=True, unique=True)
 
     # Relationships
     requester: Mapped["User"] = relationship("User", foreign_keys=[requester_id])  # noqa: F821

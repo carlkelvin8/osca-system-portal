@@ -19,7 +19,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Webcam from "react-webcam";
 import { usersApi, attendanceApi } from "@/lib/api";
 import { useAuthStore } from "@/store/useAuthStore";
-import type { UserSummary, PaginatedResponse, UserRole } from "@/types";
+import type { User, UserSummary, PaginatedResponse, UserRole } from "@/types";
 import {
   Search,
   UserPlus,

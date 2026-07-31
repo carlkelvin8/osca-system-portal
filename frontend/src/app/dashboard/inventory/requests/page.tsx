@@ -9,13 +9,14 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { inventoryApi } from "@/lib/api";
 import {
-  CheckCircle2, XCircle, Clock, Plus, X, Loader2, Package, QrCode, ScanLine, WifiOff, AlertTriangle,
+  CheckCircle2, XCircle, Clock, Plus, X, Loader2, Package, QrCode, ScanLine, WifiOff, AlertTriangle, RotateCcw,
 } from "lucide-react";
 import type {
   EquipmentRequest, PaginatedResponse, RequestStatus, Equipment, BorrowTransaction,
 } from "@/types";
 import { useAuthStore } from "@/store/useAuthStore";
 import { format } from "date-fns";
+import QRCode from "qrcode";
 import { equipmentCache } from "@/lib/offlineStore";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 
@@ -27,10 +28,12 @@ const statusConfig: Record<string, { label: string; className: string; icon: Rea
   rejected:  { label: "Rejected",  className: "bg-red-100 text-red-800",      icon: XCircle },
   cancelled: { label: "Cancelled", className: "bg-gray-200 text-gray-700",    icon: XCircle },
   expired:   { label: "Expired",   className: "bg-gray-100 text-gray-500",    icon: Clock },
+  returned:  { label: "Returned",  className: "bg-blue-100 text-blue-800",    icon: RotateCcw },
 };
 
 function getRequestStatus(req: EquipmentRequest): string {
   if (req.status === "pending" && req.is_expired) return "expired";
+  if (req.status === "approved" && req.return_qr_status === "used") return "returned";
   return req.status;
 }
 
@@ -49,27 +52,27 @@ function ReturnQRModal({ request, onClose }: { request: EquipmentRequest; onClos
   const [loading, setLoading] = useState(true);
   const [remaining, setRemaining] = useState<number | null>(null);
 
+  const returnQrCode = request.return_qr_code;
+
   useEffect(() => {
     let cancelled = false;
-    const fetchQR = async () => {
+    const generateQR = async () => {
+      if (!returnQrCode) {
+        if (!cancelled) setLoading(false);
+        return;
+      }
       try {
-        const res = await inventoryApi.getRequestQR(request.id);
-        if (cancelled) return;
-        const url = URL.createObjectURL(new Blob([res.data], { type: "image/png" }));
-        setQrUrl(url);
+        const url = await QRCode.toDataURL(returnQrCode, { width: 400, margin: 2 });
+        if (!cancelled) setQrUrl(url);
       } catch {
         // ignore
       } finally {
         if (!cancelled) setLoading(false);
       }
     };
-    fetchQR();
+    generateQR();
     return () => { cancelled = true; };
-  }, [request.id]);
-
-  useEffect(() => {
-    return () => { if (qrUrl) URL.revokeObjectURL(qrUrl); };
-  }, [qrUrl]);
+  }, [returnQrCode]);
 
   useEffect(() => {
     const expectedReturn = new Date(request.expected_return).getTime();
@@ -114,13 +117,11 @@ function ReturnQRModal({ request, onClose }: { request: EquipmentRequest; onClos
         <div className="flex items-center justify-center py-2">
           {loading ? (
             <Loader2 size={40} className="animate-spin text-gray-300" />
-          ) : qrUrl && isActive ? (
-            <img src={qrUrl} alt="Return QR Code" className="w-48 h-48" />
-          ) : isExpired ? (
+          ) : !returnQrCode ? (
             <div className="w-48 h-48 flex flex-col items-center justify-center bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
-              <Clock size={32} className="text-gray-400 mb-2" />
-              <p className="text-sm font-medium text-gray-600">QR Expired</p>
-              <p className="text-xs text-gray-400 mt-1">Expected Return time has passed.</p>
+              <QrCode size={32} className="text-gray-400 mb-2" />
+              <p className="text-sm font-medium text-gray-600 text-center px-4">No Return QR yet</p>
+              <p className="text-xs text-gray-400 mt-1 text-center px-4">Equipment must be released to generate the Return QR Code.</p>
             </div>
           ) : isUsed ? (
             <div className="w-48 h-48 flex flex-col items-center justify-center bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
@@ -128,10 +129,17 @@ function ReturnQRModal({ request, onClose }: { request: EquipmentRequest; onClos
               <p className="text-sm font-medium text-gray-600">QR Used</p>
               <p className="text-xs text-gray-400 mt-1">This QR has already been scanned for return.</p>
             </div>
+          ) : qrUrl ? (
+            <img src={qrUrl} alt="Return QR Code" className="w-48 h-48" />
           ) : (
             <p className="text-sm text-red-500">Failed to load QR code</p>
           )}
         </div>
+
+        {/* Return QR value for traceability */}
+        {returnQrCode && !isUsed && (
+          <p className="font-mono text-xs text-gray-400">{returnQrCode}</p>
+        )}
 
         {/* Expected Return */}
         <div className="text-sm text-gray-500">
@@ -150,10 +158,10 @@ function ReturnQRModal({ request, onClose }: { request: EquipmentRequest; onClos
           </div>
         )}
 
-        {/* Expired message */}
+        {/* Expired / overdue message */}
         {isExpired && (
-          <p className="text-xs text-red-600">
-            This Return QR Code has expired because the Expected Return time has passed.
+          <p className="text-xs text-amber-600">
+            The Expected Return time has passed. This QR is still valid for a late return.
           </p>
         )}
 
@@ -161,6 +169,11 @@ function ReturnQRModal({ request, onClose }: { request: EquipmentRequest; onClos
         {isActive && (
           <p className="text-xs text-gray-400">
             Present this QR Code when returning the borrowed equipment.
+          </p>
+        )}
+        {isExpired && (
+          <p className="text-xs text-gray-400">
+            Present this QR Code to Staff — they can still process the late return.
           </p>
         )}
       </div>
@@ -1027,6 +1040,8 @@ export default function EquipmentRequestsPage() {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<RequestStatus | "">("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [showNewRequest, setShowNewRequest] = useState(false);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [viewingRequest, setViewingRequest] = useState<EquipmentRequest | null>(null);
@@ -1038,17 +1053,19 @@ export default function EquipmentRequestsPage() {
   const isApprover = user?.role === "admin" || user?.role === "director" || user?.role === "staff";
 
   const { data, isLoading } = useQuery<PaginatedResponse<EquipmentRequest>>({
-    queryKey: ["equipment-requests", page, statusFilter],
+    queryKey: ["equipment-requests", page, statusFilter, dateFrom, dateTo],
     queryFn: async () => {
       const params: Record<string, string | number> = { page, page_size: 20 };
       if (statusFilter) params.status = statusFilter;
+      if (dateFrom) params.date_from = `${dateFrom}T00:00:00`;
+      if (dateTo) params.date_to = `${dateTo}T23:59:59`;
       const res = await inventoryApi.listRequests(params);
       return res.data;
     },
   });
 
   const { mutate: approveRequest } = useMutation({
-    mutationFn: (id: string) => inventoryApi.approveRequest(id, { create_transaction: false }),
+    mutationFn: (id: string) => inventoryApi.approveRequest(id, { create_transaction: true }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["equipment-requests"] }),
   });
 
@@ -1062,7 +1079,6 @@ export default function EquipmentRequestsPage() {
       {rejectingId && <RejectModal requestId={rejectingId} onClose={() => setRejectingId(null)} />}
       {returnQrView && <ReturnQRModal request={returnQrView} onClose={() => setReturnQrView(null)} />}
       {viewingRequest && <ViewDetailsModal request={viewingRequest} onClose={() => setViewingRequest(null)} />}
-      {returnQrView && <ReturnQRModal request={returnQrView} onClose={() => setReturnQrView(null)} />}
       {showScanner && (
         <QRScannerModal
           onClose={() => setShowScanner(false)}
@@ -1082,7 +1098,31 @@ export default function EquipmentRequestsPage() {
               {isRequester ? "Submit and track your equipment requests" : "Review and approve equipment requests"}
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
+                className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]/30"
+              />
+              <span className="text-xs text-gray-400">to</span>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
+                className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]/30"
+              />
+              {(dateFrom || dateTo) && (
+                <button
+                  onClick={() => { setDateFrom(""); setDateTo(""); setPage(1); }}
+                  className="flex items-center gap-1 px-2 py-2 text-xs text-gray-500 hover:text-red-600 transition"
+                  title="Clear date filter"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
             <select
               value={statusFilter}
               onChange={(e) => { setStatusFilter(e.target.value as RequestStatus | ""); setPage(1); }}
@@ -1129,9 +1169,9 @@ export default function EquipmentRequestsPage() {
             <tbody className="divide-y divide-gray-100">
               {isLoading ? (
                 <tr>
-                  <td colSpan={isApprover ? 7 : 6} className="px-4 py-8 text-center text-gray-400">
-                    <Loader2 size={20} className="animate-spin inline-block mr-2" />Loading…
-                  </td>
+                    <td colSpan={isApprover ? 7 : 6} className="px-4 py-8 text-center text-gray-400">
+                      <Loader2 size={20} className="animate-spin inline-block mr-2" />Loading…
+                    </td>
                 </tr>
               ) : (data?.items ?? []).length === 0 ? (
                 <tr>
@@ -1199,8 +1239,8 @@ export default function EquipmentRequestsPage() {
                         >
                           <Package size={12} /> View Details
                         </button>
-                        {/* Requester: Show Return QR for approved requests with QR */}
-                        {isRequester && req.status === "approved" && req.return_qr_code && (
+                        {/* Show Return QR for approved requests with active QR */}
+                        {req.status === "approved" && req.return_qr_code && req.return_qr_status !== "used" && (
                           <button
                             onClick={() => setReturnQrView(req)}
                             className="flex items-center gap-1 px-3 py-1 text-xs bg-[#1E3A5F]/10 text-[#1E3A5F] rounded-lg hover:bg-[#1E3A5F]/20 transition font-medium"
@@ -1233,12 +1273,6 @@ export default function EquipmentRequestsPage() {
                               <XCircle size={12} /> Reject
                             </button>
                           </>
-                        )}
-                        {/* Approved: show read-only badge */}
-                        {isApprover && displayStatus === "approved" && (
-                          <span className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-green-50 text-green-700 rounded-lg font-medium">
-                            <CheckCircle2 size={11} /> Approved
-                          </span>
                         )}
                       </div>
                     </td>

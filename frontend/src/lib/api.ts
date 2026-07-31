@@ -189,6 +189,21 @@ export const inventoryApi = {
     api.put(`/inventory/requests/${id}/approve`, data ?? {}),
   rejectRequest: (id: string, rejection_reason: string) =>
     api.put(`/inventory/requests/${id}/reject`, { rejection_reason }),
+  cancelRequest: (id: string) =>
+    api.put(`/inventory/requests/${id}/cancel`),
+};
+
+export const staffBorrowApi = {
+  scanBorrowingId: (qrCode: string) =>
+    api.get(`/inventory/borrowing-ids/scan/${encodeURIComponent(qrCode)}`),
+  createBorrow: (data: Record<string, unknown>) =>
+    api.post("/inventory/borrow/staff", data),
+  scanTransactionQr: (qrCode: string) =>
+    api.get(`/inventory/transactions/qr/${encodeURIComponent(qrCode)}`),
+  confirmRelease: (id: string, data?: Record<string, unknown>) =>
+    api.put(`/inventory/transactions/${id}/release`, data ?? {}),
+  completeTransaction: (id: string) =>
+    api.put(`/inventory/transactions/${id}/complete`),
 };
 
 export const reportsApi = {
@@ -211,6 +226,27 @@ export const reportsApi = {
       responseType: format === "json" ? "json" : "blob",
     }),
   dashboardSummary: () => api.get("/reports/dashboard/summary"),
+  dailyAttendance: (params?: Record<string, unknown>) => {
+    const fmt = params?.format as string;
+    return api.get("/reports/attendance/daily", {
+      params,
+      responseType: fmt && fmt !== "json" ? "blob" : "json",
+    });
+  },
+  weeklyAttendance: (params?: Record<string, unknown>) => {
+    const fmt = params?.format as string;
+    return api.get("/reports/attendance/weekly", {
+      params,
+      responseType: fmt && fmt !== "json" ? "blob" : "json",
+    });
+  },
+  monthlyAttendance: (params?: Record<string, unknown>) => {
+    const fmt = params?.format as string;
+    return api.get("/reports/attendance/monthly", {
+      params,
+      responseType: fmt && fmt !== "json" ? "blob" : "json",
+    });
+  },
 };
 
 export const announcementsApi = {

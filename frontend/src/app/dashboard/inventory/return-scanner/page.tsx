@@ -29,10 +29,31 @@ export default function ReturnScannerPage() {
   const [step, setStep] = useState<PageStep>("idle");
   const [transaction, setTransaction] = useState<TransactionQRRead | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [manualCode, setManualCode] = useState("");
+  const [processingCode, setProcessingCode] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const [scanning, setScanning] = useState(false);
   const controlsRef = useRef<{ stop: () => void } | null>(null);
+
+  const processCode = useCallback(async (code: string) => {
+    const trimmed = code.trim();
+    if (!trimmed) return;
+    setProcessingCode(true);
+    setError(null);
+    try {
+      const res = await staffBorrowApi.scanTransactionQr(trimmed);
+      setTransaction(res.data);
+      setStep("result");
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
+        "Invalid or unrecognized Return QR code.";
+      setError(msg);
+    } finally {
+      setProcessingCode(false);
+    }
+  }, []);
 
   const stopScanning = useCallback(() => {
     controlsRef.current?.stop();
@@ -67,19 +88,7 @@ export default function ReturnScannerPage() {
             const text = result.getText();
             stopScanning();
             setScanning(false);
-
-            if (!text.startsWith("TXN-")) {
-              setError("Not a valid Return QR (TXN-). Please scan a Transaction QR code.");
-              return;
-            }
-
-            try {
-              const res = await staffBorrowApi.scanTransactionQr(text);
-              setTransaction(res.data);
-              setStep("result");
-            } catch {
-              setError("Invalid or unrecognized Return QR code.");
-            }
+            await processCode(text);
           }
         );
         controlsRef.current = controls;
@@ -130,6 +139,19 @@ export default function ReturnScannerPage() {
     stopScanning();
   };
 
+  const txIsLate = transaction
+    ? transaction.status === "overdue" || new Date() > new Date(transaction.expected_return)
+    : false;
+  const txIsUsed = transaction
+    ? transaction.qr_status === "used" || transaction.status === "returned"
+    : false;
+  const canProcess = transaction
+    ? !txIsUsed && (transaction.status === "active" || transaction.status === "overdue" || txIsLate)
+    : false;
+  const canRelease = transaction
+    ? !txIsUsed && transaction.status === "active" && !txIsLate
+    : false;
+
   if (user?.role !== "staff" && user?.role !== "admin" && user?.role !== "director") {
     return (
       <div className="flex items-center justify-center h-64">
@@ -173,7 +195,7 @@ export default function ReturnScannerPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Return Scanner</h1>
           <p className="text-sm text-gray-500">
-            Scan a <strong>Return QR (TXN-)</strong> to process equipment returns
+            Scan the borrower's dynamic <strong>Return QR</strong> to process equipment returns
           </p>
         </div>
       </div>
@@ -195,7 +217,7 @@ export default function ReturnScannerPage() {
           <div className="absolute inset-0 border-2 border-dashed border-white/30 m-8 rounded-lg pointer-events-none" />
           <div className="absolute bottom-4 left-0 right-0 text-center">
             <p className="text-xs text-white/70 bg-black/50 inline-block px-3 py-1 rounded-full">
-              Point camera at a Return QR (TXN-)
+              Point camera at the borrower's Return QR
             </p>
           </div>
         </div>
@@ -209,7 +231,7 @@ export default function ReturnScannerPage() {
           </div>
           <h2 className="text-lg font-semibold text-gray-900 mb-2">Return Equipment</h2>
           <p className="text-sm text-gray-500 mb-6 max-w-sm mx-auto">
-            Scan a <strong>Return QR (TXN-)</strong> code from the borrower to process the return.
+            Scan the borrower's <strong>Return QR</strong> to process the equipment return.
           </p>
           <button
             onClick={startScanner}
@@ -217,6 +239,35 @@ export default function ReturnScannerPage() {
           >
             <ScanLine size={20} /> Open Scanner
           </button>
+
+          <div className="my-8 flex items-center gap-3 max-w-sm mx-auto">
+            <span className="h-px bg-gray-200 flex-1" />
+            <span className="text-xs text-gray-400">or enter code manually</span>
+            <span className="h-px bg-gray-200 flex-1" />
+          </div>
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              processCode(manualCode);
+            }}
+            className="flex gap-2 max-w-sm mx-auto"
+          >
+            <input
+              value={manualCode}
+              onChange={(e) => setManualCode(e.target.value)}
+              placeholder="Paste TXN- code here"
+              className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]/40 font-mono"
+            />
+            <button
+              type="submit"
+              disabled={processingCode || !manualCode.trim()}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition disabled:opacity-50 font-medium"
+            >
+              {processingCode ? <Loader2 size={14} className="animate-spin" /> : <ScanLine size={14} />}
+              Process
+            </button>
+          </form>
         </div>
       )}
 
@@ -228,6 +279,11 @@ export default function ReturnScannerPage() {
               <Package size={20} className="text-[#1E3A5F]" /> Return Transaction
             </h2>
             <div className="flex items-center gap-2">
+              {txIsLate && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                  <Clock size={12} /> Overdue
+                </span>
+              )}
               {qrStatusBadge(transaction.qr_status)}
               <button onClick={reset} className="text-xs text-gray-400 hover:text-gray-600 px-2">
                 <ArrowLeft size={16} /> Back
@@ -325,9 +381,17 @@ export default function ReturnScannerPage() {
           </div>
 
           {/* Actions */}
-          <div className="flex justify-end gap-3 pt-2">
-            {transaction.qr_status === "active" && (transaction.status === "active" || transaction.status === "overdue") && (
-              <>
+          <div className="space-y-3 pt-2">
+            {txIsLate && (
+              <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 rounded-lg">
+                <AlertTriangle size={14} className="text-amber-600 shrink-0" />
+                <p className="text-sm text-amber-700">
+                  This return is overdue. Staff may still process the late return.
+                </p>
+              </div>
+            )}
+            <div className="flex justify-end gap-3">
+              {canRelease && (
                 <button
                   onClick={() => confirmRelease()}
                   disabled={isReleasing}
@@ -336,6 +400,8 @@ export default function ReturnScannerPage() {
                   {isReleasing ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
                   Confirm Release
                 </button>
+              )}
+              {canProcess && (
                 <button
                   onClick={() => completeReturn()}
                   disabled={isCompleting}
@@ -344,23 +410,18 @@ export default function ReturnScannerPage() {
                   {isCompleting ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14} />}
                   Complete Return
                 </button>
-              </>
-            )}
-            {(transaction.qr_status === "expired" || transaction.qr_status === "used") && (
-              <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 rounded-lg">
-                <AlertTriangle size={14} className="text-gray-400" />
-                <p className="text-sm text-gray-500">
-                  {transaction.qr_status === "expired"
-                    ? "This Return QR has expired. The expected return date has passed."
-                    : "This Return QR has already been used."}
-                </p>
-              </div>
-            )}
-            {transaction.status === "returned" && (
-              <p className="text-sm text-green-600 font-medium flex items-center gap-1">
-                <CheckCircle2 size={14} /> This transaction is already completed.
-              </p>
-            )}
+              )}
+              {txIsUsed && (
+                <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 rounded-lg">
+                  <CheckCircle2 size={14} className="text-gray-400" />
+                  <p className="text-sm text-gray-500">
+                    {transaction.status === "returned"
+                      ? "This transaction is already completed."
+                      : "This Return QR has already been used."}
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
