@@ -12,6 +12,7 @@ from app.models.eligibility import AthleteEligibility
 from app.models.user import UserRole
 from app.schemas.eligibility import EligibilityCreate, EligibilityUpdate, EligibilityRead
 from app.schemas.common import PaginatedResponse
+from app.services.audit_service import audit_log
 
 router = APIRouter()
 
@@ -56,6 +57,17 @@ async def create_eligibility(
     db.add(record)
     await db.flush()
     await db.refresh(record)
+    await audit_log(
+        db=db,
+        action="ELIGIBILITY_CREATED",
+        module="Eligibility",
+        description=f"Created eligibility record for student {body.student_id}",
+        resource_type="AthleteEligibility",
+        resource_id=str(record.id),
+        new_values=body.model_dump(),
+        current_user=user,
+    )
+    await db.commit()
     return EligibilityRead.model_validate(record)
 
 
@@ -81,6 +93,16 @@ async def update_eligibility(
     for k, v in updates.items():
         setattr(record, k, v)
 
+    await audit_log(
+        db=db,
+        action="ELIGIBILITY_UPDATED",
+        module="Eligibility",
+        description=f"Updated eligibility record for student {record.student_id}",
+        resource_type="AthleteEligibility",
+        resource_id=str(record_id),
+        new_values=updates,
+        current_user=user,
+    )
     await db.flush()
     await db.refresh(record)
     return EligibilityRead.model_validate(record)

@@ -24,7 +24,7 @@ from app.models.attendance import (
     ScanResult,
     Session,
 )
-from app.models.audit import AuditLog
+from app.models.sanction import Sanction, SanctionStatus
 from app.models.user import User, UserRole
 from app.schemas.attendance import (
     AttendanceRecordRead,
@@ -32,11 +32,15 @@ from app.schemas.attendance import (
     EnrollmentResponse,
     FaceScanRequest,
     FaceScanResponse,
+    ManualAttendanceCreate,
+    ManualAttendanceUpdate,
+    QrCheckInRequest,
     SessionCreate,
     SessionRead,
     SessionUpdate,
 )
 from app.schemas.common import MessageResponse, PaginatedResponse
+from app.services.audit_service import audit_log
 from app.services.facial_recognition import FacialRecognitionService
 from app.services.fr_config_service import FRConfigService
 
@@ -60,6 +64,90 @@ def _get_fr_service(request: Request) -> FacialRecognitionService:
     return svc
 
 
+def _performed_by(user: User | None) -> str:
+    """Human label for 'performed by': role of the operator, or 'system'."""
+    if user is None:
+        return "system"
+    role = getattr(user, "role", None)
+    return role.value if hasattr(role, "value") else str(role) if role else "system"
+
+
+async def _attendance_audit(
+    db: AsyncSession,
+    *,
+    action: str,
+    description: str,
+    status: str = "success",
+    method: str | None = None,
+    result: str = "success",
+    failure_reason: str | None = None,
+    student: User | None = None,
+    session: Session | None = None,
+    attendance_record: AttendanceRecord | None = None,
+    scan_type: AttendanceScanType | None = None,
+    performer: User | None = None,
+    resource_type: str | None = None,
+    resource_id: str | None = None,
+    previous_values: dict | None = None,
+    new_values: dict | None = None,
+    request: Request | None = None,
+    ip_address: str | None = None,
+) -> None:
+    """
+    Audit log helper for the Attendance module.
+
+    Every entry is enriched with the fields required for attendance monitoring:
+    student full name / ID, sport-or-art, session name, date & time, attendance
+    status, method (facial_recognition / qr_code / manual), action, performer,
+    result, and failure reason.
+    """
+    details: dict = {
+        "student_name": student.full_name if student else None,
+        "student_id": getattr(student, "student_id", None),
+        "student_email": student.email if student else None,
+        "sport_or_art": (
+            (session.sport_or_art if session else None)
+            or (getattr(student, "sport_or_art", None) if student else None)
+        ),
+        "session_name": session.name if session else None,
+        "session_id": str(session.id) if session else None,
+        "date_time": datetime.now(UTC).isoformat(),
+        "attendance_status": attendance_record.status if attendance_record else None,
+        "method": method,
+        "scan_type": scan_type.value if scan_type else None,
+        "action": action,
+        "performed_by": _performed_by(performer),
+        "result": result,
+        "failure_reason": failure_reason,
+    }
+    if previous_values:
+        details["previous_values"] = previous_values
+    if new_values:
+        details["new_values"] = new_values
+
+    await audit_log(
+        db=db,
+        action=action,
+        module="Attendance",
+        description=description,
+        resource_type=resource_type,
+        resource_id=resource_id or (str(attendance_record.id) if attendance_record else str(session.id) if session else None),
+        previous_values=previous_values,
+        new_values=new_values,
+        details=details,
+        status=status,
+        failure_reason=failure_reason,
+        current_user=performer,
+        request=request,
+        ip_address=ip_address,
+    )
+
+
+def _check_active_sanction(sanctions) -> Sanction | None:
+    """Return the most recent ACTIVE sanction for a student (if any)."""
+    return sanctions[0] if sanctions else None
+
+
 # ── Sessions ──────────────────────────────────────────────────────────────────
 
 @router.post(
@@ -80,6 +168,28 @@ async def create_session(
     db.add(session)
     await db.commit()
     await db.refresh(session)
+
+    await _attendance_audit(
+        db=db,
+        action="SESSION_CREATED",
+        description=f"Created attendance session '{session.name}' ({session.sport_or_art or 'N/A'})",
+        status="success",
+        result="success",
+        student=None,
+        session=session,
+        performer=current_user,
+        resource_type="Session",
+        resource_id=str(session.id),
+        new_values={
+            "name": session.name,
+            "activity_type": session.activity_type.value,
+            "sport_or_art": session.sport_or_art,
+            "scheduled_start": str(session.scheduled_start),
+            "scheduled_end": str(session.scheduled_end),
+            "venue": session.venue,
+            "is_active": session.is_active,
+        },
+    )
 
     result = SessionRead.model_validate(session)
     result.attendance_count = 0
@@ -184,6 +294,18 @@ async def update_session(
     for field, value in update_data.items():
         setattr(session, field, value)
 
+    await _attendance_audit(
+        db=db,
+        action="SESSION_UPDATED",
+        description=f"Updated attendance session '{session.name}'",
+        status="success",
+        result="success",
+        session=session,
+        performer=current_user,
+        resource_type="Session",
+        resource_id=str(session_id),
+        new_values=update_data,
+    )
     await db.commit()
     await db.refresh(session)
 
@@ -216,6 +338,19 @@ async def end_session(
         )
 
     session.is_active = False
+    await _attendance_audit(
+        db=db,
+        action="SESSION_CLOSED",
+        description=f"Closed attendance session '{session.name}'",
+        status="success",
+        result="success",
+        session=session,
+        performer=current_user,
+        resource_type="Session",
+        resource_id=str(session_id),
+        previous_values={"is_active": True},
+        new_values={"is_active": False},
+    )
     await db.commit()
     await db.refresh(session)
 
@@ -225,6 +360,97 @@ async def end_session(
     sr = SessionRead.model_validate(session)
     sr.attendance_count = count_result.scalar_one()
     return sr
+
+
+@router.post(
+    "/sessions/{session_id}/open",
+    response_model=SessionRead,
+    summary="Re-open a closed session (Admin/Coach)",
+)
+async def open_session(
+    session_id: uuid.UUID,
+    current_user: AdminOrCoach,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SessionRead:
+    result = await db.execute(select(Session).where(Session.id == session_id))
+    session = result.scalar_one_or_none()
+    if not session:
+        raise NotFoundError("Session", str(session_id))
+    if session.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Session is already open",
+        )
+
+    session.is_active = True
+    await _attendance_audit(
+        db=db,
+        action="SESSION_OPENED",
+        description=f"Re-opened attendance session '{session.name}'",
+        status="success",
+        result="success",
+        session=session,
+        performer=current_user,
+        resource_type="Session",
+        resource_id=str(session_id),
+        previous_values={"is_active": False},
+        new_values={"is_active": True},
+    )
+    await db.commit()
+    await db.refresh(session)
+
+    count_result = await db.execute(
+        select(func.count(AttendanceRecord.id)).where(AttendanceRecord.session_id == session.id)
+    )
+    sr = SessionRead.model_validate(session)
+    sr.attendance_count = count_result.scalar_one()
+    return sr
+
+
+@router.delete(
+    "/sessions/{session_id}",
+    response_model=MessageResponse,
+    summary="Delete a session and its attendance records (Admin/Coach)",
+)
+async def delete_session(
+    session_id: uuid.UUID,
+    current_user: AdminOrCoach,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> MessageResponse:
+    result = await db.execute(select(Session).where(Session.id == session_id))
+    session = result.scalar_one_or_none()
+    if not session:
+        raise NotFoundError("Session", str(session_id))
+
+    record_count = (
+        await db.execute(
+            select(func.count(AttendanceRecord.id)).where(AttendanceRecord.session_id == session.id)
+        )
+    ).scalar_one()
+
+    await _attendance_audit(
+        db=db,
+        action="SESSION_DELETED",
+        description=f"Deleted attendance session '{session.name}' with {record_count} attendance record(s)",
+        status="success",
+        result="success",
+        session=session,
+        performer=current_user,
+        resource_type="Session",
+        resource_id=str(session_id),
+        previous_values={
+            "name": session.name,
+            "sport_or_art": session.sport_or_art,
+            "scheduled_start": str(session.scheduled_start),
+            "scheduled_end": str(session.scheduled_end),
+            "is_active": session.is_active,
+            "attendance_records_count": int(record_count),
+        },
+    )
+    await db.delete(session)
+    await db.commit()
+
+    return MessageResponse(message=f"Session '{session.name}' deleted")
 
 
 # ── Face Enrollment ───────────────────────────────────────────────────────────
@@ -298,14 +524,16 @@ async def enroll_face(
         db.add(face_emb)
 
     user.is_face_enrolled = True
-    db.add(AuditLog(
-        user_id=body.user_id,
+    await audit_log(
+        db=db,
         action="FACE_ENROLLED",
+        module="Attendance",
+        description=f"Enrolled face biometrics for {user.full_name}",
         resource_type="FaceEmbedding",
         resource_id=str(face_emb.id) if face_emb.id else None,
-        status="success",
         details={"model": model_used, "images_count": len(images_bytes)},
-    ))
+        current_user=current_user,
+    )
     await db.commit()
     await db.refresh(face_emb)
 
@@ -342,16 +570,57 @@ async def face_scan(
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid base64 image")
 
-    # Verify session exists and is active
-    session_result = await db.execute(
-        select(Session).where(Session.id == body.session_id, Session.is_active == True)
-    )
+    # Verify session exists (log before blocking when inactive/missing)
+    session_result = await db.execute(select(Session).where(Session.id == body.session_id))
     session = session_result.scalar_one_or_none()
     if not session:
-        raise HTTPException(status_code=404, detail="Session not found or not active")
+        await _attendance_audit(
+            db=db,
+            action="ATTENDANCE_ATTEMPT_FAILED",
+            description="Attendance scan attempted for a non-existent session",
+            status="failure",
+            method="facial_recognition",
+            result="failed",
+            failure_reason="Session not found",
+            session=None,
+            scan_type=body.scan_type,
+            performer=current_staff,
+            resource_type="Session",
+            resource_id=str(body.session_id),
+        )
+        await db.commit()
+        raise HTTPException(status_code=404, detail="Session not found")
+    if not session.is_active:
+        await _attendance_audit(
+            db=db,
+            action="ATTENDANCE_ATTEMPT_AFTER_SESSION_CLOSED",
+            description=f"Attendance attempt blocked: session '{session.name}' is closed",
+            status="failure",
+            method="facial_recognition",
+            result="blocked",
+            failure_reason="Session is closed",
+            session=session,
+            scan_type=body.scan_type,
+            performer=current_staff,
+        )
+        await db.commit()
+        raise HTTPException(status_code=400, detail="Session is not active")
 
     # PE Instructors cannot use attendance scan
     if current_staff.role == UserRole.PE_INSTRUCTOR:
+        await _attendance_audit(
+            db=db,
+            action="ATTENDANCE_ATTEMPT_BLOCKED",
+            description=f"Attendance scan blocked for PE Instructor '{current_staff.full_name}'",
+            status="failure",
+            method="facial_recognition",
+            result="blocked",
+            failure_reason="PE Instructors are not allowed to scan attendance",
+            session=session,
+            scan_type=body.scan_type,
+            performer=current_staff,
+        )
+        await db.commit()
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="PE Instructors are not allowed to scan attendance",
@@ -360,6 +629,23 @@ async def face_scan(
     # Students can only scan sessions matching their assigned sport_or_art
     if current_staff.role == UserRole.STUDENT and current_staff.sport_or_art and session.sport_or_art:
         if current_staff.sport_or_art != session.sport_or_art:
+            await _attendance_audit(
+                db=db,
+                action="ATTENDANCE_ATTEMPT_INELIGIBLE",
+                description=(
+                    f"Attendance blocked for {current_staff.full_name}: session '{session.name}' "
+                    f"does not match assigned sport/art '{current_staff.sport_or_art}'"
+                ),
+                status="failure",
+                method="facial_recognition",
+                result="blocked",
+                failure_reason="Session does not match assigned sport or art",
+                student=current_staff,
+                session=session,
+                scan_type=body.scan_type,
+                performer=current_staff,
+            )
+            await db.commit()
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="This session does not match your assigned sport or art",
@@ -372,6 +658,19 @@ async def face_scan(
     all_embeddings = emb_result.scalars().all()
 
     if not all_embeddings:
+        await _attendance_audit(
+            db=db,
+            action="ATTENDANCE_ATTEMPT_FAILED",
+            description="No enrolled students in system",
+            status="warning",
+            method="facial_recognition",
+            result="failed",
+            failure_reason="No enrolled students in system",
+            session=session,
+            scan_type=body.scan_type,
+            performer=current_staff,
+        )
+        await db.commit()
         return FaceScanResponse(
             result=ScanResult.NO_FACE_DETECTED,
             processing_time_ms=int((time.monotonic() - start_time) * 1000),
@@ -410,24 +709,42 @@ async def face_scan(
     db.add(scan_attempt)
 
     if match_result.result != ScanResult.SUCCESS:
+        await _attendance_audit(
+            db=db,
+            action="ATTENDANCE_ATTEMPT_FAILED",
+            description=(
+                f"Facial recognition failed: "
+                f"{match_result.failure_reason or match_result.result.value}"
+            ),
+            status="failure",
+            method="facial_recognition",
+            result="failed",
+            failure_reason=match_result.failure_reason or match_result.result.value,
+            session=session,
+            scan_type=body.scan_type,
+            performer=current_staff,
+        )
+
         # ── Consecutive-failure tracking (US-005 AC: alert on 3 failures) ───
         consec_key = f"fr_consec_fails:{kiosk_ip}"
         failure_count = await redis.incr(consec_key)
         await redis.expire(consec_key, _CONSEC_FAIL_WINDOW)
 
         if failure_count >= _CONSEC_FAIL_LIMIT:
-            db.add(
-                AuditLog(
-                    action="FR_CONSECUTIVE_FAILURES",
-                    resource_type="ScanAttempt",
-                    ip_address=kiosk_ip,
-                    status="warning",
-                    details={
-                        "kiosk_ip": kiosk_ip,
-                        "failure_count": int(failure_count),
-                        "last_result": match_result.result,
-                    },
-                )
+            await audit_log(
+                db=db,
+                action="FR_CONSECUTIVE_FAILURES",
+                module="Attendance",
+                description=f"Facial recognition alert: {int(failure_count)} consecutive failures from kiosk {kiosk_ip}",
+                resource_type="ScanAttempt",
+                status="warning",
+                details={
+                    "kiosk_ip": kiosk_ip,
+                    "failure_count": int(failure_count),
+                    "last_result": match_result.result,
+                    "session_name": session.name,
+                },
+                ip_address=kiosk_ip,
             )
             await redis.delete(consec_key)  # reset so next N failures trigger a fresh alert
             logger.warning(
@@ -445,8 +762,73 @@ async def face_scan(
             message=match_result.failure_reason or "Recognition failed",
         )
 
-    # Update attendance record
+    # Reset consecutive-failure counter on success
+    await redis.delete(f"fr_consec_fails:{kiosk_ip}")
+
     user_id = match_result.user_id
+    matched_user = await db.get(User, user_id)
+
+    # Blocked: student account inactive
+    if not matched_user or not matched_user.is_active:
+        await _attendance_audit(
+            db=db,
+            action="ATTENDANCE_ATTEMPT_INACTIVE_ACCOUNT",
+            description="Attendance attempt blocked: student account is inactive",
+            status="failure",
+            method="facial_recognition",
+            result="blocked",
+            failure_reason="Student account is inactive",
+            session=session,
+            scan_type=body.scan_type,
+            performer=current_staff,
+        )
+        await db.commit()
+        return FaceScanResponse(
+            result=ScanResult.FAILED_RECOGNITION,
+            processing_time_ms=processing_ms,
+            message="Student account is inactive",
+        )
+
+    # Blocked: active sanction
+    active_sanction_result = await db.execute(
+        select(Sanction)
+        .where(
+            Sanction.student_id == user_id,
+            Sanction.status == SanctionStatus.ACTIVE,
+            (Sanction.end_date.is_(None)) | (Sanction.end_date >= datetime.now(UTC).date()),
+        )
+        .order_by(Sanction.created_at.desc())
+    )
+    active_sanction = _check_active_sanction(active_sanction_result.scalars().all())
+    if active_sanction:
+        await _attendance_audit(
+            db=db,
+            action="ATTENDANCE_ATTEMPT_BLOCKED_SANCTION",
+            description=(
+                f"Attendance attempt blocked for {matched_user.full_name}: "
+                f"active sanction ('{active_sanction.violation_type.value}')"
+            ),
+            status="failure",
+            method="facial_recognition",
+            result="blocked",
+            failure_reason=f"Active sanction: {active_sanction.violation_type.value}",
+            student=matched_user,
+            session=session,
+            scan_type=body.scan_type,
+            performer=current_staff,
+        )
+        await db.commit()
+        return FaceScanResponse(
+            result=ScanResult.FAILED_RECOGNITION,
+            matched_user_id=user_id,
+            matched_user_name=matched_user.full_name,
+            confidence_score=match_result.confidence,
+            liveness_score=match_result.liveness_score,
+            processing_time_ms=processing_ms,
+            message="Attendance blocked: student has an active sanction",
+        )
+
+    # Fetch existing attendance record for this student+session
     att_result = await db.execute(
         select(AttendanceRecord).where(
             AttendanceRecord.student_id == user_id,
@@ -457,12 +839,26 @@ async def face_scan(
 
     if body.scan_type == AttendanceScanType.TIME_IN:
         if record:
-            # Already timed in — idempotent response
-            matched_user = await db.get(User, user_id)
+            # Already timed in — idempotent response but still logged
+            await _attendance_audit(
+                db=db,
+                action="ATTENDANCE_DUPLICATE_ATTEMPT",
+                description=f"Duplicate time-in attempt for {matched_user.full_name} in session '{session.name}'",
+                status="warning",
+                method="facial_recognition",
+                result="duplicate",
+                failure_reason="Already timed in for this session",
+                student=matched_user,
+                session=session,
+                attendance_record=record,
+                scan_type=body.scan_type,
+                performer=current_staff,
+            )
+            await db.commit()
             return FaceScanResponse(
                 result=ScanResult.SUCCESS,
                 matched_user_id=user_id,
-                matched_user_name=matched_user.full_name if matched_user else None,
+                matched_user_name=matched_user.full_name,
                 confidence_score=match_result.confidence,
                 liveness_score=match_result.liveness_score,
                 attendance_record_id=record.id,
@@ -470,6 +866,34 @@ async def face_scan(
                 message="Already timed in for this session",
             )
         now = datetime.now(UTC)
+        hard_cutoff = session.scheduled_end + timedelta(minutes=session.grace_period_minutes)
+        if now > hard_cutoff:
+            await _attendance_audit(
+                db=db,
+                action="ATTENDANCE_ATTEMPT_OUTSIDE_ALLOWED_TIME",
+                description=(
+                    f"Time-in attempt outside allowed window for {matched_user.full_name} "
+                    f"(session scheduled to end {session.scheduled_end.isoformat()})"
+                ),
+                status="failure",
+                method="facial_recognition",
+                result="blocked",
+                failure_reason="Check-in window has closed",
+                student=matched_user,
+                session=session,
+                scan_type=body.scan_type,
+                performer=current_staff,
+            )
+            await db.commit()
+            return FaceScanResponse(
+                result=ScanResult.FAILED_RECOGNITION,
+                matched_user_id=user_id,
+                matched_user_name=matched_user.full_name,
+                confidence_score=match_result.confidence,
+                liveness_score=match_result.liveness_score,
+                processing_time_ms=processing_ms,
+                message="Attendance attempt outside allowed time",
+            )
         grace_deadline = session.scheduled_start + timedelta(minutes=session.grace_period_minutes)
         att_status = "present" if now <= grace_deadline else "late"
         record = AttendanceRecord(
@@ -518,7 +942,21 @@ async def face_scan(
                         if record and record.time_in:
                             match_result = fb_result
                             user_id = fb_result.user_id
+                            matched_user = await db.get(User, user_id)
             if not record or not record.time_in:
+                await _attendance_audit(
+                    db=db,
+                    action="ATTENDANCE_RECORDING_FAILED",
+                    description=f"Time-out attempted without a time-in record for {matched_user.full_name} in session '{session.name}'",
+                    status="failure",
+                    method="facial_recognition",
+                    result="failed",
+                    failure_reason="No time-in record found for this session",
+                    student=matched_user,
+                    session=session,
+                    scan_type=body.scan_type,
+                    performer=current_staff,
+                )
                 await db.commit()
                 return FaceScanResponse(
                     result=ScanResult.FAILED_RECOGNITION,
@@ -532,13 +970,34 @@ async def face_scan(
         record.duration_minutes = int((now - record.time_in).total_seconds() / 60)
         record.is_complete = True
 
-    # Reset consecutive-failure counter on success
-    await redis.delete(f"fr_consec_fails:{kiosk_ip}")
-
     await db.commit()
     await db.refresh(record)
 
-    matched_user = await db.get(User, user_id)
+    is_time_in = body.scan_type == AttendanceScanType.TIME_IN
+    await _attendance_audit(
+        db=db,
+        action="ATTENDANCE_TIME_IN" if is_time_in else "ATTENDANCE_TIME_OUT",
+        description=(
+            f"{matched_user.full_name} checked {'in' if is_time_in else 'out'} "
+            f"(facial recognition) for session '{session.name}' — {record.status}"
+        ),
+        status="success",
+        method="facial_recognition",
+        result="success",
+        student=matched_user,
+        session=session,
+        attendance_record=record,
+        scan_type=body.scan_type,
+        performer=current_staff,
+        resource_type="AttendanceRecord",
+        resource_id=str(record.id),
+        new_values={
+            "time_in": str(record.time_in) if record.time_in else None,
+            "time_out": str(record.time_out) if record.time_out else None,
+            "status": record.status,
+            "confidence": round(match_result.confidence or 0, 4),
+        },
+    )
     logger.info(
         "face_scan_success",
         user_id=str(user_id),
@@ -613,3 +1072,552 @@ async def get_attendance_records(
 
     return PaginatedResponse(items=items, total=total, page=page, page_size=page_size,
                              pages=(total + page_size - 1) // page_size)
+
+
+# ── Manual Attendance (Admin / Director / Staff / Coach) ───────────────────────
+
+async def _load_manual_context(
+    db: AsyncSession,
+    session_id: uuid.UUID,
+    student_id: uuid.UUID,
+) -> tuple[Session, User]:
+    """Load session + student for manual/QR attendance endpoints."""
+    sres = await db.execute(select(Session).where(Session.id == session_id))
+    session = sres.scalar_one_or_none()
+    if not session:
+        raise NotFoundError("Session", str(session_id))
+
+    ures = await db.execute(select(User).where(User.id == student_id))
+    student = ures.scalar_one_or_none()
+    if not student:
+        raise NotFoundError("User", str(student_id))
+
+    return session, student
+
+
+@router.post(
+    "/manual",
+    response_model=AttendanceRecordRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Manually add an attendance record (Admin/Staff/Coach)",
+)
+async def add_manual_attendance(
+    body: ManualAttendanceCreate,
+    current_user: AdminOrCoach,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AttendanceRecordRead:
+    session, student = await _load_manual_context(db, body.session_id, body.student_id)
+
+    # Prevent duplicates (unique index: student_id + session_id)
+    dup = await db.execute(
+        select(AttendanceRecord).where(
+            AttendanceRecord.student_id == body.student_id,
+            AttendanceRecord.session_id == body.session_id,
+        )
+    )
+    if dup.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Attendance record already exists for this student in this session",
+        )
+
+    if not body.time_in and not body.time_out and not body.status:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Provide at least one of: time_in, time_out, or status",
+        )
+
+    now = datetime.now(UTC)
+    record = AttendanceRecord(
+        student_id=body.student_id,
+        session_id=body.session_id,
+        time_in=body.time_in or (now if body.status in ("present", "late") else None),
+        time_out=body.time_out,
+        status=body.status or ("present" if body.time_in else None),
+        notes=body.notes,
+    )
+    if record.time_out and record.time_in:
+        record.duration_minutes = int((record.time_out - record.time_in).total_seconds() / 60)
+        record.is_complete = True
+
+    db.add(record)
+    await db.commit()
+    await db.refresh(record)
+
+    await _attendance_audit(
+        db=db,
+        action="MANUAL_ATTENDANCE_ADDED",
+        description=(
+            f"Manually added attendance for {student.full_name} in session '{session.name}'"
+            f" ({record.status})"
+        ),
+        status="success",
+        method="manual",
+        result="success",
+        student=student,
+        session=session,
+        attendance_record=record,
+        performer=current_user,
+        resource_type="AttendanceRecord",
+        resource_id=str(record.id),
+        new_values={
+            "time_in": str(record.time_in) if record.time_in else None,
+            "time_out": str(record.time_out) if record.time_out else None,
+            "status": record.status,
+        },
+    )
+
+    if record.time_in:
+        await _attendance_audit(
+            db=db,
+            action="MANUAL_TIME_IN",
+            description=f"Manual time-in recorded for {student.full_name} at {record.time_in.isoformat()}",
+            status="success",
+            method="manual",
+            result="success",
+            student=student,
+            session=session,
+            attendance_record=record,
+            performer=current_user,
+            resource_type="AttendanceRecord",
+            resource_id=str(record.id),
+        )
+    if record.time_out:
+        await _attendance_audit(
+            db=db,
+            action="MANUAL_TIME_OUT",
+            description=f"Manual time-out recorded for {student.full_name} at {record.time_out.isoformat()}",
+            status="success",
+            method="manual",
+            result="success",
+            student=student,
+            session=session,
+            attendance_record=record,
+            performer=current_user,
+            resource_type="AttendanceRecord",
+            resource_id=str(record.id),
+        )
+    await db.commit()
+
+    return _record_to_read(record, session, student)
+
+
+@router.patch(
+    "/manual/{record_id}",
+    response_model=AttendanceRecordRead,
+    summary="Edit a manual attendance record (Admin/Staff/Coach)",
+)
+async def edit_manual_attendance(
+    record_id: uuid.UUID,
+    body: ManualAttendanceUpdate,
+    current_user: AdminOrCoach,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AttendanceRecordRead:
+    rres = await db.execute(
+        select(AttendanceRecord).where(AttendanceRecord.id == record_id).options(selectinload(AttendanceRecord.student))
+    )
+    record = rres.scalar_one_or_none()
+    if not record:
+        raise NotFoundError("AttendanceRecord", str(record_id))
+
+    sres = await db.execute(select(Session).where(Session.id == record.session_id))
+    session = sres.scalar_one_or_none()
+
+    old_values = {
+        "time_in": str(record.time_in) if record.time_in else None,
+        "time_out": str(record.time_out) if record.time_out else None,
+        "status": record.status,
+        "notes": record.notes,
+    }
+
+    had_time_out = record.time_out is not None
+    prev_status = record.status
+
+    update_data = body.model_dump(exclude_unset=True)
+    if "time_in" in update_data and update_data["time_in"]:
+        record.time_in = update_data["time_in"]
+        record.status = record.status or "present"
+    if "time_out" in update_data and update_data["time_out"]:
+        record.time_out = update_data["time_out"]
+    if "status" in update_data and update_data["status"]:
+        record.status = update_data["status"]
+    if "notes" in update_data:
+        record.notes = update_data["notes"]
+
+    # Recompute duration / completeness
+    if record.time_in and record.time_out:
+        record.duration_minutes = int((record.time_out - record.time_in).total_seconds() / 60)
+        record.is_complete = True
+
+    await db.commit()
+    await db.refresh(record)
+
+    await _attendance_audit(
+        db=db,
+        action="MANUAL_ATTENDANCE_EDITED",
+        description=f"Edited attendance record for {record.student.full_name} in session '{session.name if session else ''}'",
+        status="success",
+        method="manual",
+        result="success",
+        student=record.student,
+        session=session,
+        attendance_record=record,
+        performer=current_user,
+        resource_type="AttendanceRecord",
+        resource_id=str(record.id),
+        previous_values=old_values,
+        new_values={
+            "time_in": str(record.time_in) if record.time_in else None,
+            "time_out": str(record.time_out) if record.time_out else None,
+            "status": record.status,
+        },
+    )
+
+    if update_data.get("status") and prev_status != update_data["status"]:
+        await _attendance_audit(
+            db=db,
+            action="ATTENDANCE_STATUS_CHANGED",
+            description=f"Attendance status changed for {record.student.full_name}: {prev_status} → {record.status}",
+            status="success",
+            method="manual",
+            result="success",
+            student=record.student,
+            session=session,
+            attendance_record=record,
+            performer=current_user,
+            resource_type="AttendanceRecord",
+            resource_id=str(record.id),
+            previous_values={"status": prev_status},
+            new_values={"status": record.status},
+        )
+    if update_data.get("time_out") and not had_time_out and record.time_out:
+        await _attendance_audit(
+            db=db,
+            action="MANUAL_TIME_OUT",
+            description=f"Manual time-out recorded for {record.student.full_name} at {record.time_out.isoformat()}",
+            status="success",
+            method="manual",
+            result="success",
+            student=record.student,
+            session=session,
+            attendance_record=record,
+            performer=current_user,
+            resource_type="AttendanceRecord",
+            resource_id=str(record.id),
+        )
+    if update_data.get("time_in") and record.time_in:
+        await _attendance_audit(
+            db=db,
+            action="MANUAL_TIME_IN",
+            description=f"Manual time-in recorded for {record.student.full_name} at {record.time_in.isoformat()}",
+            status="success",
+            method="manual",
+            result="success",
+            student=record.student,
+            session=session,
+            attendance_record=record,
+            performer=current_user,
+            resource_type="AttendanceRecord",
+            resource_id=str(record.id),
+        )
+    await db.commit()
+
+    return _record_to_read(record, session, record.student)
+
+
+@router.delete(
+    "/manual/{record_id}",
+    response_model=MessageResponse,
+    summary="Delete a manual attendance record (Admin/Staff/Coach)",
+)
+async def delete_manual_attendance(
+    record_id: uuid.UUID,
+    current_user: AdminOrCoach,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> MessageResponse:
+    rres = await db.execute(
+        select(AttendanceRecord).where(AttendanceRecord.id == record_id).options(selectinload(AttendanceRecord.student))
+    )
+    record = rres.scalar_one_or_none()
+    if not record:
+        raise NotFoundError("AttendanceRecord", str(record_id))
+
+    sres = await db.execute(select(Session).where(Session.id == record.session_id))
+    session = sres.scalar_one_or_none()
+
+    await _attendance_audit(
+        db=db,
+        action="MANUAL_ATTENDANCE_DELETED",
+        description=f"Deleted attendance record for {record.student.full_name} in session '{session.name if session else ''}'",
+        status="success",
+        method="manual",
+        result="success",
+        student=record.student,
+        session=session,
+        attendance_record=record,
+        performer=current_user,
+        resource_type="AttendanceRecord",
+        resource_id=str(record_id),
+        previous_values={
+            "time_in": str(record.time_in) if record.time_in else None,
+            "time_out": str(record.time_out) if record.time_out else None,
+            "status": record.status,
+        },
+    )
+    await db.delete(record)
+    await db.commit()
+
+    return MessageResponse(message="Attendance record deleted")
+
+
+def _record_to_read(record: AttendanceRecord, session: Session | None, student: User | None) -> AttendanceRecordRead:
+    """Build an AttendanceRecordRead with session/student display fields."""
+    ar = AttendanceRecordRead.model_validate(record)
+    if student:
+        ar.student_name = student.full_name
+        ar.student_number = student.student_id
+    if session:
+        ar.session_name = session.name
+        ar.session_sport_or_art = session.sport_or_art
+    return ar
+
+
+# ── QR Code Attendance Check-in ────────────────────────────────────────────────
+
+def _parse_student_qr(qr_code: str) -> uuid.UUID | None:
+    """Parse a student QR payload (STU-<uuid> / full uuid / 12-char hex) into a UUID."""
+    raw = qr_code.strip()
+    if raw.upper().startswith("STU-"):
+        raw = raw[4:].strip()
+    try:
+        return uuid.UUID(raw)
+    except ValueError:
+        return None
+
+
+@router.post(
+    "/qr/check-in",
+    response_model=AttendanceRecordRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Student QR check-in to an active session",
+)
+async def qr_check_in(
+    body: QrCheckInRequest,
+    current_user: ScanStaff,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AttendanceRecordRead:
+    # Validate the scanned QR payload
+    student_id = _parse_student_qr(body.qr_code)
+    if student_id is None:
+        await _attendance_audit(
+            db=db,
+            action="QR_CODE_VALIDATION_FAILED",
+            description=f"QR code validation failed: '{body.qr_code}' is not a valid student QR",
+            status="failure",
+            method="qr_code",
+            result="failed",
+            failure_reason="Invalid QR code format",
+            performer=current_user,
+            resource_type="Session",
+            resource_id=str(body.session_id),
+        )
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Invalid student QR code",
+        )
+
+    # Locate student
+    ures = await db.execute(select(User).where(User.id == student_id))
+    student = ures.scalar_one_or_none()
+    if not student:
+        await _attendance_audit(
+            db=db,
+            action="QR_CODE_VALIDATION_FAILED",
+            description=f"QR code validation failed: no student matches QR '{body.qr_code}'",
+            status="failure",
+            method="qr_code",
+            result="failed",
+            failure_reason="Student not found",
+            performer=current_user,
+            resource_type="Session",
+            resource_id=str(body.session_id),
+        )
+        await db.commit()
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    # Locate session
+    sres = await db.execute(select(Session).where(Session.id == body.session_id))
+    session = sres.scalar_one_or_none()
+    if not session:
+        await _attendance_audit(
+            db=db,
+            action="INVALID_SESSION_QR",
+            description=f"QR check-in failed: session '{body.session_id}' not found",
+            status="failure",
+            method="qr_code",
+            result="failed",
+            failure_reason="Session not found",
+            student=student,
+            performer=current_user,
+            resource_type="Session",
+            resource_id=str(body.session_id),
+        )
+        await db.commit()
+        raise HTTPException(status_code=404, detail="Session not found")
+    if not session.is_active:
+        await _attendance_audit(
+            db=db,
+            action="ATTENDANCE_ATTEMPT_AFTER_SESSION_CLOSED",
+            description=f"QR check-in blocked for {student.full_name}: session '{session.name}' is closed",
+            status="failure",
+            method="qr_code",
+            result="blocked",
+            failure_reason="Session is closed",
+            student=student,
+            session=session,
+            performer=current_user,
+        )
+        await db.commit()
+        raise HTTPException(status_code=400, detail="Session is not active")
+
+    # Inactive account
+    if not student.is_active:
+        await _attendance_audit(
+            db=db,
+            action="ATTENDANCE_ATTEMPT_INACTIVE_ACCOUNT",
+            description=f"QR check-in blocked for {student.full_name}: account is inactive",
+            status="failure",
+            method="qr_code",
+            result="blocked",
+            failure_reason="Student account is inactive",
+            student=student,
+            session=session,
+            performer=current_user,
+        )
+        await db.commit()
+        raise HTTPException(status_code=403, detail="Student account is inactive")
+
+    # Sport/art eligibility
+    if student.sport_or_art and session.sport_or_art and student.sport_or_art != session.sport_or_art:
+        await _attendance_audit(
+            db=db,
+            action="ATTENDANCE_ATTEMPT_INELIGIBLE",
+            description=f"QR check-in blocked for {student.full_name}: session '{session.name}' does not match sport/art '{student.sport_or_art}'",
+            status="failure",
+            method="qr_code",
+            result="blocked",
+            failure_reason="Session does not match assigned sport or art",
+            student=student,
+            session=session,
+            performer=current_user,
+        )
+        await db.commit()
+        raise HTTPException(status_code=403, detail="This session does not match your assigned sport or art")
+
+    # Active sanction
+    active_sanction_result = await db.execute(
+        select(Sanction)
+        .where(
+            Sanction.student_id == student.id,
+            Sanction.status == SanctionStatus.ACTIVE,
+            (Sanction.end_date.is_(None)) | (Sanction.end_date >= datetime.now(UTC).date()),
+        )
+        .order_by(Sanction.created_at.desc())
+    )
+    active_sanction = _check_active_sanction(active_sanction_result.scalars().all())
+    if active_sanction:
+        await _attendance_audit(
+            db=db,
+            action="ATTENDANCE_ATTEMPT_BLOCKED_SANCTION",
+            description=f"QR check-in blocked for {student.full_name}: active sanction ('{active_sanction.violation_type.value}')",
+            status="failure",
+            method="qr_code",
+            result="blocked",
+            failure_reason=f"Active sanction: {active_sanction.violation_type.value}",
+            student=student,
+            session=session,
+            performer=current_user,
+        )
+        await db.commit()
+        raise HTTPException(status_code=403, detail="Attendance blocked: student has an active sanction")
+
+    # Duplicate check
+    dup = await db.execute(
+        select(AttendanceRecord).where(
+            AttendanceRecord.student_id == student.id,
+            AttendanceRecord.session_id == session.id,
+        )
+    )
+    existing = dup.scalar_one_or_none()
+    if existing:
+        await _attendance_audit(
+            db=db,
+            action="ATTENDANCE_DUPLICATE_ATTEMPT",
+            description=f"Duplicate QR check-in attempt for {student.full_name} in session '{session.name}'",
+            status="warning",
+            method="qr_code",
+            result="duplicate",
+            failure_reason="Already checked in for this session",
+            student=student,
+            session=session,
+            attendance_record=existing,
+            performer=current_user,
+        )
+        await db.commit()
+        return _record_to_read(existing, session, student)
+
+    # Outside allowed time
+    now = datetime.now(UTC)
+    hard_cutoff = session.scheduled_end + timedelta(minutes=session.grace_period_minutes)
+    if now > hard_cutoff:
+        await _attendance_audit(
+            db=db,
+            action="ATTENDANCE_ATTEMPT_OUTSIDE_ALLOWED_TIME",
+            description=f"QR check-in blocked for {student.full_name}: outside allowed window for session '{session.name}'",
+            status="failure",
+            method="qr_code",
+            result="blocked",
+            failure_reason="Check-in window has closed",
+            student=student,
+            session=session,
+            performer=current_user,
+        )
+        await db.commit()
+        raise HTTPException(status_code=400, detail="Attendance attempt outside allowed time")
+
+    # Success — record check-in
+    grace_deadline = session.scheduled_start + timedelta(minutes=session.grace_period_minutes)
+    att_status = "present" if now <= grace_deadline else "late"
+    record = AttendanceRecord(
+        student_id=student.id,
+        session_id=session.id,
+        time_in=now,
+        status=att_status,
+        notes=f"QR check-in by {current_user.full_name}",
+    )
+    db.add(record)
+    await db.commit()
+    await db.refresh(record)
+
+    await _attendance_audit(
+        db=db,
+        action="ATTENDANCE_TIME_IN",
+        description=f"{student.full_name} checked in (QR code) for session '{session.name}' — {record.status}",
+        status="success",
+        method="qr_code",
+        result="success",
+        student=student,
+        session=session,
+        attendance_record=record,
+        performer=current_user,
+        resource_type="AttendanceRecord",
+        resource_id=str(record.id),
+        new_values={
+            "time_in": str(record.time_in) if record.time_in else None,
+            "status": record.status,
+        },
+    )
+    await db.commit()
+
+    return _record_to_read(record, session, student)

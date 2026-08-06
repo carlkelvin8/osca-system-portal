@@ -22,6 +22,7 @@ from app.models.announcement import Announcement
 from app.models.user import UserRole
 from app.schemas.announcement import AnnouncementCreate, AnnouncementRead, AnnouncementUpdate
 from app.schemas.common import PaginatedResponse
+from app.services.audit_service import audit_log
 from app.services.storage_service import StorageService
 
 router = APIRouter()
@@ -94,6 +95,17 @@ async def create_announcement(
     db.add(ann)
     await db.commit()
     await db.refresh(ann)
+    await audit_log(
+        db=db,
+        action="ANNOUNCEMENT_CREATED",
+        module="Announcements",
+        description=f"Created announcement '{body.title}'",
+        resource_type="Announcement",
+        resource_id=str(ann.id),
+        new_values={"title": body.title, "tag": body.tag, "pinned": body.pinned},
+        current_user=current_user,
+    )
+    await db.commit()
     r = AnnouncementRead.model_validate(ann)
     r.created_by_name = current_user.full_name
     return r
@@ -120,6 +132,17 @@ async def update_announcement(
     for field, value in body.model_dump(exclude_unset=True).items():
         setattr(ann, field, value)
 
+    update_data = body.model_dump(exclude_unset=True)
+    await audit_log(
+        db=db,
+        action="ANNOUNCEMENT_UPDATED",
+        module="Announcements",
+        description=f"Updated announcement '{ann.title}'",
+        resource_type="Announcement",
+        resource_id=str(announcement_id),
+        new_values=update_data,
+        current_user=current_user,
+    )
     await db.commit()
     await db.refresh(ann)
     r = AnnouncementRead.model_validate(ann)
@@ -146,6 +169,17 @@ async def delete_announcement(
         raise NotFoundError("Announcement", str(announcement_id))
 
     ann.is_active = False
+    await audit_log(
+        db=db,
+        action="ANNOUNCEMENT_DELETED",
+        module="Announcements",
+        description=f"Deleted announcement '{ann.title}'",
+        resource_type="Announcement",
+        resource_id=str(announcement_id),
+        previous_values={"is_active": True},
+        new_values={"is_active": False},
+        current_user=current_user,
+    )
     await db.commit()
     logger.info("announcement_deleted", announcement_id=str(announcement_id), admin_id=str(current_user.id))
 
@@ -190,6 +224,15 @@ async def upload_announcement_image(
 
     image_url = storage.get_presigned_url("osca-reports", key, expires_in=86400)
     ann.image_url = image_url
+    await audit_log(
+        db=db,
+        action="ANNOUNCEMENT_IMAGE_UPLOADED",
+        module="Announcements",
+        description=f"Uploaded image for announcement '{ann.title}'",
+        resource_type="Announcement",
+        resource_id=str(announcement_id),
+        current_user=current_user,
+    )
     await db.commit()
     await db.refresh(ann)
 

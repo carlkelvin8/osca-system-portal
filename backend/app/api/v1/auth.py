@@ -26,7 +26,6 @@ from app.core.security import (
     is_token_type,
     verify_password,
 )
-from app.models.audit import AuditLog
 from app.models.user import User
 from app.schemas.auth import (
     LoginRequest,
@@ -36,6 +35,7 @@ from app.schemas.auth import (
 )
 from app.schemas.common import MessageResponse
 from app.schemas.user import UserRead
+from app.services.audit_service import audit_log
 from app.services.storage_service import StorageService
 
 router = APIRouter()
@@ -63,13 +63,16 @@ async def login(
     # Constant-time comparison to prevent user enumeration
     if not user or not verify_password(body.password, user.hashed_password):
         # Log failed attempt
-        db.add(AuditLog(
+        await audit_log(
+            db=db,
             action="USER_LOGIN_FAILED",
-            ip_address=client_ip,
+            module="Auth",
+            description=f"Failed login attempt for {body.email}",
             details={"email": body.email},
             status="failure",
             failure_reason="Invalid credentials",
-        ))
+            request=request,
+        )
         await db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -102,12 +105,17 @@ async def login(
     online_ttl = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
     await redis.setex(f"online:{user.id}", online_ttl, "1")
 
-    db.add(AuditLog(
-        user_id=user.id,
+    await audit_log(
+        db=db,
         action="USER_LOGIN_SUCCESS",
-        ip_address=client_ip,
-        status="success",
-    ))
+        module="Auth",
+        description=f"User logged in as {user.role.value}",
+        resource_type="User",
+        resource_id=str(user.id),
+        current_user=user,
+        user_id=user.id,
+        request=request,
+    )
     await db.commit()
 
     logger.info("user_login", user_id=str(user.id), role=user.role)
@@ -182,6 +190,16 @@ async def logout(
     # Remove online key and record logout timestamp
     await redis.delete(f"online:{current_user.id}")
     current_user.last_logout_at = datetime.now(UTC)
+    await audit_log(
+        db=db,
+        action="USER_LOGOUT",
+        module="Auth",
+        description=f"User logged out ({current_user.role.value})",
+        resource_type="User",
+        resource_id=str(current_user.id),
+        current_user=current_user,
+        request=request,
+    )
     await db.commit()
 
     logger.info("user_logout", user_id=str(current_user.id))
@@ -213,6 +231,15 @@ async def change_password(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect")
 
     current_user.hashed_password = hash_password(body.new_password)
-    db.add(AuditLog(user_id=current_user.id, action="PASSWORD_CHANGED", status="success"))
+    await audit_log(
+        db=db,
+        action="PASSWORD_CHANGED",
+        module="Auth",
+        description="User changed their own password",
+        resource_type="User",
+        resource_id=str(current_user.id),
+        current_user=current_user,
+        request=request,
+    )
     await db.commit()
     return MessageResponse(message="Password changed successfully")

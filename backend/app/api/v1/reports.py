@@ -18,9 +18,33 @@ from app.core.dependencies import CurrentUser, NotStudent, get_db
 from app.models.attendance import AttendanceRecord, Session
 from app.models.user import User
 from app.schemas.attendance import AttendanceReportFilter
+from app.services.audit_service import audit_log
 from app.services.report_service import ReportService
 
 router = APIRouter()
+
+
+async def _log_report_export(
+    db: AsyncSession,
+    user,
+    report: str,
+    period: str,
+    fmt: str,
+    target: str,
+) -> None:
+    """Audit-log a report generation / export action."""
+    if fmt == "json":
+        return
+    await audit_log(
+        db=db,
+        action="REPORT_GENERATED",
+        module="Reports",
+        description=f"Exported {report} report ({period}, {fmt.upper()})",
+        resource_type="Report",
+        details={"format": fmt, "report": report, "period": period, "target": target},
+        current_user=user,
+    )
+    await db.commit()
 
 
 @router.get(
@@ -42,6 +66,17 @@ async def attendance_pdf(
         date_from=date_from,
         date_to=date_to,
     )
+    await audit_log(
+        db=db,
+        action="REPORT_GENERATED",
+        module="Reports",
+        description="Generated attendance report (PDF)",
+        resource_type="Report",
+        details={"format": "pdf", "report": "attendance", "sport_or_art": sport_or_art,
+                 "date_from": str(date_from) if date_from else None, "date_to": str(date_to) if date_to else None},
+        current_user=_user,
+    )
+    await db.commit()
     return StreamingResponse(
         iter([pdf_bytes]),
         media_type="application/pdf",
@@ -67,6 +102,17 @@ async def attendance_xlsx(
         date_from=date_from,
         date_to=date_to,
     )
+    await audit_log(
+        db=db,
+        action="REPORT_GENERATED",
+        module="Reports",
+        description="Exported attendance report (XLSX)",
+        resource_type="Report",
+        details={"format": "xlsx", "report": "attendance", "sport_or_art": sport_or_art,
+                 "date_from": str(date_from) if date_from else None, "date_to": str(date_to) if date_to else None},
+        current_user=_user,
+    )
+    await db.commit()
     return StreamingResponse(
         iter([xlsx_bytes]),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -85,6 +131,16 @@ async def inventory_pdf(
 ) -> StreamingResponse:
     report_service = ReportService(db)
     pdf_bytes = await report_service.generate_inventory_pdf()
+    await audit_log(
+        db=db,
+        action="REPORT_GENERATED",
+        module="Reports",
+        description="Generated inventory report (PDF)",
+        resource_type="Report",
+        details={"format": "pdf", "report": "inventory"},
+        current_user=_user,
+    )
+    await db.commit()
     return StreamingResponse(
         iter([pdf_bytes]),
         media_type="application/pdf",
@@ -103,6 +159,16 @@ async def inventory_xlsx(
 ) -> StreamingResponse:
     report_service = ReportService(db)
     xlsx_bytes = await report_service.generate_inventory_xlsx()
+    await audit_log(
+        db=db,
+        action="REPORT_GENERATED",
+        module="Reports",
+        description="Exported inventory report (XLSX)",
+        resource_type="Report",
+        details={"format": "xlsx", "report": "inventory"},
+        current_user=_user,
+    )
+    await db.commit()
     return StreamingResponse(
         iter([xlsx_bytes]),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -296,6 +362,7 @@ async def daily_attendance(
 
     rows = await _fetch_attendance_logs(db, date_from, date_to, sport_or_art)
     period_str = f"Daily Attendance — {target.isoformat()}"
+    await _log_report_export(db, _user, "attendance", "Daily", format, target.isoformat())
 
     if format == "csv":
         csv_data = _build_attendance_csv(rows)
@@ -343,6 +410,7 @@ async def weekly_attendance(
 
     rows = await _fetch_attendance_logs(db, date_from, date_to, sport_or_art)
     period_str = f"Weekly Attendance — {start.isoformat()} to {(start + timedelta(days=6)).isoformat()}"
+    await _log_report_export(db, _user, "attendance", "Weekly", format, f"{start.isoformat()}_to_{start.isoformat()}")
 
     if format == "csv":
         csv_data = _build_attendance_csv(rows)
@@ -396,6 +464,7 @@ async def monthly_attendance(
     rows = await _fetch_attendance_logs(db, date_from, date_to, sport_or_art)
     from calendar import month_name
     period_str = f"Monthly Attendance — {month_name[m]} {y}"
+    await _log_report_export(db, _user, "attendance", "Monthly", format, f"{y}-{m:02d}")
 
     if format == "csv":
         csv_data = _build_attendance_csv(rows)

@@ -16,12 +16,12 @@ from sqlalchemy.orm import selectinload
 from app.core.dependencies import AdminOnly, CurrentUser, OptionalUser, get_db, get_redis
 from app.core.exceptions import ConflictError, NotFoundError
 from app.core.security import hash_password
-from app.models.audit import AuditLog
 from app.models.attendance import FaceEmbedding
 from app.models.inventory import BorrowingID, BorrowTransaction, EquipmentRequest
 from app.models.user import User, UserRole
 from app.schemas.common import MessageResponse, PaginatedResponse
 from app.schemas.user import UserCreate, UserRead, UserSummary, UserUpdate
+from app.services.audit_service import audit_log
 from app.services.barcode_service import BarcodeService
 from app.services.storage_service import StorageService
 from app.services.facial_recognition import FacialRecognitionService
@@ -104,13 +104,17 @@ async def create_user(
         biometric_consent_date=datetime.now(UTC) if body.biometric_consent else None,
     )
     db.add(user)
-    db.add(AuditLog(
-        user_id=user.id,
+    await audit_log(
+        db=db,
         action="USER_REGISTERED",
+        module="Users",
+        description=f"Registered new {user.role.value} account: {user.full_name}",
         resource_type="User",
         resource_id=str(user.id),
-        status="success",
-    ))
+        new_values={"email": user.email, "role": user.role.value, "is_active": user.is_active},
+        current_user=current_user,
+        request=request,
+    )
     await db.commit()
     await db.refresh(user)
 
@@ -156,13 +160,17 @@ async def create_user(
                 )
                 db.add(face_emb)
                 user.is_face_enrolled = True
-                db.add(AuditLog(
-                    user_id=user.id,
+                await audit_log(
+                    db=db,
                     action="FACE_ENROLLED",
+                    module="User Management",
+                    description=f"Face biometrics enrolled for {user.full_name}",
                     resource_type="FaceEmbedding",
-                    status="success",
+                    resource_id=str(user.id),
                     details={"model": model_used, "images_count": len(images_bytes)},
-                ))
+                    current_user=current_user,
+                    request=request,
+                )
                 await db.commit()
                 await db.refresh(user)
                 logger.info("face_enrolled_during_registration", user_id=str(user.id), model=model_used)
@@ -291,13 +299,16 @@ async def update_user(
     for field, value in update_data.items():
         setattr(user, field, value)
 
-    db.add(AuditLog(
-        user_id=current_user.id,
+    await audit_log(
+        db=db,
         action="USER_UPDATED",
+        module="User Management",
+        description=f"Updated profile of {user.full_name}",
         resource_type="User",
         resource_id=str(user_id),
-        status="success",
-    ))
+        new_values=update_data,
+        current_user=current_user,
+    )
     await db.commit()
     await db.refresh(user)
     _resolve_user_profile_urls(user)
@@ -316,12 +327,17 @@ async def deactivate_user(
         raise NotFoundError("User", str(user_id))
 
     user.is_active = False
-    db.add(AuditLog(
+    await audit_log(
+        db=db,
         action="USER_DEACTIVATED",
+        module="User Management",
+        description=f"Deactivated account of {user.full_name}",
         resource_type="User",
         resource_id=str(user_id),
-        status="success",
-    ))
+        previous_values={"is_active": True},
+        new_values={"is_active": False},
+        current_user=_admin,
+    )
     await db.commit()
     return MessageResponse(message=f"User {user.full_name} deactivated")
 
@@ -337,12 +353,16 @@ async def delete_user_permanently(
     if not user:
         raise NotFoundError("User", str(user_id))
 
-    db.add(AuditLog(
+    await audit_log(
+        db=db,
         action="USER_DELETED",
+        module="User Management",
+        description=f"Permanently deleted account of {user.full_name} ({user.email})",
         resource_type="User",
         resource_id=str(user_id),
-        status="success",
-    ))
+        previous_values={"email": user.email, "role": user.role.value},
+        current_user=_admin,
+    )
     await db.delete(user)
     await db.commit()
     return MessageResponse(message=f"User {user.full_name} has been permanently deleted")
@@ -393,13 +413,15 @@ async def upload_profile_picture(
 
     # Store the object key (not presigned URL) so it never expires
     user.profile_picture_url = key
-    db.add(AuditLog(
-        user_id=current_user.id,
+    await audit_log(
+        db=db,
         action="PROFILE_PICTURE_UPDATED",
+        module="User Management",
+        description=f"Updated profile picture of {user.full_name}",
         resource_type="User",
         resource_id=str(user_id),
-        status="success",
-    ))
+        current_user=current_user,
+    )
     await db.commit()
     await db.refresh(user)
     _resolve_user_profile_urls(user)

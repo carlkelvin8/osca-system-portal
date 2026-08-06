@@ -82,6 +82,9 @@ async def get_current_user(
     if user is None or not user.is_active:
         raise credentials_exception
 
+    # Attach the request so audit logging can extract IP / browser / device context.
+    user._current_request = request
+
     return user
 
 
@@ -118,6 +121,7 @@ async def get_optional_user(
         user = result.scalar_one_or_none()
         if user is None or not user.is_active:
             return None
+        user._current_request = request
         return user
     except JWTError:
         return None

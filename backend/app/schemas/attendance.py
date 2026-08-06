@@ -74,6 +74,48 @@ class AttendanceRecordRead(OSCABaseModel):
     notes: str | None
 
 
+# ── Manual Attendance Schemas (Admin / Staff / Coach) ──────────────────────────
+
+class ManualAttendanceCreate(OSCABaseModel):
+    session_id: uuid.UUID
+    student_id: uuid.UUID
+    time_in: datetime | None = None
+    time_out: datetime | None = None
+    status: str | None = Field(
+        default=None, pattern="^(present|late|absent|excused)$",
+        description="present, late, absent, excused",
+    )
+    notes: str | None = None
+
+    @field_validator("time_out")
+    @classmethod
+    def time_out_after_time_in(cls, v: datetime | None, info) -> datetime | None:
+        if v is not None and info.data.get("time_in") is not None and v <= info.data["time_in"]:
+            raise ValueError("time_out must be after time_in")
+        return v
+
+
+class ManualAttendanceUpdate(OSCABaseModel):
+    time_in: datetime | None = None
+    time_out: datetime | None = None
+    status: str | None = Field(
+        default=None, pattern="^(present|late|absent|excused)$",
+        description="present, late, absent, excused",
+    )
+    notes: str | None = None
+
+
+# ── QR Check-in Schema ─────────────────────────────────────────────────────────
+
+class QrCheckInRequest(OSCABaseModel):
+    """
+    Student scans a QR that encodes their student identity and checks into a session.
+    qr_code format: STU-{student_uuid_hex} (12-hex short form) or full UUID.
+    """
+    qr_code: str = Field(min_length=4, max_length=64)
+    session_id: uuid.UUID
+
+
 # ── Facial Recognition Schemas ────────────────────────────────────────────────
 
 class FaceScanRequest(OSCABaseModel):

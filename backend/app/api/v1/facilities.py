@@ -13,6 +13,7 @@ from app.schemas.facility import (
     ScheduleCreate, ScheduleRead,
 )
 from app.schemas.common import PaginatedResponse
+from app.services.audit_service import audit_log
 
 router = APIRouter()
 
@@ -49,6 +50,17 @@ async def create_facility(
     db.add(facility)
     await db.flush()
     await db.refresh(facility)
+    await audit_log(
+        db=db,
+        action="FACILITY_CREATED",
+        module="Facilities",
+        description=f"Created facility '{body.name}'",
+        resource_type="Facility",
+        resource_id=str(facility.id),
+        new_values=body.model_dump(),
+        current_user=admin,
+    )
+    await db.commit()
     return FacilityRead.model_validate(facility)
 
 
@@ -64,8 +76,19 @@ async def update_facility(
     if not facility:
         raise HTTPException(status_code=404, detail="Facility not found")
 
-    for k, v in body.model_dump(exclude_unset=True).items():
+    updates = body.model_dump(exclude_unset=True)
+    for k, v in updates.items():
         setattr(facility, k, v)
+    await audit_log(
+        db=db,
+        action="FACILITY_UPDATED",
+        module="Facilities",
+        description=f"Updated facility '{facility.name}'",
+        resource_type="Facility",
+        resource_id=str(facility_id),
+        new_values=updates,
+        current_user=admin,
+    )
     await db.flush()
     await db.refresh(facility)
     return FacilityRead.model_validate(facility)
@@ -96,4 +119,15 @@ async def create_schedule(
     db.add(schedule)
     await db.flush()
     await db.refresh(schedule)
+    await audit_log(
+        db=db,
+        action="FACILITY_SCHEDULE_CREATED",
+        module="Facilities",
+        description=f"Booked facility schedule for {body.facility_id} on {body.scheduled_date}",
+        resource_type="FacilitySchedule",
+        resource_id=str(schedule.id),
+        new_values=body.model_dump(),
+        current_user=user,
+    )
+    await db.commit()
     return ScheduleRead.model_validate(schedule)

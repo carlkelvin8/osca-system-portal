@@ -14,7 +14,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import AdminOnly, CurrentUser, get_db
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
-from app.models.audit import AuditLog
 from app.models.eligibility import AthleteEligibility
 from app.models.inventory import (
     BorrowingID,
@@ -53,6 +52,7 @@ from app.schemas.inventory import (
     TransactionReleaseRequest,
     _compute_return_qr_status,
 )
+from app.services.audit_service import audit_log
 from app.services.barcode_service import BarcodeService
 from app.services.storage_service import StorageService
 
@@ -88,15 +88,19 @@ async def create_equipment(
         created_by_id=current_user.id,
     )
     db.add(equipment)
-    db.add(AuditLog(
-        user_id=current_user.id,
-        action="EQUIPMENT_CREATED",
-        resource_type="Equipment",
-        status="success",
-        details={"qr_code": qr_value, "name": body.name},
-    ))
     await db.commit()
     await db.refresh(equipment)
+    await audit_log(
+        db=db,
+        action="EQUIPMENT_CREATED",
+        module="Inventory",
+        description=f"Registered equipment '{body.name}' (qty {body.total_quantity})",
+        resource_type="Equipment",
+        resource_id=str(equipment.id),
+        details={"qr_code": qr_value, "name": body.name, "total_quantity": body.total_quantity},
+        current_user=current_user,
+    )
+    await db.commit()
     return EquipmentRead.model_validate(equipment)
 
 
@@ -171,9 +175,20 @@ async def update_equipment(
     if not eq:
         raise NotFoundError("Equipment", str(equipment_id))
 
-    for field, value in body.model_dump(exclude_unset=True).items():
+    update_data = body.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
         setattr(eq, field, value)
 
+    await audit_log(
+        db=db,
+        action="EQUIPMENT_UPDATED",
+        module="Inventory",
+        description=f"Updated equipment '{eq.name}'",
+        resource_type="Equipment",
+        resource_id=str(equipment_id),
+        new_values=update_data,
+        current_user=_admin,
+    )
     await db.commit()
     await db.refresh(eq)
     return EquipmentRead.model_validate(eq)
@@ -251,6 +266,17 @@ async def issue_borrowing_id(
     await db.commit()
     await db.refresh(bid)
 
+    await audit_log(
+        db=db,
+        action="BORROWING_ID_ISSUED",
+        module="Inventory",
+        description=f"Issued Borrowing ID to {instructor.full_name}",
+        resource_type="BorrowingID",
+        resource_id=str(bid.id),
+        current_user=_admin,
+    )
+    await db.commit()
+
     result_schema = BorrowingIDRead.model_validate(bid)
     result_schema.instructor_name = instructor.full_name
     return result_schema
@@ -289,16 +315,18 @@ async def create_equipment_request(
             quantity=item_req.quantity,
         ))
 
-    db.add(AuditLog(
-        user_id=current_user.id,
-        action="EQUIPMENT_REQUEST_CREATED",
-        resource_type="EquipmentRequest",
-        status="success",
-        details={"items_count": len(body.items)},
-    ))
-
     await db.flush()
     req.return_qr_code = f"TXN-{req.id.hex[:12].upper()}"
+    await audit_log(
+        db=db,
+        action="EQUIPMENT_REQUEST_CREATED",
+        module="Inventory",
+        description=f"Submitted equipment request with {len(body.items)} item(s)",
+        resource_type="EquipmentRequest",
+        resource_id=str(req.id),
+        details={"items_count": len(body.items), "expected_return": str(body.expected_return)},
+        current_user=current_user,
+    )
     await db.commit()
     await db.refresh(req)
     return await _build_request_read(req, db)
@@ -518,14 +546,16 @@ async def approve_equipment_request(
     req.approved_by_id = current_user.id
     req.approved_at = now
 
-    db.add(AuditLog(
-        user_id=current_user.id,
+    await audit_log(
+        db=db,
         action=action,
+        module="Inventory",
+        description=f"Approved equipment request for {req.requester_id}",
         resource_type="EquipmentRequest",
         resource_id=str(req.id),
-        status="success",
-        details={"requester_id": str(req.requester_id)},
-    ))
+        details={"requester_id": str(req.requester_id), "create_transaction": body.create_transaction},
+        current_user=current_user,
+    )
     await db.commit()
     await db.refresh(req)
     return await _build_request_read(req, db)
@@ -611,14 +641,16 @@ async def release_equipment_request(
     req.approved_by_id = current_user.id
     req.approved_at = now
 
-    db.add(AuditLog(
-        user_id=current_user.id,
+    await audit_log(
+        db=db,
         action="EQUIPMENT_REQUEST_RELEASED",
+        module="Inventory",
+        description=f"Released equipment to {req.requester_id}",
         resource_type="EquipmentRequest",
         resource_id=str(req.id),
-        status="success",
         details={"requester_id": str(req.requester_id)},
-    ))
+        current_user=current_user,
+    )
     await db.commit()
     await db.refresh(transaction)
     return await _build_transaction_read(transaction, db)
@@ -649,14 +681,16 @@ async def reject_equipment_request(
     req.approved_at = datetime.now(UTC)
     req.rejection_reason = body.rejection_reason
 
-    db.add(AuditLog(
-        user_id=current_user.id,
+    await audit_log(
+        db=db,
         action="EQUIPMENT_REQUEST_REJECTED",
+        module="Inventory",
+        description="Rejected equipment request",
         resource_type="EquipmentRequest",
         resource_id=str(req.id),
-        status="success",
         details={"rejection_reason": body.rejection_reason},
-    ))
+        current_user=current_user,
+    )
     await db.commit()
     await db.refresh(req)
     return await _build_request_read(req, db)
@@ -686,13 +720,15 @@ async def cancel_equipment_request(
     req.status = RequestStatus.CANCELLED
     req.approved_at = datetime.now(UTC)
 
-    db.add(AuditLog(
-        user_id=current_user.id,
+    await audit_log(
+        db=db,
         action="EQUIPMENT_REQUEST_CANCELLED",
+        module="Inventory",
+        description="Cancelled equipment request",
         resource_type="EquipmentRequest",
         resource_id=str(req.id),
-        status="success",
-    ))
+        current_user=current_user,
+    )
     await db.commit()
     await db.refresh(req)
     return await _build_request_read(req, db)
@@ -727,14 +763,16 @@ async def delete_equipment_request(
                 "Cannot delete an approved request while a borrow is in progress. Complete the return first."
             )
 
-    db.add(AuditLog(
-        user_id=current_user.id,
+    await audit_log(
+        db=db,
         action="EQUIPMENT_REQUEST_DELETED",
+        module="Inventory",
+        description=f"Deleted equipment request (status: {req.status.value})",
         resource_type="EquipmentRequest",
         resource_id=str(req.id),
-        status="success",
         details={"status": req.status.value},
-    ))
+        current_user=current_user,
+    )
     await db.delete(req)
     await db.commit()
     return MessageResponse(message="Equipment request deleted.")
@@ -796,13 +834,16 @@ async def borrow_equipment(
         )
         db.add(tx_item)
 
-    db.add(AuditLog(
-        user_id=current_user.id,
+    await audit_log(
+        db=db,
         action="EQUIPMENT_BORROWED",
+        module="Inventory",
+        description=f"Direct borrow of {len(body.items)} item(s)",
         resource_type="BorrowTransaction",
-        status="success",
+        resource_id=str(transaction.id),
         details={"instructor_id": str(bid.instructor_id), "items_count": len(body.items)},
-    ))
+        current_user=current_user,
+    )
     await db.commit()
     await db.refresh(transaction)
     return await _build_transaction_read(transaction, db)
@@ -873,13 +914,16 @@ async def return_equipment(
     if pending_count == 0:
         transaction.returned_at = now
 
-    db.add(AuditLog(
-        user_id=current_user.id,
+    await audit_log(
+        db=db,
         action="EQUIPMENT_RETURNED",
+        module="Inventory",
+        description=f"Returned equipment (status: {transaction.status.value})",
         resource_type="BorrowTransaction",
         resource_id=str(transaction.id),
-        status="success",
-    ))
+        details={"status": transaction.status.value},
+        current_user=current_user,
+    )
     await db.commit()
     await db.refresh(transaction)
     return await _build_transaction_read(transaction, db)
@@ -1080,13 +1124,16 @@ async def staff_borrow(
     transaction_qr = f"TXN-{transaction.id.hex[:12].upper()}"
     transaction.transaction_qr_code = transaction_qr
 
-    db.add(AuditLog(
-        user_id=current_user.id,
+    await audit_log(
+        db=db,
         action="EQUIPMENT_BORROWED_STAFF",
+        module="Inventory",
+        description=f"Staff-assisted borrow of {len(body.items)} item(s)",
         resource_type="BorrowTransaction",
-        status="success",
+        resource_id=str(transaction.id),
         details={"instructor_id": str(bid.instructor_id), "items_count": len(body.items)},
-    ))
+        current_user=current_user,
+    )
     await db.commit()
     await db.refresh(transaction)
     return await _build_transaction_read(transaction, db)
@@ -1177,13 +1224,15 @@ async def confirm_release(
     if body.notes:
         transaction.notes = (transaction.notes or "") + f"\n[Release confirmed by {current_user.full_name}]: {body.notes}"
 
-    db.add(AuditLog(
-        user_id=current_user.id,
+    await audit_log(
+        db=db,
         action="TRANSACTION_RELEASED",
+        module="Inventory",
+        description="Confirmed release of borrowed equipment",
         resource_type="BorrowTransaction",
         resource_id=str(transaction.id),
-        status="success",
-    ))
+        current_user=current_user,
+    )
     await db.commit()
     await db.refresh(transaction)
     return await _build_transaction_read(transaction, db)
@@ -1249,14 +1298,16 @@ async def complete_transaction(
     transaction.returned_at = now
     transaction.transaction_qr_invalidated = True
 
-    db.add(AuditLog(
-        user_id=current_user.id,
+    await audit_log(
+        db=db,
         action="RETURN_COMPLETED",
+        module="Inventory",
+        description=f"Completed return (late: {was_overdue})",
         resource_type="BorrowTransaction",
         resource_id=str(transaction.id),
-        status="success",
         details={"qr_invalidated": True, "returned_late": was_overdue},
-    ))
+        current_user=current_user,
+    )
     await db.commit()
     await db.refresh(transaction)
     return await _build_transaction_read(transaction, db)

@@ -24,6 +24,7 @@ import {
   AlertTriangle,
   Gavel,
   TrendingUp,
+  ScrollText,
   Moon,
   Sun,
   Menu,
@@ -99,6 +100,12 @@ const navItems: NavItem[] = [
       label: "Users",
       icon: Users,
       roles: ["admin", "director", "staff"],
+    },
+    {
+      href: "/dashboard/audit-logs",
+      label: "Audit Logs",
+      icon: ScrollText,
+      roles: ["admin"],
     },
     {
       href: "/dashboard/admin/fr-config",

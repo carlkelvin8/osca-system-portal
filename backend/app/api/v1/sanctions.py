@@ -12,6 +12,7 @@ from app.models.sanction import Sanction, SanctionStatus
 from app.models.user import UserRole
 from app.schemas.sanction import SanctionCreate, SanctionUpdate, SanctionRead
 from app.schemas.common import PaginatedResponse
+from app.services.audit_service import audit_log
 
 router = APIRouter()
 
@@ -56,6 +57,17 @@ async def create_sanction(
     db.add(sanction)
     await db.flush()
     await db.refresh(sanction)
+    await audit_log(
+        db=db,
+        action="SANCTION_CREATED",
+        module="Sanctions",
+        description=f"Issued sanction to student {body.student_id} ({body.violation_type})",
+        resource_type="Sanction",
+        resource_id=str(sanction.id),
+        new_values=body.model_dump(),
+        current_user=user,
+    )
+    await db.commit()
     return SanctionRead.model_validate(sanction)
 
 
@@ -71,9 +83,20 @@ async def update_sanction(
     if not sanction:
         raise HTTPException(status_code=404, detail="Sanction not found")
 
-    for k, v in body.model_dump(exclude_unset=True).items():
+    updates = body.model_dump(exclude_unset=True)
+    for k, v in updates.items():
         setattr(sanction, k, v)
 
+    await audit_log(
+        db=db,
+        action="SANCTION_UPDATED",
+        module="Sanctions",
+        description=f"Updated sanction for student {sanction.student_id}",
+        resource_type="Sanction",
+        resource_id=str(sanction_id),
+        new_values=updates,
+        current_user=user,
+    )
     await db.flush()
     await db.refresh(sanction)
     return SanctionRead.model_validate(sanction)
@@ -95,6 +118,15 @@ async def acknowledge_sanction(
 
     sanction.acknowledged_by_student = True
     sanction.acknowledged_at = datetime.now(UTC)
+    await audit_log(
+        db=db,
+        action="SANCTION_ACKNOWLEDGED",
+        module="Sanctions",
+        description="Student acknowledged sanction",
+        resource_type="Sanction",
+        resource_id=str(sanction_id),
+        current_user=current_user,
+    )
     await db.flush()
     await db.refresh(sanction)
     return SanctionRead.model_validate(sanction)

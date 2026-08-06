@@ -72,10 +72,17 @@ function moduleColor(mod: string | null, isDark: boolean) {
   const colors: Record<string, string> = {
     Auth: isDark ? "text-cyan-400 bg-cyan-400/10" : "text-cyan-700 bg-cyan-50",
     Users: isDark ? "text-purple-400 bg-purple-400/10" : "text-purple-700 bg-purple-50",
+    "User Management": isDark ? "text-purple-400 bg-purple-400/10" : "text-purple-700 bg-purple-50",
     Attendance: isDark ? "text-blue-400 bg-blue-400/10" : "text-blue-700 bg-blue-50",
     Inventory: isDark ? "text-orange-400 bg-orange-400/10" : "text-orange-700 bg-orange-50",
     "Audit Logs": isDark ? "text-yellow-400 bg-yellow-400/10" : "text-yellow-700 bg-yellow-50",
     Announcements: isDark ? "text-pink-400 bg-pink-400/10" : "text-pink-700 bg-pink-50",
+    Facilities: isDark ? "text-teal-400 bg-teal-400/10" : "text-teal-700 bg-teal-50",
+    Eligibility: isDark ? "text-green-400 bg-green-400/10" : "text-green-700 bg-green-50",
+    Incidents: isDark ? "text-red-400 bg-red-400/10" : "text-red-700 bg-red-50",
+    Sanctions: isDark ? "text-rose-400 bg-rose-400/10" : "text-rose-700 bg-rose-50",
+    Reports: isDark ? "text-indigo-400 bg-indigo-400/10" : "text-indigo-700 bg-indigo-50",
+    System: isDark ? "text-slate-400 bg-slate-400/10" : "text-slate-700 bg-slate-50",
   };
   if (mod && colors[mod]) return colors[mod];
   return isDark ? "text-gray-400 bg-gray-400/10" : "text-gray-600 bg-gray-50";
@@ -335,6 +342,8 @@ export default function AuditLogsPage() {
   const [moduleFilter, setModuleFilter] = useState("");
   const [actionFilter, setActionFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
   const pageSize = 25;
@@ -343,13 +352,13 @@ export default function AuditLogsPage() {
   const [moduleOptions, setModuleOptions] = useState<string[]>([]);
   const [actionOptions, setActionOptions] = useState<string[]>([]);
 
-  // Access guard
-  if (user && user.role !== "admin" && user.role !== "director") {
+  // Access guard — Admin only
+  if (user && user.role !== "admin") {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-4">
         <AlertTriangle size={48} className="text-amber-500" />
         <h2 className="text-xl font-bold text-gray-900 dark:text-white">Access Denied</h2>
-        <p className="text-sm text-gray-500">Only Admin and Director roles can view audit logs.</p>
+        <p className="text-sm text-gray-500">Only Admin can view audit logs.</p>
       </div>
     );
   }
@@ -367,6 +376,8 @@ export default function AuditLogsPage() {
       if (moduleFilter) params.module = moduleFilter;
       if (actionFilter) params.action = actionFilter;
       if (statusFilter) params.status = statusFilter;
+      if (dateFrom) params.date_from = `${dateFrom}T00:00:00`;
+      if (dateTo) params.date_to = `${dateTo}T23:59:59`;
 
       const res = await auditLogsApi.list(params);
       setData(res.data);
@@ -376,7 +387,7 @@ export default function AuditLogsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, sortOrder, search, moduleFilter, actionFilter, statusFilter]);
+  }, [page, sortOrder, search, moduleFilter, actionFilter, statusFilter, dateFrom, dateTo]);
 
   useEffect(() => {
     fetchLogs();
@@ -391,7 +402,7 @@ export default function AuditLogsPage() {
   // Reset page on filter change
   useEffect(() => {
     setPage(1);
-  }, [search, moduleFilter, actionFilter, statusFilter, sortOrder]);
+  }, [search, moduleFilter, actionFilter, statusFilter, sortOrder, dateFrom, dateTo]);
 
   const handleExport = async (format: "csv" | "xlsx" | "pdf") => {
     const params: Record<string, string | number | boolean> = {};
@@ -399,6 +410,8 @@ export default function AuditLogsPage() {
     if (moduleFilter) params.module = moduleFilter;
     if (actionFilter) params.action = actionFilter;
     if (statusFilter) params.status = statusFilter;
+    if (dateFrom) params.date_from = `${dateFrom}T00:00:00`;
+    if (dateTo) params.date_to = `${dateTo}T23:59:59`;
 
     try {
       let res;
@@ -494,6 +507,28 @@ export default function AuditLogsPage() {
           isDark={isDark}
         />
 
+        <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${isDark ? "border-[#2a3040] bg-[#0f1219]" : "border-gray-200 bg-gray-50"}`}>
+          <span className={`text-xs font-medium ${isDark ? "text-gray-400" : "text-gray-500"}`}>From</span>
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className={`bg-transparent text-xs outline-none ${isDark ? "text-white [color-scheme:dark]" : "text-gray-900"}`}
+          />
+          <span className={`text-xs font-medium ${isDark ? "text-gray-500" : "text-gray-400"}`}>to</span>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            className={`bg-transparent text-xs outline-none ${isDark ? "text-white [color-scheme:dark]" : "text-gray-900"}`}
+          />
+          {(dateFrom || dateTo) && (
+            <button onClick={() => { setDateFrom(""); setDateTo(""); }} className="text-gray-400 hover:text-gray-600">
+              <X size={13} />
+            </button>
+          )}
+        </div>
+
         <button
           onClick={() => setSortOrder(sortOrder === "desc" ? "asc" : "desc")}
           className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border transition ${isDark ? "border-[#2a3040] text-gray-400 hover:bg-white/5" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
@@ -520,7 +555,7 @@ export default function AuditLogsPage() {
           <div className="flex flex-col items-center justify-center py-20 gap-3">
             <Clock size={32} className={isDark ? "text-gray-600" : "text-gray-300"} />
             <p className={`text-sm ${isDark ? "text-gray-400" : "text-gray-500"}`}>
-              {search || moduleFilter || actionFilter || statusFilter
+              {search || moduleFilter || actionFilter || statusFilter || dateFrom || dateTo
                 ? "No audit logs match your filters"
                 : "No audit logs yet"}
             </p>

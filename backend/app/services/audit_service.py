@@ -27,6 +27,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.audit import AuditLog
 
 
+def request_of(user: Any | None) -> Any | None:
+    """Return the FastAPI Request attached to the authenticated user (if any)."""
+    if user is None:
+        return None
+    return getattr(user, "_current_request", None)
+
+
 def _parse_user_agent(ua_string: str | None) -> dict[str, str | None]:
     """Parse user-agent string into browser, OS, and device info."""
     if not ua_string:
@@ -86,6 +93,10 @@ async def audit_log(
     req_url = None
     req_method = None
     session_id = None
+
+    # If no explicit request was passed, fall back to the one attached to the user
+    if request is None:
+        request = request_of(current_user)
 
     if request is not None:
         # FastAPI Request object

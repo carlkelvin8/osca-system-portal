@@ -12,6 +12,7 @@ from app.models.incident import Incident, IncidentStatus
 from app.models.user import UserRole
 from app.schemas.incident import IncidentCreate, IncidentUpdate, IncidentRead
 from app.schemas.common import PaginatedResponse
+from app.services.audit_service import audit_log
 
 router = APIRouter()
 
@@ -56,6 +57,17 @@ async def create_incident(
     db.add(incident)
     await db.flush()
     await db.refresh(incident)
+    await audit_log(
+        db=db,
+        action="INCIDENT_CREATED",
+        module="Incidents",
+        description=f"Reported incident involving student {body.involved_student_id} ({body.category})",
+        resource_type="Incident",
+        resource_id=str(incident.id),
+        new_values=body.model_dump(),
+        current_user=user,
+    )
+    await db.commit()
     return IncidentRead.model_validate(incident)
 
 
@@ -81,6 +93,16 @@ async def update_incident(
     for k, v in updates.items():
         setattr(incident, k, v)
 
+    await audit_log(
+        db=db,
+        action="INCIDENT_UPDATED",
+        module="Incidents",
+        description=f"Updated incident (status: {incident.status.value if hasattr(incident.status, 'value') else incident.status})",
+        resource_type="Incident",
+        resource_id=str(incident_id),
+        new_values=updates,
+        current_user=user,
+    )
     await db.flush()
     await db.refresh(incident)
     return IncidentRead.model_validate(incident)

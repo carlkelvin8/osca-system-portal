@@ -32,13 +32,13 @@ from app.services.audit_service import audit_log
 logger = structlog.get_logger(__name__)
 router = APIRouter()
 
-_EDITOR_ROLES = {UserRole.ADMIN, UserRole.DIRECTOR}
+_EDITOR_ROLES = {UserRole.ADMIN}
 
 
 def _require_editor(current_user: CurrentUser) -> None:
     if current_user.role not in _EDITOR_ROLES:
         from app.core.exceptions import ForbiddenError
-        raise ForbiddenError("Only admin and director can access audit logs.")
+        raise ForbiddenError("Only admin can access audit logs.")
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -179,6 +179,7 @@ async def get_distinct_modules(
     _editor: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[str]:
+    _require_editor(_editor)
     result = await db.execute(
         select(AuditLog.module).where(AuditLog.module.isnot(None)).distinct()
     )
@@ -193,6 +194,7 @@ async def get_distinct_actions(
     _editor: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[str]:
+    _require_editor(_editor)
     result = await db.execute(
         select(AuditLog.action).distinct()
     )

@@ -16,8 +16,8 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import AdminOnly, get_db, get_redis
-from app.models.audit import AuditLog
 from app.schemas.admin import THRESHOLD_SECURITY_FLOOR, FRConfigRead, FRConfigUpdate
+from app.services.audit_service import audit_log
 from app.services.fr_config_service import FRConfigService
 
 router = APIRouter()
@@ -82,18 +82,19 @@ async def update_fr_config(
     )
 
     audit_status = "warning" if security_warning else "success"
-    db.add(
-        AuditLog(
-            user_id=admin.id,
-            action="FR_CONFIG_UPDATED",
-            resource_type="FRConfig",
-            status=audit_status,
-            details={
-                "previous": previous,
-                "updated": updated,
-                "warning": security_warning,
-            },
-        )
+    await audit_log(
+        db=db,
+        action="FR_CONFIG_UPDATED",
+        module="System",
+        description=f"Updated facial recognition configuration (status: {audit_status})",
+        resource_type="FRConfig",
+        status=audit_status,
+        details={
+            "previous": previous,
+            "updated": updated,
+            "warning": security_warning,
+        },
+        current_user=admin,
     )
     await db.commit()
 
