@@ -67,6 +67,7 @@ class UserSummary(OSCABaseModel):
     email: str
     role: UserRole
     student_id: str | None
+    employee_id: str | None = None
     is_active: bool
     is_face_enrolled: bool
     profile_picture_url: str | None = None

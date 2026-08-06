@@ -61,6 +61,7 @@ export interface UserSummary {
   email: string;
   role: UserRole;
   student_id: string | null;
+  employee_id: string | null;
   is_active: boolean;
   is_face_enrolled: boolean;
   profile_picture_url: string | null;

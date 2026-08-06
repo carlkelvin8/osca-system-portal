@@ -1327,7 +1327,7 @@ function UserRow({
       </td>
       <td className="px-4 py-3 text-sm text-[#6b7280]">{user.email}</td>
       <td className="px-4 py-3 font-mono text-xs text-[#6b7280]">
-        {user.student_id ?? "—"}
+        {(user.role === "student" ? user.student_id : user.employee_id) ?? "—"}
       </td>
       <td className="px-4 py-3">
         <span
@@ -1601,7 +1601,11 @@ export default function UsersPage() {
                   Email
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-[#6b7280] uppercase tracking-wide">
-                  Student ID
+                  {roleFilter === "student"
+                    ? "Student ID"
+                    : roleFilter
+                      ? "Employee ID"
+                      : "ID Number"}
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-[#6b7280] uppercase tracking-wide">
                   Role
