@@ -21,6 +21,7 @@ class FacilityStatus(str, enum.Enum):
     IN_USE = "in_use"
     MAINTENANCE = "maintenance"
     CLOSED = "closed"
+    RESERVED = "reserved"
 
 
 class FacilityCondition(str, enum.Enum):
@@ -39,6 +40,10 @@ class Facility(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     location: Mapped[str | None] = mapped_column(String(200), nullable=True)
     capacity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    image: Mapped[str | None] = mapped_column(
+        String(500), nullable=True,
+        comment="Custom uploaded venue image (MinIO key). Falls back to bundled public image when null."
+    )
     status: Mapped[FacilityStatus] = mapped_column(
         Enum(FacilityStatus, name="facility_status_enum"), default=FacilityStatus.AVAILABLE
     )
@@ -52,6 +57,7 @@ class Facility(Base):
 
     # Relationships
     schedules: Mapped[list["FacilitySchedule"]] = relationship(back_populates="facility", cascade="all, delete-orphan")
+    venue_reservations: Mapped[list["VenueReservationRequest"]] = relationship(back_populates="facility")  # noqa: F821
 
     __table_args__ = (Index("ix_facilities_status", "status"),)
 

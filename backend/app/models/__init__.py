@@ -21,6 +21,8 @@ from app.models.inventory import (
 from app.models.audit import AuditLog
 from app.models.announcement import Announcement
 from app.models.facility import Facility, FacilitySchedule, FacilityStatus, FacilityCondition
+from app.models.reservation import VenueReservationRequest, ReservationStatus
+from app.models.notification import Notification
 from app.models.eligibility import AthleteEligibility, EligibilityStatus, EligibilityReasonType
 from app.models.incident import Incident, IncidentSeverity, IncidentStatus, IncidentCategory
 from app.models.sanction import Sanction, ViolationType, SanctionSeverity, SanctionStatus
@@ -35,6 +37,8 @@ __all__ = [
     "AuditLog",
     "Announcement",
     "Facility", "FacilitySchedule", "FacilityStatus", "FacilityCondition",
+    "VenueReservationRequest", "ReservationStatus",
+    "Notification",
     "AthleteEligibility", "EligibilityStatus", "EligibilityReasonType",
     "Incident", "IncidentSeverity", "IncidentStatus", "IncidentCategory",
     "Sanction", "ViolationType", "SanctionSeverity", "SanctionStatus",

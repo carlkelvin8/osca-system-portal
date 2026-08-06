@@ -204,6 +204,49 @@ def generate_report_async(
         raise self.retry(exc=exc)
 
 
+@celery_app.task(
+    name="app.workers.tasks.release_expired_reservations",
+    bind=True,
+)
+def release_expired_reservations(self):
+    """
+    Release venues whose approved reservation end datetime has passed.
+    Sets facility.status from RESERVED back to AVAILABLE.
+    Runs every 15 minutes via celery-beat.
+    """
+    async def _run():
+        from datetime import datetime, time
+        from zoneinfo import ZoneInfo
+        from sqlalchemy import select
+        from app.database import AsyncSessionLocal
+        from app.models.facility import Facility, FacilityStatus
+        from app.models.reservation import VenueReservationRequest, ReservationStatus
+
+        tz = ZoneInfo("Asia/Manila")
+        now = datetime.now(tz)
+
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(
+                select(VenueReservationRequest).where(
+                    VenueReservationRequest.status == ReservationStatus.APPROVED
+                )
+            )
+            released = 0
+            for req in result.scalars().all():
+                end = datetime.combine(req.reservation_date, req.end_time, tzinfo=tz)
+                if now < end:
+                    continue
+                facility = await db.get(Facility, req.facility_id)
+                if facility and facility.status == FacilityStatus.RESERVED:
+                    facility.status = FacilityStatus.AVAILABLE
+                    released += 1
+
+            await db.commit()
+            logger.info("reservations_released", count=released)
+
+    _run_async(_run())
+
+
 async def _send_overdue_email(instructor, transaction) -> None:
     """Send overdue notification email to instructor."""
     try:

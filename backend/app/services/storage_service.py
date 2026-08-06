@@ -20,9 +20,10 @@ class StorageService:
     """Thin async-friendly wrapper around boto3 S3 client for MinIO."""
 
     def __init__(self) -> None:
+        self._scheme = "https" if settings.MINIO_SECURE else "http"
         self._client = boto3.client(
             "s3",
-            endpoint_url=f"{'https' if settings.MINIO_SECURE else 'http'}://{settings.MINIO_ENDPOINT}",
+            endpoint_url=f"{self._scheme}://{settings.MINIO_ENDPOINT}",
             aws_access_key_id=settings.MINIO_ACCESS_KEY,
             aws_secret_access_key=settings.MINIO_SECRET_KEY,
             config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
@@ -101,17 +102,32 @@ class StorageService:
         )
 
     def get_presigned_url(self, bucket: str, key: str, expires_in: int = 3600) -> str:
-        """Generate a pre-signed URL for temporary object access."""
-        scheme = "https" if settings.MINIO_SECURE else "http"
-        url = self._client.generate_presigned_url(
+        """Generate a pre-signed URL for temporary object access.
+
+        Signs against the public endpoint so the host in the SigV4 signature
+        matches the URL the browser will actually fetch (host is a signed header).
+        """
+        if self._scheme != "https" and settings.MINIO_PUBLIC_ENDPOINT == settings.MINIO_ENDPOINT:
+            # No public override — sign with the regular client (no host rewrite needed).
+            return self._client.generate_presigned_url(
+                "get_object",
+                Params={"Bucket": bucket, "Key": key},
+                ExpiresIn=expires_in,
+            )
+
+        public_client = boto3.client(
+            "s3",
+            endpoint_url=f"{self._scheme}://{settings.MINIO_PUBLIC_ENDPOINT}",
+            aws_access_key_id=settings.MINIO_ACCESS_KEY,
+            aws_secret_access_key=settings.MINIO_SECRET_KEY,
+            config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
+            region_name="us-east-1",
+        )
+        return public_client.generate_presigned_url(
             "get_object",
             Params={"Bucket": bucket, "Key": key},
             ExpiresIn=expires_in,
         )
-        # Replace internal Docker hostname with public-facing endpoint
-        internal = f"{scheme}://{settings.MINIO_ENDPOINT}"
-        public = f"{scheme}://{settings.MINIO_PUBLIC_ENDPOINT}"
-        return url.replace(internal, public)
 
     async def delete_object(self, bucket: str, key: str) -> None:
         """Delete an object (e.g., purge face images after retention period)."""
@@ -189,6 +205,34 @@ class StorageService:
         # Generate a fresh presigned URL
         try:
             return self.get_presigned_url(settings.MINIO_BUCKET_PROFILES, key, expires_in=3600)
+        except Exception:
+            return None
+
+    def resolve_venue_image_url(self, stored_value: str | None) -> str | None:
+        """Resolve a stored venue image value to a fresh presigned URL.
+
+        Accepts either a MinIO object key (e.g. 'facilities/{id}/image.jpg')
+        or an old presigned URL (legacy, extracts key from URL).
+        """
+        if not stored_value:
+            return None
+
+        if stored_value.startswith("http"):
+            try:
+                from urllib.parse import urlparse
+                parsed = urlparse(stored_value)
+                path = parsed.path.lstrip("/")
+                bucket_prefix = settings.MINIO_BUCKET_REPORTS + "/"
+                if not path.startswith(bucket_prefix):
+                    return None
+                key = path[len(bucket_prefix):]
+            except Exception:
+                return None
+        else:
+            key = stored_value
+
+        try:
+            return self.get_presigned_url(settings.MINIO_BUCKET_REPORTS, key, expires_in=3600)
         except Exception:
             return None
 

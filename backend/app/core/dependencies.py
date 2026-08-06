@@ -147,6 +147,7 @@ def require_roles(*roles: UserRole):
 # Pre-built role dependencies — Director shares Admin privileges
 AdminOnly = Annotated[User, Depends(require_roles(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.STAFF))]
 AdminOrCoach = Annotated[User, Depends(require_roles(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.STAFF, UserRole.COACH))]
+CoachOrPe = Annotated[User, Depends(require_roles(UserRole.COACH, UserRole.PE_INSTRUCTOR))]
 StaffOnly = Annotated[User, Depends(
     require_roles(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.STAFF, UserRole.COACH, UserRole.PE_INSTRUCTOR)
 )]

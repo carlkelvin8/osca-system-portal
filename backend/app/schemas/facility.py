@@ -3,6 +3,7 @@ import uuid
 from datetime import date, datetime, time
 from pydantic import BaseModel, Field
 from app.models.facility import FacilityStatus, FacilityCondition
+from app.models.reservation import ReservationStatus
 
 
 class FacilityCreate(BaseModel):
@@ -32,6 +33,7 @@ class FacilityRead(BaseModel):
     description: str | None
     location: str | None
     capacity: int | None
+    image_url: str | None = None
     status: FacilityStatus
     condition: FacilityCondition
     is_active: bool
@@ -40,6 +42,40 @@ class FacilityRead(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class ReservationCreate(BaseModel):
+    facility_id: uuid.UUID
+    purpose: str = Field(min_length=1, max_length=300)
+    reservation_date: date
+    start_time: time
+    end_time: time
+    remarks: str | None = Field(default=None, max_length=1000)
+
+
+class ReservationRead(BaseModel):
+    id: uuid.UUID
+    facility_id: uuid.UUID
+    requester_id: uuid.UUID
+    purpose: str
+    reservation_date: date
+    start_time: time
+    end_time: time
+    remarks: str | None
+    status: ReservationStatus
+    rejection_reason: str | None
+    created_at: datetime
+    updated_at: datetime
+    # Enriched fields
+    requester_name: str | None = None
+    requester_role: str | None = None
+    facility_name: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class ReservationReject(BaseModel):
+    rejection_reason: str | None = Field(default=None, max_length=500)
 
 
 class ScheduleCreate(BaseModel):

@@ -129,7 +129,14 @@ const navItems: NavItem[] = [
       href: "/dashboard/facilities",
       label: "Facilities",
       icon: Building2,
-      roles: ["admin", "director", "coach", "staff"],
+      roles: ["admin", "director", "coach", "pe_instructor", "staff"],
+      children: [
+        {
+          href: "/dashboard/facilities/reservations",
+          label: "Venue Reservations",
+          roles: ["admin", "director", "coach", "pe_instructor", "staff"],
+        },
+      ],
     },
     {
       href: "/dashboard/eligibility",
@@ -197,7 +204,7 @@ function useBreadcrumb(pathname: string) {
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, isLoading, logout, fetchCurrentUser } = useAuthStore();
   const { isDark, toggle: toggleTheme } = useThemeStore();
-  const { notifications, unreadCount, markAllRead } = useNotificationStore();
+  const { notifications, unreadCount, markAllRead, markRead, fetch: fetchNotifications } = useNotificationStore();
   const router = useRouter();
   const pathname = usePathname();
   const crumbs = useBreadcrumb(pathname);
@@ -208,6 +215,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     fetchCurrentUser();
   }, [fetchCurrentUser]);
+
+  // Poll notifications from the backend once authenticated
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      fetchNotifications();
+      const interval = setInterval(fetchNotifications, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [isAuthenticated, user, fetchNotifications]);
 
   // Only redirect after auth check is complete — avoids race with Zustand hydration
   useEffect(() => {
@@ -430,10 +446,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       <p className="text-sm text-gray-400 text-center py-6">No notifications</p>
                     ) : (
                       notifications.slice(0, 10).map((n) => (
-                        <div key={n.id} className={`px-4 py-3 border-b last:border-0 ${!n.read ? (isDark ? "bg-blue-900/10" : "bg-blue-50/50") : ""} ${isDark ? "border-[#2a2f3e]" : "border-gray-50"}`}>
+                        <button
+                          key={n.id}
+                          onClick={() => markRead(n.id)}
+                          className={`w-full text-left px-4 py-3 border-b last:border-0 transition-colors ${!n.read ? (isDark ? "bg-blue-900/10" : "bg-blue-50/50") : ""} ${isDark ? "border-[#2a2f3e] hover:bg-white/5" : "border-gray-50 hover:bg-gray-50"}`}
+                        >
                           <p className={`text-sm font-medium ${isDark ? "text-white" : "text-gray-900"}`}>{n.title}</p>
                           <p className={`text-xs ${isDark ? "text-gray-400" : "text-gray-500"} mt-0.5`}>{n.message}</p>
-                        </div>
+                        </button>
                       ))
                     )}
                   </div>

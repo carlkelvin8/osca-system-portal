@@ -51,5 +51,10 @@ celery_app.conf.update(
             "task": "app.workers.tasks.mark_overdue_statuses",
             "schedule": crontab(minute=0),  # Every hour
         },
+        # Release venues whose approved reservation has ended
+        "release-expired-reservations": {
+            "task": "app.workers.tasks.release_expired_reservations",
+            "schedule": crontab(minute="*/15"),  # Every 15 minutes
+        },
     },
 )

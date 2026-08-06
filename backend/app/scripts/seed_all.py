@@ -72,11 +72,12 @@ async def seed():
         # ─── FACILITIES ──────────────────────────────────────────────────
         print("🏟️  Seeding facilities...")
         facilities_data = [
-            {"name": "Covered Court", "description": "Multi-purpose covered basketball/volleyball court", "location": "Main Campus, Building A", "capacity": 500, "status": FacilityStatus.AVAILABLE, "condition": FacilityCondition.GOOD},
-            {"name": "Upper Gym", "description": "Upper floor gymnasium for indoor sports", "location": "Building B - 2nd Floor", "capacity": 200, "status": FacilityStatus.IN_USE, "condition": FacilityCondition.GOOD},
-            {"name": "Gym", "description": "Main gymnasium with weight training equipment", "location": "Building C", "capacity": 100, "status": FacilityStatus.AVAILABLE, "condition": FacilityCondition.EXCELLENT},
-            {"name": "Swimming Pool", "description": "Olympic-size swimming pool", "location": "Aquatics Center", "capacity": 50, "status": FacilityStatus.MAINTENANCE, "condition": FacilityCondition.FAIR},
-            {"name": "Track & Field", "description": "400m oval running track", "location": "Athletics Complex", "capacity": 300, "status": FacilityStatus.AVAILABLE, "condition": FacilityCondition.GOOD},
+            {"name": "Covered Court", "description": "Multi-purpose covered court for basketball and volleyball games.", "location": "Covered Court", "capacity": 500, "status": FacilityStatus.AVAILABLE, "condition": FacilityCondition.GOOD},
+            {"name": "Upper Gym", "description": "Upper floor gymnasium for indoor sports and training.", "location": "Upper Gym", "capacity": 200, "status": FacilityStatus.AVAILABLE, "condition": FacilityCondition.GOOD},
+            {"name": "Band Room", "description": "Music room used for band practice and rehearsals.", "location": "Band Room", "capacity": 60, "status": FacilityStatus.AVAILABLE, "condition": FacilityCondition.GOOD},
+            {"name": "CAU Studio", "description": "Studio space for creative and performing arts activities.", "location": "CAU Studio", "capacity": 80, "status": FacilityStatus.AVAILABLE, "condition": FacilityCondition.GOOD},
+            {"name": "Open Ground", "description": "Open field for outdoor sports, drills, and school events.", "location": "Open Ground", "capacity": 300, "status": FacilityStatus.AVAILABLE, "condition": FacilityCondition.GOOD},
+            {"name": "Weights Room", "description": "Fitness room equipped with weights and exercise machines.", "location": "Weights Room", "capacity": 30, "status": FacilityStatus.AVAILABLE, "condition": FacilityCondition.GOOD},
         ]
         facility_map: dict[str, Facility] = {}
         for f in facilities_data:

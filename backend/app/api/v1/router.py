@@ -3,7 +3,7 @@ from fastapi import APIRouter
 
 from app.api.v1 import (
     admin, announcements, audit_logs, attendance, auth, eligibility,
-    facilities, incidents, inventory, offline_sync, reports,
+    facilities, incidents, inventory, notifications, offline_sync, reports,
     sanctions, users,
 )
 
@@ -22,3 +22,4 @@ api_router.include_router(reports.router,       prefix="/reports",       tags=["
 api_router.include_router(admin.router,         prefix="/admin",         tags=["Admin"])
 api_router.include_router(announcements.router, prefix="/announcements", tags=["Announcements"])
 api_router.include_router(audit_logs.router,    prefix="/audit-logs",    tags=["Audit Logs"])
+api_router.include_router(notifications.router, prefix="/notifications", tags=["Notifications"])

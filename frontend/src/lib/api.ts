@@ -281,10 +281,33 @@ export const facilitiesApi = {
     api.post("/facilities", data),
   update: (id: string, data: Record<string, unknown>) =>
     api.patch(`/facilities/${id}`, data),
+  delete: (id: string) =>
+    api.delete(`/facilities/${id}`),
+  uploadImage: (id: string, formData: FormData) =>
+    api.post(`/facilities/${id}/image`, formData),
+  listReservations: (params?: Record<string, string | number | boolean>) =>
+    api.get("/facilities/reservations", { params }),
+  createReservation: (data: Record<string, unknown>) =>
+    api.post("/facilities/reservations", data),
+  approveReservation: (id: string) =>
+    api.patch(`/facilities/reservations/${id}/approve`),
+  rejectReservation: (id: string, data: Record<string, unknown>) =>
+    api.patch(`/facilities/reservations/${id}/reject`, data),
   listSchedules: (params?: Record<string, string | number | boolean>) =>
     api.get("/facilities/schedules", { params }),
   createSchedule: (data: Record<string, unknown>) =>
     api.post("/facilities/schedules", data),
+};
+
+// ── Notifications ─────────────────────────────────────────────────────────────
+
+export const notificationsApi = {
+  list: () =>
+    api.get("/notifications"),
+  markRead: (id: string) =>
+    api.patch(`/notifications/${id}/read`),
+  markAllRead: () =>
+    api.patch("/notifications/read-all"),
 };
 
 // ── Eligibility ───────────────────────────────────────────────────────────────

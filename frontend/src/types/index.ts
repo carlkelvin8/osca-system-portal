@@ -396,7 +396,7 @@ export interface MonthlyInventoryReport {
 
 // ── Facilities ────────────────────────────────────────────────────────────────
 
-export type FacilityStatus = "available" | "in_use" | "maintenance" | "closed";
+export type FacilityStatus = "available" | "in_use" | "maintenance" | "closed" | "reserved";
 export type FacilityConditionType = "excellent" | "good" | "fair" | "poor" | "needs_repair";
 
 export interface Facility {
@@ -405,12 +405,83 @@ export interface Facility {
   description: string | null;
   location: string | null;
   capacity: number | null;
+  image_url: string | null;
   status: FacilityStatus;
   condition: FacilityConditionType;
   is_active: boolean;
   notes: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface FacilityCreate {
+  name: string;
+  description?: string;
+  location?: string;
+  capacity?: number;
+  status?: FacilityStatus;
+  condition?: FacilityConditionType;
+  notes?: string;
+}
+
+export interface FacilityUpdate {
+  name?: string;
+  description?: string;
+  location?: string;
+  capacity?: number;
+  status?: FacilityStatus;
+  condition?: FacilityConditionType;
+  notes?: string;
+  is_active?: boolean;
+}
+
+export type ReservationStatus = "pending" | "approved" | "rejected";
+
+export interface VenueReservation {
+  id: string;
+  facility_id: string;
+  requester_id: string;
+  purpose: string;
+  reservation_date: string;
+  start_time: string;
+  end_time: string;
+  remarks: string | null;
+  status: ReservationStatus;
+  rejection_reason: string | null;
+  created_at: string;
+  updated_at: string;
+  requester_name: string | null;
+  requester_role: string | null;
+  facility_name: string | null;
+}
+
+export interface ReservationCreate {
+  facility_id: string;
+  purpose: string;
+  reservation_date: string;
+  start_time: string;
+  end_time: string;
+  remarks?: string;
+}
+
+export interface ReservationReject {
+  rejection_reason?: string;
+}
+
+// ── Notifications ─────────────────────────────────────────────────────────────
+
+export interface NotificationItem {
+  id: string;
+  title: string;
+  message: string;
+  type: string;
+  read: boolean;
+  createdAt: string;
+}
+
+export interface NotificationListRead {
+  items: NotificationItem[];
+  unread_count: number;
 }
 
 export interface FacilitySchedule {

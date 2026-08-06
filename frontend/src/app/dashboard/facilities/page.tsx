@@ -1,177 +1,705 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { facilitiesApi } from "@/lib/api";
 import { useAuthStore } from "@/store/useAuthStore";
-import { Building2, Plus, X, Loader2, Calendar, Clock } from "lucide-react";
-import type { Facility, FacilitySchedule, PaginatedResponse } from "@/types";
+import {
+  Building2,
+  Eye,
+  Pencil,
+  X,
+  Loader2,
+  Activity,
+  Calendar,
+  Clock,
+  Plus,
+  Trash2,
+  ImageUp,
+  CalendarPlus,
+  AlertTriangle,
+} from "lucide-react";
+import type { Facility, PaginatedResponse, ReservationCreate } from "@/types";
 
-const STATUS_COLORS: Record<string, string> = {
-  available: "bg-green-100 text-green-800",
-  in_use: "bg-blue-100 text-blue-800",
-  maintenance: "bg-yellow-100 text-yellow-800",
-  closed: "bg-red-100 text-red-800",
+type VenueDef = { name: string; image: string };
+
+const VENUES: VenueDef[] = [
+  { name: "Covered Court", image: "/covered_court.png" },
+  { name: "Upper Gym", image: "/upper_gym.png" },
+  { name: "Band Room", image: "/band_room.jpg" },
+  { name: "CAU Studio", image: "/cau_studio.jpg" },
+  { name: "Open Ground", image: "/open_ground.png" },
+  { name: "Weights Room", image: "/weights_room.jpg" },
+];
+
+const STATUS_CONFIG: Record<string, { label: string; className: string; dot: string }> = {
+  available: { label: "Available", className: "bg-green-100 text-green-800 border-green-200", dot: "bg-green-500" },
+  in_use: { label: "In Use", className: "bg-blue-100 text-blue-800 border-blue-200", dot: "bg-blue-500" },
+  maintenance: { label: "Under Maintenance", className: "bg-yellow-100 text-yellow-800 border-yellow-200", dot: "bg-yellow-500" },
+  closed: { label: "Closed", className: "bg-red-100 text-red-800 border-red-200", dot: "bg-red-500" },
+  reserved: { label: "Reserved", className: "bg-indigo-100 text-indigo-800 border-indigo-200", dot: "bg-indigo-500" },
 };
 
-const CONDITION_COLORS: Record<string, string> = {
-  excellent: "bg-emerald-100 text-emerald-800",
-  good: "bg-blue-100 text-blue-800",
-  fair: "bg-yellow-100 text-yellow-800",
-  poor: "bg-orange-100 text-orange-800",
-  needs_repair: "bg-red-100 text-red-800",
+function venueImageOf(name: string) {
+  return VENUES.find((v) => v.name === name)?.image ?? "";
+}
+
+function formatDateTime(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return "—";
+  }
+}
+
+function formatTime(t: string | null | undefined): string {
+  if (!t) return "—";
+  const [h, m] = t.split(":").map(Number);
+  if (Number.isNaN(h)) return t;
+  const period = h >= 12 ? "PM" : "AM";
+  const hr = h % 12 === 0 ? 12 : h % 12;
+  return `${hr}:${String(m).padStart(2, "0")} ${period}`;
+}
+
+function VenueImage({ src, alt }: { src: string; alt: string }) {
+  const [errored, setErrored] = useState(false);
+  if (errored || !src) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-[#1E3A5F] to-[#16304f]">
+        <Building2 size={44} className="text-white/40" />
+        <span className="text-xs text-white/50">No image available</span>
+      </div>
+    );
+  }
+  return <img src={src} alt={alt} onError={() => setErrored(true)} className="w-full h-full object-cover" />;
+}
+
+const STATUS_BADGE = (status: string) => {
+  const st = STATUS_CONFIG[status] ?? STATUS_CONFIG.available;
+  return (
+    <span className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border shadow-sm ${st.className}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
+      {st.label}
+    </span>
+  );
 };
+
+const statusOptions = [
+  { value: "available", label: "Available" },
+  { value: "maintenance", label: "Under Maintenance" },
+  { value: "closed", label: "Closed" },
+];
 
 export default function FacilitiesPage() {
   const role = useAuthStore((s) => s.user?.role);
-  const isAdmin = role === "admin" || role === "director" || role === "staff";
+  const isManager = role === "admin" || role === "director" || role === "staff";
+  const isRequester = role === "coach" || role === "pe_instructor";
   const queryClient = useQueryClient();
+
+  const [viewFacility, setViewFacility] = useState<Facility | null>(null);
+  const [editFacility, setEditFacility] = useState<Facility | null>(null);
+  const [deleteFacility, setDeleteFacility] = useState<Facility | null>(null);
   const [showAdd, setShowAdd] = useState(false);
-  const [showSchedule, setShowSchedule] = useState<string | null>(null);
+  const [showRequest, setShowRequest] = useState(false);
+
+  const [editForm, setEditForm] = useState({ status: "available", description: "", notes: "" });
+  const [addForm, setAddForm] = useState({ name: "", description: "", notes: "" });
+  const [reqForm, setReqForm] = useState<ReservationCreate>({
+    facility_id: "",
+    purpose: "",
+    reservation_date: new Date().toISOString().slice(0, 10),
+    start_time: "08:00:00",
+    end_time: "10:00:00",
+    remarks: "",
+  });
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [reqError, setReqError] = useState("");
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   const { data, isLoading } = useQuery<PaginatedResponse<Facility>>({
     queryKey: ["facilities"],
     queryFn: async () => (await facilitiesApi.list({ page_size: 50 })).data,
   });
 
-  const { data: schedules } = useQuery<FacilitySchedule[]>({
-    queryKey: ["facility-schedules", showSchedule],
-    queryFn: async () => (await facilitiesApi.listSchedules({ facility_id: showSchedule! })).data,
-    enabled: !!showSchedule,
+  const facilities = data?.items ?? [];
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data: body }: { id: string; data: Record<string, unknown> }) =>
+      facilitiesApi.update(id, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["facilities"] });
+      setEditFacility(null);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => facilitiesApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["facilities"] });
+      setDeleteFacility(null);
+    },
+  });
+
+  const imageMutation = useMutation({
+    mutationFn: ({ id, file }: { id: string; file: File }) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      return facilitiesApi.uploadImage(id, formData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["facilities"] });
+      setEditFacility(null);
+      setShowAdd(false);
+      setImageFile(null);
+    },
   });
 
   const createMutation = useMutation({
-    mutationFn: (d: Record<string, unknown>) => facilitiesApi.create(d),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["facilities"] }); setShowAdd(false); },
+    mutationFn: (data: Record<string, unknown>) => facilitiesApi.create(data),
+    onSuccess: async (res) => {
+      queryClient.invalidateQueries({ queryKey: ["facilities"] });
+      if (imageFile) {
+        await imageMutation.mutateAsync({ id: res.data.id, file: imageFile });
+      }
+      setShowAdd(false);
+      setAddForm({ name: "", description: "", notes: "" });
+      setImageFile(null);
+    },
   });
 
-  const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) => facilitiesApi.update(id, data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["facilities"] }),
+  const requestMutation = useMutation({
+    mutationFn: (data: ReservationCreate) => facilitiesApi.createReservation(data as unknown as Record<string, unknown>),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["facility-reservations"] });
+      setShowRequest(false);
+      setReqForm({
+        facility_id: "",
+        purpose: "",
+        reservation_date: new Date().toISOString().slice(0, 10),
+        start_time: "08:00:00",
+        end_time: "10:00:00",
+        remarks: "",
+      });
+      setReqError("");
+    },
+    onError: (err: unknown) => {
+      const msg =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
+        "Unable to submit the request.";
+      setReqError(msg);
+    },
   });
 
-  const [form, setForm] = useState({ name: "", description: "", location: "", capacity: "", status: "available", condition: "good" });
-  const [capacityError, setCapacityError] = useState<string | null>(null);
+  const openEdit = (f: Facility) => {
+    setEditForm({ status: f.status, description: f.description ?? "", notes: f.notes ?? "" });
+    setEditFacility(f);
+  };
+
+  const submitRequest = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (reqForm.end_time <= reqForm.start_time) {
+      setReqError("End time must be after start time.");
+      return;
+    }
+    setReqError("");
+    requestMutation.mutate(reqForm);
+  };
+
+  if (role === "student") {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center">
+        <AlertTriangle size={40} className="text-red-400 mb-4" />
+        <h1 className="text-lg font-bold text-[#111827]">Access Denied</h1>
+        <p className="text-sm text-gray-500 mt-1">You do not have permission to view facilities.</p>
+      </div>
+    );
+  }
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <Building2 size={22} className="text-[#1E3A5F]" />
-          <h1 className="text-xl font-bold text-[#111827]">Facility Monitoring</h1>
+          <div>
+            <h1 className="text-xl font-bold text-[#111827]">Facility Monitoring</h1>
+            <p className="text-sm text-gray-500">Venue availability across OSCA</p>
+          </div>
         </div>
-        {isAdmin && (
-          <button onClick={() => setShowAdd(true)} className="flex items-center gap-2 px-4 py-2 text-sm bg-[#1E3A5F] text-white rounded-lg hover:bg-[#16304f]">
-            <Plus size={14} /> Add Facility
-          </button>
-        )}
+        <div className="flex gap-2">
+          {isRequester && (
+            <button
+              onClick={() => setShowRequest(true)}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm bg-[#1E3A5F] text-white rounded-lg font-medium hover:bg-[#16304f] transition-colors"
+            >
+              <CalendarPlus size={15} /> Request Venue
+            </button>
+          )}
+          {isManager && (
+            <button
+              onClick={() => setShowAdd(true)}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm bg-[#1E3A5F] text-white rounded-lg font-medium hover:bg-[#16304f] transition-colors"
+            >
+              <Plus size={15} /> Add Venue
+            </button>
+          )}
+        </div>
       </div>
 
       {isLoading ? (
         <div className="flex justify-center py-12"><Loader2 className="animate-spin text-gray-400" size={24} /></div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {data?.items.map((f) => (
-            <div key={f.id} className="bg-white border border-gray-200 rounded-xl p-5 hover:shadow-md transition">
-              <div className="flex items-start justify-between mb-3">
-                <h3 className="font-semibold text-[#111827]">{f.name}</h3>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[f.status] ?? "bg-gray-100 text-gray-600"}`}>
-                  {f.status.replace("_", " ")}
-                </span>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {facilities.map((fac) => {
+            const st = STATUS_CONFIG[fac.status] ?? STATUS_CONFIG.available;
+            return (
+              <div
+                key={fac.id}
+                className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-200 flex flex-col"
+              >
+                <div className="relative aspect-video">
+                  <VenueImage src={fac.image_url ?? venueImageOf(fac.name)} alt={fac.name} />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+                  <span className={`absolute top-3 right-3 flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border shadow-sm ${st.className}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
+                    {st.label}
+                  </span>
+                  <h3 className="absolute bottom-3 left-4 text-white font-semibold text-lg drop-shadow">{fac.name}</h3>
+                </div>
+                <div className="p-4 flex flex-col flex-1">
+                  <p className="text-sm text-gray-500 line-clamp-2 flex-1 min-h-[2.5rem]">
+                    {fac.description || "No description available."}
+                  </p>
+                  <div className="flex gap-2 mt-4">
+                    <button
+                      onClick={() => setViewFacility(fac)}
+                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm border border-[#d1d5db] rounded-lg text-[#374151] hover:bg-[#f9fafb] transition-colors"
+                    >
+                      <Eye size={14} /> View Details
+                    </button>
+                    {isManager && (
+                      <button
+                        onClick={() => openEdit(fac)}
+                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm bg-[#1E3A5F] text-white rounded-lg font-medium hover:bg-[#16304f] transition-colors"
+                      >
+                        <Pencil size={14} /> Edit
+                      </button>
+                    )}
+                    {isRequester && (
+                      <button
+                        onClick={() => {
+                          setReqForm({ ...reqForm, facility_id: fac.id });
+                          setShowRequest(true);
+                        }}
+                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm bg-[#1E3A5F] text-white rounded-lg font-medium hover:bg-[#16304f] transition-colors"
+                      >
+                        <CalendarPlus size={14} /> Request
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
-              {f.description && <p className="text-sm text-gray-500 mb-2">{f.description}</p>}
-              <div className="flex flex-wrap gap-2 text-xs text-gray-500 mb-3">
-                {f.location && <span>📍 {f.location}</span>}
-                {f.capacity && <span>👥 Capacity: {f.capacity}</span>}
-                <span className={`px-2 py-0.5 rounded-full ${CONDITION_COLORS[f.condition] ?? "bg-gray-100"}`}>{f.condition}</span>
-              </div>
-              <div className="flex gap-2">
-                <button onClick={() => setShowSchedule(f.id)} className="text-xs text-blue-600 hover:underline flex items-center gap-1">
-                  <Calendar size={12} /> Schedules
-                </button>
-                {isAdmin && (
-                  <select
-                    className="text-xs border rounded px-2 py-1"
-                    value={f.status}
-                    onChange={(e) => updateMutation.mutate({ id: f.id, data: { status: e.target.value } })}
-                  >
-                    <option value="available">Available</option>
-                    <option value="in_use">In Use</option>
-                    <option value="maintenance">Maintenance</option>
-                    <option value="closed">Closed</option>
-                  </select>
-                )}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
-      {/* Add Facility Modal */}
-      {showAdd && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="font-bold text-lg">Add Facility</h2>
-              <button onClick={() => setShowAdd(false)}><X size={18} /></button>
+      {/* View Details Modal */}
+      {viewFacility && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-xl w-full max-w-md shadow-xl overflow-hidden max-h-[85vh] flex flex-col">
+            <div className="relative aspect-video shrink-0">
+              <VenueImage src={viewFacility.image_url ?? venueImageOf(viewFacility.name)} alt={viewFacility.name} />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+              <button onClick={() => setViewFacility(null)} className="absolute top-3 left-3 text-white bg-black/30 rounded-full p-1.5 hover:bg-black/50 transition-colors"><X size={16} /></button>
+              {STATUS_BADGE(viewFacility.status)}
+              <h2 className="absolute bottom-3 left-4 text-white font-bold text-xl drop-shadow">{viewFacility.name}</h2>
             </div>
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              const capNum = form.capacity ? +form.capacity : null;
-              if (capNum !== null && capNum < 0) {
-                setCapacityError("Quantity cannot be less than 0.");
-                return;
-              }
-              setCapacityError(null);
-              createMutation.mutate({ ...form, capacity: capNum });
-            }} className="space-y-3">
-              <input placeholder="Name *" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full px-3 py-2 text-sm border rounded-lg" />
-              <input placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="w-full px-3 py-2 text-sm border rounded-lg" />
-              <input placeholder="Location" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} className="w-full px-3 py-2 text-sm border rounded-lg" />
-              <input
-                placeholder="Capacity"
-                type="number"
-                min="0"
-                value={form.capacity}
-                onChange={(e) => {
-                  setCapacityError(null);
-                  setForm({ ...form, capacity: e.target.value });
-                }}
-                className="w-full px-3 py-2 text-sm border rounded-lg"
-              />
-              {capacityError && <p className="text-xs text-red-600">{capacityError}</p>}
-              <button type="submit" disabled={createMutation.isPending} className="w-full py-2 bg-[#1E3A5F] text-white rounded-lg text-sm font-medium disabled:opacity-50">
-                {createMutation.isPending ? "Saving..." : "Create Facility"}
-              </button>
+            <div className="p-5">
+              <div className="flex items-center justify-between py-3 border-b border-gray-100">
+                <div className="flex items-center gap-2 text-sm text-gray-500">
+                  <Activity size={15} className="text-[#9ca3af] shrink-0" /> Status
+                </div>
+                {STATUS_BADGE(viewFacility.status)}
+              </div>
+              <div className="flex items-center justify-between py-3 border-b border-gray-100">
+                <div className="flex items-center gap-2 text-sm text-gray-500">
+                  <Calendar size={15} className="text-[#9ca3af] shrink-0" /> Date Created
+                </div>
+                <span className="text-sm font-medium text-[#111827]">{formatDateTime(viewFacility.created_at)}</span>
+              </div>
+              <div className="flex items-center justify-between py-3">
+                <div className="flex items-center gap-2 text-sm text-gray-500">
+                  <Clock size={15} className="text-[#9ca3af] shrink-0" /> Last Updated
+                </div>
+                <span className="text-sm font-medium text-[#111827]">{formatDateTime(viewFacility.updated_at)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Facility Modal */}
+      {editFacility && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-xl w-full max-w-md shadow-xl overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="relative aspect-video shrink-0">
+              <VenueImage src={editFacility.image_url ?? venueImageOf(editFacility.name)} alt={editFacility.name} />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+              <button onClick={() => setEditFacility(null)} className="absolute top-3 left-3 text-white bg-black/30 rounded-full p-1.5 hover:bg-black/50 transition-colors"><X size={16} /></button>
+              <h2 className="absolute bottom-3 left-4 text-white font-bold text-xl drop-shadow">Edit {editFacility.name}</h2>
+            </div>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                updateMutation.mutate({ id: editFacility.id, data: editForm });
+              }}
+              className="p-5 space-y-4 overflow-y-auto"
+            >
+              <div>
+                <label className="block text-xs font-semibold text-[#374151] mb-1.5">Status</label>
+                <select
+                  value={editForm.status}
+                  onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
+                  className="w-full px-3 py-2 text-sm border border-[#d1d5db] rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#2563eb]"
+                >
+                  {statusOptions.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-[#374151] mb-1.5">Description</label>
+                <textarea
+                  rows={2}
+                  value={editForm.description}
+                  onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                  placeholder="Enter a brief description..."
+                  className="w-full px-3 py-2 text-sm border border-[#d1d5db] rounded-lg placeholder:text-[#9ca3af] focus:outline-none focus:ring-2 focus:ring-[#2563eb] resize-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-[#374151] mb-1.5">Notes</label>
+                <textarea
+                  rows={2}
+                  value={editForm.notes}
+                  onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                  placeholder="Optional internal notes..."
+                  className="w-full px-3 py-2 text-sm border border-[#d1d5db] rounded-lg placeholder:text-[#9ca3af] focus:outline-none focus:ring-2 focus:ring-[#2563eb] resize-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-[#374151] mb-1.5">Venue Image</label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => imageInputRef.current?.click()}
+                    className="flex items-center gap-1.5 px-3 py-2 text-sm border border-[#d1d5db] rounded-lg text-[#374151] hover:bg-[#f9fafb] transition-colors"
+                  >
+                    <ImageUp size={14} /> {imageFile ? imageFile.name : "Change Image"}
+                  </button>
+                  {imageFile && (
+                    <button
+                      type="button"
+                      onClick={() => setImageFile(null)}
+                      className="text-xs text-red-500 hover:underline"
+                    >
+                      Remove
+                    </button>
+                  )}
+                  <input
+                    ref={imageInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setEditFacility(null); setImageFile(null); }}
+                  className="px-4 py-2 text-sm border border-[#d1d5db] rounded-lg text-[#374151] hover:bg-[#f9fafb] transition-colors"
+                >
+                  Cancel
+                </button>
+                {imageFile ? (
+                  <button
+                    type="button"
+                    disabled={imageMutation.isPending}
+                    onClick={() => imageMutation.mutate({ id: editFacility.id, file: imageFile })}
+                    className="px-4 py-2 text-sm bg-[#1E3A5F] text-white rounded-lg font-medium hover:bg-[#16304f] disabled:opacity-50 transition-colors"
+                  >
+                    {imageMutation.isPending ? "Uploading..." : "Upload Image"}
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    disabled={updateMutation.isPending}
+                    className="px-4 py-2 text-sm bg-[#1E3A5F] text-white rounded-lg font-medium hover:bg-[#16304f] disabled:opacity-50 transition-colors"
+                  >
+                    {updateMutation.isPending ? "Saving..." : "Save Changes"}
+                  </button>
+                )}
+              </div>
+              <div className="pt-2 border-t border-gray-100 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setDeleteFacility(editFacility)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                >
+                  <Trash2 size={13} /> Delete Venue
+                </button>
+              </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* Schedule Modal */}
-      {showSchedule && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl p-6 w-full max-w-lg shadow-xl max-h-[80vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="font-bold text-lg">Facility Schedule</h2>
-              <button onClick={() => setShowSchedule(null)}><X size={18} /></button>
+      {/* Add Venue Modal */}
+      {showAdd && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-xl w-full max-w-md shadow-xl overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="relative aspect-video shrink-0">
+              <VenueImage src={imageFile ? URL.createObjectURL(imageFile) : ""} alt="New venue" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+              <button onClick={() => { setShowAdd(false); setImageFile(null); }} className="absolute top-3 left-3 text-white bg-black/30 rounded-full p-1.5 hover:bg-black/50 transition-colors"><X size={16} /></button>
+              <h2 className="absolute bottom-3 left-4 text-white font-bold text-xl drop-shadow">Add Venue</h2>
             </div>
-            {schedules && schedules.length > 0 ? (
-              <div className="space-y-2">
-                {schedules.map((s) => (
-                  <div key={s.id} className="border rounded-lg p-3 text-sm">
-                    <p className="font-medium">{s.title}</p>
-                    <p className="text-gray-500 text-xs flex items-center gap-2 mt-1">
-                      <Calendar size={12} /> {s.scheduled_date}
-                      <Clock size={12} /> {s.start_time} - {s.end_time}
-                    </p>
-                    {s.sport_or_activity && <p className="text-xs text-blue-600 mt-1">{s.sport_or_activity}</p>}
-                  </div>
-                ))}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                createMutation.mutate({
+                  name: addForm.name,
+                  description: addForm.description || null,
+                  notes: addForm.notes || null,
+                  status: "available",
+                });
+              }}
+              className="p-5 space-y-4 overflow-y-auto"
+            >
+              <div>
+                <label className="block text-xs font-semibold text-[#374151] mb-1.5">Venue Name</label>
+                <input
+                  required
+                  value={addForm.name}
+                  onChange={(e) => setAddForm({ ...addForm, name: e.target.value })}
+                  placeholder="e.g. Covered Court"
+                  list="venue-suggestions"
+                  className="w-full px-3 py-2 text-sm border border-[#d1d5db] rounded-lg placeholder:text-[#9ca3af] focus:outline-none focus:ring-2 focus:ring-[#2563eb]"
+                />
+                <datalist id="venue-suggestions">
+                  {VENUES.map((v) => (
+                    <option key={v.name} value={v.name} />
+                  ))}
+                </datalist>
               </div>
-            ) : (
-              <p className="text-sm text-gray-400 text-center py-8">No schedules yet.</p>
-            )}
+              <div>
+                <label className="block text-xs font-semibold text-[#374151] mb-1.5">Description</label>
+                <textarea
+                  rows={2}
+                  value={addForm.description}
+                  onChange={(e) => setAddForm({ ...addForm, description: e.target.value })}
+                  placeholder="Enter a brief description..."
+                  className="w-full px-3 py-2 text-sm border border-[#d1d5db] rounded-lg placeholder:text-[#9ca3af] focus:outline-none focus:ring-2 focus:ring-[#2563eb] resize-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-[#374151] mb-1.5">Notes</label>
+                <textarea
+                  rows={2}
+                  value={addForm.notes}
+                  onChange={(e) => setAddForm({ ...addForm, notes: e.target.value })}
+                  placeholder="Optional internal notes..."
+                  className="w-full px-3 py-2 text-sm border border-[#d1d5db] rounded-lg placeholder:text-[#9ca3af] focus:outline-none focus:ring-2 focus:ring-[#2563eb] resize-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-[#374151] mb-1.5">Venue Image (optional)</label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => imageInputRef.current?.click()}
+                    className="flex items-center gap-1.5 px-3 py-2 text-sm border border-[#d1d5db] rounded-lg text-[#374151] hover:bg-[#f9fafb] transition-colors"
+                  >
+                    <ImageUp size={14} /> {imageFile ? imageFile.name : "Choose Image"}
+                  </button>
+                  {imageFile && (
+                    <button type="button" onClick={() => setImageFile(null)} className="text-xs text-red-500 hover:underline">
+                      Remove
+                    </button>
+                  )}
+                  <input
+                    ref={imageInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setShowAdd(false); setImageFile(null); }}
+                  className="px-4 py-2 text-sm border border-[#d1d5db] rounded-lg text-[#374151] hover:bg-[#f9fafb] transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={createMutation.isPending || imageMutation.isPending}
+                  className="px-4 py-2 text-sm bg-[#1E3A5F] text-white rounded-lg font-medium hover:bg-[#16304f] disabled:opacity-50 transition-colors"
+                >
+                  {createMutation.isPending || imageMutation.isPending ? "Creating..." : "Create Venue"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Request Venue Modal */}
+      {showRequest && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-xl w-full max-w-md shadow-xl overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="font-bold text-lg text-[#111827]">Request Venue</h2>
+              <button onClick={() => { setShowRequest(false); setReqError(""); }} className="text-gray-400 hover:text-gray-600 transition-colors"><X size={18} /></button>
+            </div>
+            <form onSubmit={submitRequest} className="p-5 space-y-4 overflow-y-auto">
+              <div>
+                <label className="block text-xs font-semibold text-[#374151] mb-1.5">Venue</label>
+                <select
+                  required
+                  value={reqForm.facility_id}
+                  onChange={(e) => setReqForm({ ...reqForm, facility_id: e.target.value })}
+                  className="w-full px-3 py-2 text-sm border border-[#d1d5db] rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#2563eb]"
+                >
+                  <option value="" disabled>Select a venue...</option>
+                  {facilities.map((f) => (
+                    <option key={f.id} value={f.id} disabled={f.status === "reserved"}>
+                      {f.name}{f.status === "reserved" ? " (Reserved)" : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-[#374151] mb-1.5">Date</label>
+                <input
+                  required
+                  type="date"
+                  min={new Date().toISOString().slice(0, 10)}
+                  value={reqForm.reservation_date}
+                  onChange={(e) => setReqForm({ ...reqForm, reservation_date: e.target.value })}
+                  className="w-full px-3 py-2 text-sm border border-[#d1d5db] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2563eb]"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-[#374151] mb-1.5">Start Time</label>
+                  <input
+                    required
+                    type="time"
+                    value={reqForm.start_time.slice(0, 5)}
+                    onChange={(e) => setReqForm({ ...reqForm, start_time: `${e.target.value}:00` })}
+                    className="w-full px-3 py-2 text-sm border border-[#d1d5db] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2563eb]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[#374151] mb-1.5">End Time</label>
+                  <input
+                    required
+                    type="time"
+                    value={reqForm.end_time.slice(0, 5)}
+                    onChange={(e) => setReqForm({ ...reqForm, end_time: `${e.target.value}:00` })}
+                    className="w-full px-3 py-2 text-sm border border-[#d1d5db] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2563eb]"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-[#374151] mb-1.5">Purpose</label>
+                <textarea
+                  required
+                  rows={2}
+                  value={reqForm.purpose}
+                  onChange={(e) => setReqForm({ ...reqForm, purpose: e.target.value })}
+                  placeholder="e.g. Basketball practice"
+                  className="w-full px-3 py-2 text-sm border border-[#d1d5db] rounded-lg placeholder:text-[#9ca3af] focus:outline-none focus:ring-2 focus:ring-[#2563eb] resize-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-[#374151] mb-1.5">Remarks (optional)</label>
+                <textarea
+                  rows={2}
+                  value={reqForm.remarks ?? ""}
+                  onChange={(e) => setReqForm({ ...reqForm, remarks: e.target.value })}
+                  placeholder="Additional notes for the approver..."
+                  className="w-full px-3 py-2 text-sm border border-[#d1d5db] rounded-lg placeholder:text-[#9ca3af] focus:outline-none focus:ring-2 focus:ring-[#2563eb] resize-none"
+                />
+              </div>
+              {reqError && (
+                <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{reqError}</p>
+              )}
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setShowRequest(false); setReqError(""); }}
+                  className="px-4 py-2 text-sm border border-[#d1d5db] rounded-lg text-[#374151] hover:bg-[#f9fafb] transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={requestMutation.isPending}
+                  className="px-4 py-2 text-sm bg-[#1E3A5F] text-white rounded-lg font-medium hover:bg-[#16304f] disabled:opacity-50 transition-colors"
+                >
+                  {requestMutation.isPending ? "Submitting..." : "Submit Request"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Venue Confirm */}
+      {deleteFacility && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
+                <Trash2 size={20} className="text-red-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-900">Delete Venue</h3>
+                <p className="text-sm text-gray-500">This action cannot be undone.</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-600 mb-5">
+              Are you sure you want to delete <span className="font-semibold">{deleteFacility.name}</span>?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteFacility(null)}
+                className="flex-1 px-4 py-2.5 text-sm font-medium rounded-xl text-gray-700 bg-gray-100 hover:bg-gray-200 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => deleteMutation.mutate(deleteFacility.id)}
+                disabled={deleteMutation.isPending}
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-red-600 rounded-xl hover:bg-red-700 disabled:opacity-50 transition"
+              >
+                {deleteMutation.isPending ? "Deleting..." : "Delete"}
+              </button>
+            </div>
           </div>
         </div>
       )}
