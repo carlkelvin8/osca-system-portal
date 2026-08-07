@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { useAuthStore } from "@/store/useAuthStore";
 import { staffBorrowApi } from "@/lib/api";
+import { useQrScanner } from "@/hooks/useQrScanner";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import type { TransactionQRRead } from "@/types";
@@ -32,10 +33,6 @@ export default function ReturnScannerPage() {
   const [manualCode, setManualCode] = useState("");
   const [processingCode, setProcessingCode] = useState(false);
 
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [scanning, setScanning] = useState(false);
-  const controlsRef = useRef<{ stop: () => void } | null>(null);
-
   const processCode = useCallback(async (code: string) => {
     const trimmed = code.trim();
     if (!trimmed) return;
@@ -55,53 +52,14 @@ export default function ReturnScannerPage() {
     }
   }, []);
 
-  const stopScanning = useCallback(() => {
-    controlsRef.current?.stop();
-    controlsRef.current = null;
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      stopScanning();
-    };
-  }, [stopScanning]);
-
-  const startScanner = useCallback(() => {
-    setError(null);
-    setScanning(true);
-  }, []);
-
-  useEffect(() => {
-    if (!scanning || !videoRef.current) return;
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const { BrowserQRCodeReader } = await import("@zxing/browser");
-        const reader = new BrowserQRCodeReader();
-
-        const controls = await reader.decodeFromVideoDevice(
-          undefined,
-          videoRef.current!,
-          async (result, _err) => {
-            if (cancelled || !result) return;
-            const text = result.getText();
-            stopScanning();
-            setScanning(false);
-            await processCode(text);
-          }
-        );
-        controlsRef.current = controls;
-      } catch {
-        if (!cancelled) setError("Unable to access camera. Please allow camera permissions.");
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      stopScanning();
-    };
-  }, [scanning]);
+  const {
+    videoRef,
+    isScanning: scanning,
+    error: scannerError,
+    start: startScanner,
+    stop: stopScanning,
+  } = useQrScanner(processCode);
+  const displayedError = error ?? scannerError;
 
   const { mutate: completeReturn, isPending: isCompleting } = useMutation({
     mutationFn: () => staffBorrowApi.completeTransaction(transaction!.transaction_id),
@@ -135,10 +93,8 @@ export default function ReturnScannerPage() {
     setStep("idle");
     setTransaction(null);
     setError(null);
-    setScanning(false);
     stopScanning();
   };
-
   const txIsLate = transaction
     ? transaction.status === "overdue" || new Date() > new Date(transaction.expected_return)
     : false;
@@ -200,10 +156,10 @@ export default function ReturnScannerPage() {
         </div>
       </div>
 
-      {error && (
+      {displayedError && (
         <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
           <AlertTriangle size={16} className="text-red-500 shrink-0" />
-          <p className="text-sm text-red-700 flex-1">{error}</p>
+          <p className="text-sm text-red-700 flex-1">{displayedError}</p>
           <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600">
             <X size={16} />
           </button>
@@ -213,7 +169,7 @@ export default function ReturnScannerPage() {
       {/* Camera scanner */}
       {scanning && (
         <div className="relative bg-black rounded-xl overflow-hidden max-w-md mx-auto">
-          <video ref={videoRef} className="w-full aspect-square object-cover" />
+          <video ref={videoRef} autoPlay muted playsInline className="w-full aspect-square object-cover" />
           <div className="absolute inset-0 border-2 border-dashed border-white/30 m-8 rounded-lg pointer-events-none" />
           <div className="absolute bottom-4 left-0 right-0 text-center">
             <p className="text-xs text-white/70 bg-black/50 inline-block px-3 py-1 rounded-full">

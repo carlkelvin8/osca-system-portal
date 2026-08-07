@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useCallback } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { staffBorrowApi, inventoryApi } from "@/lib/api";
+import { useQrScanner } from "@/hooks/useQrScanner";
 import {
   ScanLine,
   Loader2,
@@ -33,7 +33,6 @@ type ScanStep = "idle" | "identity" | "transaction" | "done";
 export default function BorrowScannerPage() {
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
-  const router = useRouter();
 
   const [step, setStep] = useState<ScanStep>("idle");
   const [identity, setIdentity] = useState<ScanBorrowingIDResponse | null>(null);
@@ -41,66 +40,6 @@ export default function BorrowScannerPage() {
   const [selectedRequest, setSelectedRequest] = useState<EquipmentRequest | null>(null);
   const [releaseResult, setReleaseResult] = useState<{ txnQr: string; requestId: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  // Scanner state
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [scanning, setScanning] = useState(false);
-  const readerRef = useRef<import("@zxing/browser").BrowserQRCodeReader | null>(null);
-  const controlsRef = useRef<{ stop: () => void } | null>(null);
-
-  const stopScanning = useCallback(() => {
-    controlsRef.current?.stop();
-    controlsRef.current = null;
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      stopScanning();
-    };
-  }, [stopScanning]);
-
-  const startScanner = useCallback(() => {
-    setError(null);
-    setScanning(true);
-  }, []);
-
-  useEffect(() => {
-    if (!scanning || !videoRef.current) return;
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const { BrowserQRCodeReader } = await import("@zxing/browser");
-        const reader = new BrowserQRCodeReader();
-        readerRef.current = reader;
-
-        const controls = await reader.decodeFromVideoDevice(
-          undefined,
-          videoRef.current!,
-          async (result, _err) => {
-            if (cancelled || !result) return;
-            const text = result.getText();
-            stopScanning();
-            setScanning(false);
-
-            if (text.startsWith("TXN-")) {
-              await handleTransactionScan(text);
-            } else {
-              await handleIdentityScan(text);
-            }
-          }
-        );
-        controlsRef.current = controls;
-      } catch {
-        if (!cancelled) setError("Unable to access camera. Please allow camera permissions.");
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      stopScanning();
-    };
-  }, [scanning]);
 
   const handleIdentityScan = async (qrCode: string) => {
     setError(null);
@@ -123,6 +62,25 @@ export default function BorrowScannerPage() {
       setError("Invalid transaction QR code.");
     }
   };
+
+  const handleScan = useCallback(
+    async (text: string) => {
+      if (text.startsWith("TXN-")) {
+        await handleTransactionScan(text);
+      } else {
+        await handleIdentityScan(text);
+      }
+    },
+    [handleTransactionScan, handleIdentityScan]
+  );
+  const {
+    videoRef,
+    isScanning: scanning,
+    error: scannerError,
+    start: startScanner,
+    stop: stopScanning,
+  } = useQrScanner(handleScan);
+  const displayedError = error ?? scannerError;
 
   const { mutate: confirmRelease, isPending: isReleasing } = useMutation({
     mutationFn: () => staffBorrowApi.confirmRelease(transaction!.transaction_id),
@@ -180,7 +138,6 @@ export default function BorrowScannerPage() {
     setError(null);
     setReleaseResult(null);
     setSelectedRequest(null);
-    setScanning(false);
     stopScanning();
   };
 
@@ -203,10 +160,10 @@ export default function BorrowScannerPage() {
         </div>
       </div>
 
-      {error && (
+      {displayedError && (
         <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
           <AlertTriangle size={16} className="text-red-500 shrink-0" />
-          <p className="text-sm text-red-700 flex-1">{error}</p>
+          <p className="text-sm text-red-700 flex-1">{displayedError}</p>
           <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600">
             <X size={16} />
           </button>
@@ -216,7 +173,7 @@ export default function BorrowScannerPage() {
       {/* Camera scanner */}
       {scanning && (
         <div className="relative bg-black rounded-xl overflow-hidden max-w-md mx-auto">
-          <video ref={videoRef} className="w-full aspect-square object-cover" />
+          <video ref={videoRef} autoPlay muted playsInline className="w-full aspect-square object-cover" />
           <div className="absolute inset-0 border-2 border-dashed border-white/30 m-8 rounded-lg pointer-events-none" />
           <div className="absolute bottom-4 left-0 right-0 text-center">
             <p className="text-xs text-white/70 bg-black/50 inline-block px-3 py-1 rounded-full">
