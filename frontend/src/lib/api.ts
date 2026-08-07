@@ -208,6 +208,18 @@ export const staffBorrowApi = {
     api.put(`/inventory/transactions/${id}/complete`),
 };
 
+export type ReportFormat = "json" | "csv" | "xlsx" | "pdf";
+
+const reportGet = (
+  path: string,
+  params: Record<string, unknown>,
+  format: ReportFormat = "json",
+) =>
+  api.get(path, {
+    params: { ...params, format },
+    responseType: format === "json" ? "json" : "blob",
+  });
+
 export const reportsApi = {
   attendancePdf: (params?: Record<string, string>) =>
     api.get("/reports/attendance/pdf", {
@@ -222,7 +234,7 @@ export const reportsApi = {
   inventoryPdf: () => api.get("/reports/inventory/pdf", { responseType: "blob" }),
   inventoryXlsx: () =>
     api.get("/reports/inventory/xlsx", { responseType: "blob" }),
-  inventoryMonthly: (year: number, month: number, format: "json" | "pdf" | "xlsx" = "json") =>
+  inventoryMonthly: (year: number, month: number, format: "json" | "pdf" | "xlsx" | "csv" = "json") =>
     api.get("/reports/inventory/monthly", {
       params: { year, month, format },
       responseType: format === "json" ? "json" : "blob",
@@ -249,6 +261,38 @@ export const reportsApi = {
       responseType: fmt && fmt !== "json" ? "blob" : "json",
     });
   },
+  inventoryEquipment: (params: Record<string, unknown>, format: ReportFormat = "json") =>
+    reportGet("/reports/inventory/equipment", params, format),
+  borrowingHistory: (params: Record<string, unknown>, format: ReportFormat = "json") =>
+    reportGet("/reports/inventory/borrowing-history", params, format),
+  returnedEquipment: (params: Record<string, unknown>, format: ReportFormat = "json") =>
+    reportGet("/reports/inventory/returned", params, format),
+  lostDamagedEquipment: (params: Record<string, unknown>, format: ReportFormat = "json") =>
+    reportGet("/reports/inventory/lost-damaged", params, format),
+  venueReservations: (params: Record<string, unknown>, format: ReportFormat = "json") =>
+    reportGet("/reports/facilities/venue-reservations", params, format),
+  venueUsage: (params: Record<string, unknown>, format: ReportFormat = "json") =>
+    reportGet("/reports/facilities/venue-usage", params, format),
+  facilityStatus: (params: Record<string, unknown>, format: ReportFormat = "json") =>
+    reportGet("/reports/facilities/status", params, format),
+  eligibleStudents: (params: Record<string, unknown>, format: ReportFormat = "json") =>
+    reportGet("/reports/eligibility/eligible", params, format),
+  restrictedStudents: (params: Record<string, unknown>, format: ReportFormat = "json") =>
+    reportGet("/reports/eligibility/restricted", params, format),
+  ineligibleStudents: (params: Record<string, unknown>, format: ReportFormat = "json") =>
+    reportGet("/reports/eligibility/ineligible", params, format),
+  incidentReports: (params: Record<string, unknown>, format: ReportFormat = "json") =>
+    reportGet("/reports/incidents/reports", params, format),
+  incidentCategories: (params: Record<string, unknown>, format: ReportFormat = "json") =>
+    reportGet("/reports/incidents/categories", params, format),
+  incidentSummary: (params: Record<string, unknown>, format: ReportFormat = "json") =>
+    reportGet("/reports/incidents/summary", params, format),
+  activeSanctions: (params: Record<string, unknown>, format: ReportFormat = "json") =>
+    reportGet("/reports/sanctions/active", params, format),
+  completedSanctions: (params: Record<string, unknown>, format: ReportFormat = "json") =>
+    reportGet("/reports/sanctions/completed", params, format),
+  sanctionHistory: (params: Record<string, unknown>, format: ReportFormat = "json") =>
+    reportGet("/reports/sanctions/history", params, format),
 };
 
 export const announcementsApi = {

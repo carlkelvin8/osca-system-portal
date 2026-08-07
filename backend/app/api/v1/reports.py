@@ -4,18 +4,31 @@ and daily/weekly/monthly attendance logs with export.
 """
 import csv
 import io
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Annotated
 
 import openpyxl
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 from xhtml2pdf import pisa
 
 from app.core.dependencies import CurrentUser, NotStudent, get_db
 from app.models.attendance import AttendanceRecord, Session
+from app.models.eligibility import AthleteEligibility, EligibilityStatus
+from app.models.facility import Facility
+from app.models.incident import Incident
+from app.models.inventory import (
+    BorrowTransaction,
+    BorrowTransactionItem,
+    Equipment,
+    EquipmentCondition,
+    TransactionStatus,
+)
+from app.models.reservation import VenueReservationRequest
+from app.models.sanction import Sanction, SanctionStatus
 from app.models.user import User
 from app.schemas.attendance import AttendanceReportFilter
 from app.services.audit_service import audit_log
@@ -198,11 +211,18 @@ async def inventory_monthly(
     db: Annotated[AsyncSession, Depends(get_db)],
     year: int = Query(..., ge=2020, le=2100, description="Report year"),
     month: int = Query(..., ge=1, le=12, description="Report month (1-12)"),
-    format: str = Query("json", pattern="^(json|pdf|xlsx)$", description="Response format"),
+    format: str = Query("json", pattern="^(json|pdf|xlsx|csv)$", description="Response format"),
 ) -> StreamingResponse | dict:
     report_service = ReportService(db)
     result = await report_service.generate_inventory_monthly_report(year=year, month=month)
 
+    if format == "csv":
+        csv_data = _build_monthly_csv(result)
+        return StreamingResponse(
+            iter([csv_data]),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename=inventory_monthly_{year}_{month:02d}.csv"},
+        )
     if format == "pdf":
         pdf_bytes = await report_service.render_monthly_report_pdf(result)
         filename = f"inventory_monthly_{year}_{month:02d}.pdf"
@@ -492,3 +512,813 @@ async def monthly_attendance(
         )
 
     return rows
+
+
+# ── Shared row renderers (CSV / XLSX / PDF) ────────────────────────────────────
+
+def _fmt_val(v):
+    """Stringify a value for CSV/PDF output."""
+    if v is None:
+        return ""
+    if isinstance(v, (datetime, date, time)):
+        return v.isoformat()
+    if isinstance(v, bool):
+        return "Yes" if v else "No"
+    if hasattr(v, "value"):
+        return v.value
+    return str(v)
+
+
+def _xlsx_val(v):
+    """Convert a value to an openpyxl-safe cell value (no tz-aware datetimes)."""
+    if v is None:
+        return ""
+    if isinstance(v, datetime):
+        return v.astimezone(UTC).replace(tzinfo=None) if v.tzinfo is not None else v
+    if isinstance(v, (date, time)):
+        return v
+    if hasattr(v, "value"):
+        return v.value
+    return v
+
+
+def _rows_to_csv(rows: list[dict], headers: list[str]) -> str:
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(headers)
+    for r in rows:
+        writer.writerow([_fmt_val(r.get(h)) for h in headers])
+    output.seek(0)
+    return output.getvalue()
+
+
+def _rows_to_xlsx(rows: list[dict], headers: list[str], title: str) -> bytes:
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    sheet_name = (title or "Report")[:31] or "Report"
+    for ch in "\\/*?:[]":
+        sheet_name = sheet_name.replace(ch, " ")
+    ws.title = sheet_name
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.fill = openpyxl.styles.PatternFill("solid", fgColor="1E3A5F")
+        cell.font = openpyxl.styles.Font(color="FFFFFF", bold=True)
+    for i, r in enumerate(rows, 2):
+        for col, h in enumerate(headers, 1):
+            cell = ws.cell(row=i, column=col, value=_xlsx_val(r.get(h)))
+            if i % 2 == 0:
+                cell.fill = openpyxl.styles.PatternFill("solid", fgColor="EBF0F7")
+    for column in ws.columns:
+        max_len = max((len(str(cell.value or "")) for cell in column), default=10)
+        ws.column_dimensions[column[0].column_letter].width = min(max_len + 4, 50)
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def _rows_to_pdf(rows: list[dict], headers: list[str], title: str, subtitle: str) -> bytes:
+    wide = len(headers) > 5
+    orientation = "landscape" if wide else "portrait"
+    thead = "".join(f"<th>{h}</th>" for h in headers)
+    body = ""
+    for i, r in enumerate(rows):
+        bg = "#EBF0F7" if i % 2 == 0 else "#FFFFFF"
+        cells = "".join(f"<td>{_fmt_val(r.get(h))}</td>" for h in headers)
+        body += f'<tr style="background:{bg}">{cells}</tr>'
+    html = f"""
+    <!DOCTYPE html><html><head><meta charset="UTF-8">
+    <style>
+        @page {{ size: A4 {orientation}; margin: 15mm 10mm; }}
+        body {{ font-family: Arial, sans-serif; font-size: 10pt; }}
+        h1 {{ color: #1E3A5F; font-size: 14pt; }}
+        p {{ color: #666; font-size: 9pt; }}
+        table {{ width: 100%; table-layout: fixed; border-collapse: collapse; margin-top: 10px; }}
+        th {{ background: #1E3A5F; color: white; padding: 4px 5px; text-align: left; font-size: 7pt; }}
+        td {{ padding: 3px 5px; border-bottom: 1px solid #DDD; font-size: 7pt; }}
+    </style></head><body>
+    <h1>NAAP-Villamor OSCA — {title}</h1>
+    <p>{subtitle} | Records: {len(rows)} | Generated: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}</p>
+    <table><tr>{thead}</tr>{body}</table>
+    </body></html>"""
+    buffer = io.BytesIO()
+    pisa.CreatePDF(io.StringIO(html), dest=buffer)
+    return buffer.getvalue()
+
+
+async def _export_rows(
+    db: AsyncSession,
+    user,
+    rows: list[dict],
+    headers: list[str],
+    title: str,
+    period: str,
+    fmt: str,
+    report_name: str,
+    slug: str,
+    date_from=None,
+    date_to=None,
+) -> StreamingResponse | list:
+    """Audit + stream a row-based report in the requested format."""
+    if fmt == "json":
+        return rows
+    await _log_report_export(db, user, report_name, period, fmt, f"{date_from or 'all'} – {date_to or 'all'}")
+    if fmt == "csv":
+        return StreamingResponse(
+            iter([_rows_to_csv(rows, headers)]),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename={slug}.csv"},
+        )
+    if fmt == "xlsx":
+        data = _rows_to_xlsx(rows, headers, title)
+        return StreamingResponse(
+            iter([data]),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={slug}.xlsx"},
+        )
+    data = _rows_to_pdf(rows, headers, title, period)
+    return StreamingResponse(
+        iter([data]),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={slug}.pdf"},
+    )
+
+
+def _day_start(d: date | None) -> datetime | None:
+    return datetime(d.year, d.month, d.day, tzinfo=UTC) if d else None
+
+
+def _day_end(d: date | None) -> datetime | None:
+    return datetime(d.year, d.month, d.day, 23, 59, 59, tzinfo=UTC) if d else None
+
+
+def _range_label(date_from, date_to) -> str:
+    if date_from and date_to:
+        return f"{date_from.isoformat()} to {date_to.isoformat()}"
+    if date_from:
+        return f"From {date_from.isoformat()}"
+    if date_to:
+        return f"Until {date_to.isoformat()}"
+    return "All time"
+
+
+def _build_monthly_csv(report: dict) -> str:
+    from calendar import month_name
+    period = report["period"]
+    label = f"{month_name[period['month']]} {period['year']}"
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Period", "Metric", "Value"])
+    for group, metric, value in [
+        ("Summary", "Active Equipment", report["total_active_equipment"]),
+        ("Summary", "Borrowed This Month", report["borrowed_this_month"]),
+        ("Summary", "Returned This Month", report["returned_this_month"]),
+        ("Summary", "Overdue at End of Month", report["overdue_at_end_of_month"]),
+    ]:
+        writer.writerow([label, f"{group} — {metric}", value])
+    for i, e in enumerate(report["top_5_borrowed"], 1):
+        writer.writerow([label, f"Top 5 Borrowed #{i}", f"{e['name']} — {e['borrow_count']}"])
+    for cond, count in report["condition_breakdown"].items():
+        writer.writerow([label, f"Condition — {cond.title()}", count])
+    output.seek(0)
+    return output.getvalue()
+
+
+# ── Inventory Reports ──────────────────────────────────────────────────────────
+
+async def _fetch_inventory_items_map(db: AsyncSession, transaction_ids: list) -> dict:
+    if not transaction_ids:
+        return {}
+    result = await db.execute(
+        select(BorrowTransactionItem.transaction_id, Equipment.name, BorrowTransactionItem.quantity)
+        .join(Equipment, Equipment.id == BorrowTransactionItem.equipment_id)
+        .where(BorrowTransactionItem.transaction_id.in_(transaction_ids))
+    )
+    mapping: dict = {}
+    for txn_id, name, qty in result.all():
+        mapping.setdefault(txn_id, []).append(f"{name} (x{qty})")
+    return mapping
+
+
+async def _fetch_borrowing_history(db: AsyncSession, date_from, date_to) -> list[dict]:
+    query = (
+        select(BorrowTransaction, User)
+        .join(User, BorrowTransaction.instructor_id == User.id)
+    )
+    if date_from:
+        query = query.where(BorrowTransaction.borrowed_at >= date_from)
+    if date_to:
+        query = query.where(BorrowTransaction.borrowed_at <= date_to)
+    query = query.order_by(BorrowTransaction.borrowed_at.desc())
+    result = await db.execute(query)
+    pairs = result.all()
+    items_map = await _fetch_inventory_items_map(db, [t.id for t, _ in pairs])
+    rows = []
+    for t, instructor in pairs:
+        rows.append({
+            "Transaction": f"TXN-{t.id.hex[:12].upper()}",
+            "Instructor": instructor.full_name,
+            "Items": ", ".join(items_map.get(t.id, [])),
+            "Borrowed At": t.borrowed_at,
+            "Expected Return": t.expected_return,
+            "Returned At": t.returned_at,
+            "Status": t.status.value,
+            "Notes": t.notes,
+        })
+    return rows
+
+
+async def _fetch_returned_equipment(db: AsyncSession, date_from, date_to) -> list[dict]:
+    query = (
+        select(BorrowTransaction, User)
+        .join(User, BorrowTransaction.instructor_id == User.id)
+        .where(BorrowTransaction.status == TransactionStatus.RETURNED)
+    )
+    if date_from:
+        query = query.where(BorrowTransaction.returned_at >= date_from)
+    if date_to:
+        query = query.where(BorrowTransaction.returned_at <= date_to)
+    query = query.order_by(BorrowTransaction.returned_at.desc())
+    result = await db.execute(query)
+    pairs = result.all()
+    items_map = await _fetch_inventory_items_map(db, [t.id for t, _ in pairs])
+    rows = []
+    for t, instructor in pairs:
+        days = (t.returned_at - t.borrowed_at).days if t.returned_at else ""
+        rows.append({
+            "Transaction": f"TXN-{t.id.hex[:12].upper()}",
+            "Instructor": instructor.full_name,
+            "Items": ", ".join(items_map.get(t.id, [])),
+            "Returned At": t.returned_at,
+            "Days Borrowed": days,
+            "Notes": t.notes,
+        })
+    return rows
+
+
+async def _fetch_lost_damaged(db: AsyncSession, date_from, date_to) -> list[dict]:
+    query = (
+        select(BorrowTransactionItem, Equipment, BorrowTransaction, User)
+        .join(Equipment, Equipment.id == BorrowTransactionItem.equipment_id)
+        .join(BorrowTransaction, BorrowTransaction.id == BorrowTransactionItem.transaction_id)
+        .join(User, BorrowTransaction.instructor_id == User.id)
+        .where(or_(
+            BorrowTransactionItem.return_condition == EquipmentCondition.POOR,
+            BorrowTransactionItem.return_condition == EquipmentCondition.FOR_REPAIR,
+            BorrowTransactionItem.return_condition == EquipmentCondition.CONDEMNED,
+            BorrowTransactionItem.notes.ilike("%lost%"),
+            BorrowTransactionItem.notes.ilike("%missing%"),
+            BorrowTransactionItem.notes.ilike("%damaged%"),
+        ))
+    )
+    if date_from:
+        query = query.where(BorrowTransaction.returned_at >= date_from)
+    if date_to:
+        query = query.where(BorrowTransaction.returned_at <= date_to)
+    query = query.order_by(BorrowTransaction.returned_at.desc())
+    result = await db.execute(query)
+    rows = []
+    for item, equipment, txn, instructor in result.all():
+        rows.append({
+            "Transaction": f"TXN-{txn.id.hex[:12].upper()}",
+            "Equipment": equipment.name,
+            "Quantity": item.quantity,
+            "Return Condition": item.return_condition.value if item.return_condition else "",
+            "Instructor": instructor.full_name,
+            "Returned At": txn.returned_at,
+            "Notes": item.notes or txn.notes or "",
+        })
+    return rows
+
+
+@router.get(
+    "/inventory/equipment",
+    response_model=None,
+    summary="Equipment inventory report (all formats)",
+)
+async def equipment_inventory_report(
+    _user: NotStudent,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    format: str = Query("json", pattern="^(json|csv|xlsx|pdf)$"),
+) -> StreamingResponse | list:
+    report_service = ReportService(db)
+    rows = await report_service._fetch_all_equipment()
+    headers = ["Equipment Name", "Category", "Condition", "QR Code",
+               "Total Qty", "Available", "Borrowed", "Location", "Sport/Art"]
+    return await _export_rows(db, _user, rows, headers, "Equipment Inventory Report",
+                              "All time", format, "inventory-equipment", "inventory-equipment")
+
+
+@router.get(
+    "/inventory/borrowing-history",
+    response_model=None,
+    summary="Borrowing history report",
+)
+async def borrowing_history_report(
+    _user: NotStudent,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
+    format: str = Query("json", pattern="^(json|csv|xlsx|pdf)$"),
+) -> StreamingResponse | list:
+    rows = await _fetch_borrowing_history(db, _day_start(date_from), _day_end(date_to))
+    headers = ["Transaction", "Instructor", "Items", "Borrowed At",
+               "Expected Return", "Returned At", "Status", "Notes"]
+    return await _export_rows(db, _user, rows, headers, "Borrowing History Report",
+                              _range_label(date_from, date_to), format,
+                              "borrowing-history", "borrowing-history", date_from, date_to)
+
+
+@router.get(
+    "/inventory/returned",
+    response_model=None,
+    summary="Returned equipment report",
+)
+async def returned_equipment_report(
+    _user: NotStudent,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
+    format: str = Query("json", pattern="^(json|csv|xlsx|pdf)$"),
+) -> StreamingResponse | list:
+    rows = await _fetch_returned_equipment(db, _day_start(date_from), _day_end(date_to))
+    headers = ["Transaction", "Instructor", "Items", "Returned At", "Days Borrowed", "Notes"]
+    return await _export_rows(db, _user, rows, headers, "Returned Equipment Report",
+                              _range_label(date_from, date_to), format,
+                              "returned-equipment", "returned-equipment", date_from, date_to)
+
+
+@router.get(
+    "/inventory/lost-damaged",
+    response_model=None,
+    summary="Lost / damaged equipment report",
+)
+async def lost_damaged_equipment_report(
+    _user: NotStudent,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
+    format: str = Query("json", pattern="^(json|csv|xlsx|pdf)$"),
+) -> StreamingResponse | list:
+    rows = await _fetch_lost_damaged(db, _day_start(date_from), _day_end(date_to))
+    headers = ["Transaction", "Equipment", "Quantity", "Return Condition",
+               "Instructor", "Returned At", "Notes"]
+    return await _export_rows(db, _user, rows, headers, "Lost / Damaged Equipment Report",
+                              _range_label(date_from, date_to), format,
+                              "lost-damaged", "lost-damaged", date_from, date_to)
+
+
+# ── Facilities Reports ─────────────────────────────────────────────────────────
+
+async def _fetch_venue_reservations(db: AsyncSession, date_from, date_to) -> list[dict]:
+    query = (
+        select(VenueReservationRequest, Facility, User)
+        .join(Facility, Facility.id == VenueReservationRequest.facility_id)
+        .join(User, User.id == VenueReservationRequest.requester_id)
+    )
+    if date_from:
+        query = query.where(VenueReservationRequest.reservation_date >= date_from)
+    if date_to:
+        query = query.where(VenueReservationRequest.reservation_date <= date_to)
+    query = query.order_by(VenueReservationRequest.reservation_date.desc(), VenueReservationRequest.start_time)
+    result = await db.execute(query)
+    rows = []
+    for req, facility, requester in result.all():
+        rows.append({
+            "Venue": facility.name,
+            "Requester": requester.full_name,
+            "Purpose": req.purpose,
+            "Date": req.reservation_date,
+            "Start": req.start_time,
+            "End": req.end_time,
+            "Status": req.status.value,
+            "Remarks": req.remarks,
+            "Rejection Reason": req.rejection_reason,
+        })
+    return rows
+
+
+async def _fetch_venue_usage(db: AsyncSession, date_from, date_to) -> list[dict]:
+    query = (
+        select(VenueReservationRequest, Facility)
+        .join(Facility, Facility.id == VenueReservationRequest.facility_id)
+    )
+    if date_from:
+        query = query.where(VenueReservationRequest.reservation_date >= date_from)
+    if date_to:
+        query = query.where(VenueReservationRequest.reservation_date <= date_to)
+    result = await db.execute(query)
+    stats: dict[str, dict] = {}
+    for req, facility in result.all():
+        entry = stats.setdefault(facility.name, {
+            "Venue": facility.name,
+            "Total Requests": 0,
+            "Approved": 0,
+            "Pending": 0,
+            "Rejected": 0,
+            "Approved Hours": 0.0,
+        })
+        entry["Total Requests"] += 1
+        if req.status.value == "approved":
+            entry["Approved"] += 1
+            minutes = (req.end_time.hour * 60 + req.end_time.minute) - (req.start_time.hour * 60 + req.start_time.minute)
+            entry["Approved Hours"] += round(minutes / 60, 1)
+        elif req.status.value == "pending":
+            entry["Pending"] += 1
+        elif req.status.value == "rejected":
+            entry["Rejected"] += 1
+    return sorted(stats.values(), key=lambda x: x["Total Requests"], reverse=True)
+
+
+async def _fetch_facility_status(db: AsyncSession) -> list[dict]:
+    result = await db.execute(select(Facility).order_by(Facility.name))
+    rows = []
+    for f in result.scalars().all():
+        rows.append({
+            "Venue": f.name,
+            "Status": f.status.value,
+            "Capacity": f.capacity,
+            "Active": f.is_active,
+            "Description": f.description,
+            "Last Updated": f.updated_at,
+        })
+    return rows
+
+
+@router.get(
+    "/facilities/venue-reservations",
+    response_model=None,
+    summary="Venue reservations report",
+)
+async def venue_reservations_report(
+    _user: NotStudent,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
+    format: str = Query("json", pattern="^(json|csv|xlsx|pdf)$"),
+) -> StreamingResponse | list:
+    rows = await _fetch_venue_reservations(db, date_from, date_to)
+    headers = ["Venue", "Requester", "Purpose", "Date", "Start", "End",
+               "Status", "Remarks", "Rejection Reason"]
+    return await _export_rows(db, _user, rows, headers, "Venue Reservations Report",
+                              _range_label(date_from, date_to), format,
+                              "venue-reservations", "venue-reservations", date_from, date_to)
+
+
+@router.get(
+    "/facilities/venue-usage",
+    response_model=None,
+    summary="Venue usage summary report",
+)
+async def venue_usage_report(
+    _user: NotStudent,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
+    format: str = Query("json", pattern="^(json|csv|xlsx|pdf)$"),
+) -> StreamingResponse | list:
+    rows = await _fetch_venue_usage(db, date_from, date_to)
+    headers = ["Venue", "Total Requests", "Approved", "Pending", "Rejected", "Approved Hours"]
+    return await _export_rows(db, _user, rows, headers, "Venue Usage Report",
+                              _range_label(date_from, date_to), format,
+                              "venue-usage", "venue-usage", date_from, date_to)
+
+
+@router.get(
+    "/facilities/status",
+    response_model=None,
+    summary="Facility status report",
+)
+async def facility_status_report(
+    _user: NotStudent,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    format: str = Query("json", pattern="^(json|csv|xlsx|pdf)$"),
+) -> StreamingResponse | list:
+    rows = await _fetch_facility_status(db)
+    headers = ["Venue", "Status", "Capacity", "Active", "Description", "Last Updated"]
+    return await _export_rows(db, _user, rows, headers, "Facility Status Report",
+                              "All time", format, "facility-status", "facility-status")
+
+
+# ── Eligibility Reports ────────────────────────────────────────────────────────
+
+async def _fetch_eligibility(db: AsyncSession, statuses: list, date_from, date_to) -> list[dict]:
+    query = (
+        select(AthleteEligibility, User)
+        .join(User, User.id == AthleteEligibility.student_id)
+        .where(AthleteEligibility.status.in_(statuses))
+    )
+    if date_from:
+        query = query.where(AthleteEligibility.start_date >= date_from)
+    if date_to:
+        query = query.where(AthleteEligibility.start_date <= date_to)
+    query = query.order_by(User.last_name, User.first_name)
+    result = await db.execute(query)
+    rows = []
+    for rec, student in result.all():
+        rows.append({
+            "Student Name": student.full_name,
+            "Student ID": student.student_id or "",
+            "Sport/Art": student.sport_or_art or "",
+            "Status": rec.status.value,
+            "Start Date": rec.start_date,
+            "End Date": rec.end_date,
+            "Medical Clearance": rec.medical_clearance,
+            "Reason": rec.reason_type.value if rec.reason_type else "",
+            "Reason Detail": rec.reason_detail,
+            "Notes": rec.notes,
+        })
+    return rows
+
+
+async def _eligibility_report(
+    _user: NotStudent,
+    db: AsyncSession,
+    statuses: list,
+    title: str,
+    slug: str,
+    date_from: date | None,
+    date_to: date | None,
+    format: str,
+) -> StreamingResponse | list:
+    rows = await _fetch_eligibility(db, statuses, date_from, date_to)
+    headers = ["Student Name", "Student ID", "Sport/Art", "Status", "Start Date", "End Date",
+               "Medical Clearance", "Reason", "Reason Detail", "Notes"]
+    return await _export_rows(db, _user, rows, headers, title,
+                              _range_label(date_from, date_to), format, slug, slug, date_from, date_to)
+
+
+@router.get("/eligibility/eligible", response_model=None, summary="Eligible students report")
+async def eligible_students_report(
+    _user: NotStudent,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
+    format: str = Query("json", pattern="^(json|csv|xlsx|pdf)$"),
+) -> StreamingResponse | list:
+    return await _eligibility_report(_user, db, [EligibilityStatus.ELIGIBLE],
+                                     "Eligible Students Report", "eligible-students",
+                                     date_from, date_to, format)
+
+
+@router.get("/eligibility/restricted", response_model=None, summary="Restricted students report")
+async def restricted_students_report(
+    _user: NotStudent,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
+    format: str = Query("json", pattern="^(json|csv|xlsx|pdf)$"),
+) -> StreamingResponse | list:
+    return await _eligibility_report(_user, db, [EligibilityStatus.RESTRICTED],
+                                     "Restricted Students Report", "restricted-students",
+                                     date_from, date_to, format)
+
+
+@router.get("/eligibility/ineligible", response_model=None, summary="Ineligible students report")
+async def ineligible_students_report(
+    _user: NotStudent,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
+    format: str = Query("json", pattern="^(json|csv|xlsx|pdf)$"),
+) -> StreamingResponse | list:
+    return await _eligibility_report(_user, db, [EligibilityStatus.INELIGIBLE],
+                                     "Ineligible Students Report", "ineligible-students",
+                                     date_from, date_to, format)
+
+
+# ── Incidents Reports ──────────────────────────────────────────────────────────
+
+async def _fetch_incident_reports(db: AsyncSession, date_from, date_to) -> list[dict]:
+    reporter = aliased(User)
+    student = aliased(User)
+    query = (
+        select(Incident, reporter, student)
+        .join(reporter, reporter.id == Incident.reported_by_id)
+        .outerjoin(student, student.id == Incident.involved_student_id)
+    )
+    if date_from:
+        query = query.where(Incident.incident_date >= date_from)
+    if date_to:
+        query = query.where(Incident.incident_date <= date_to)
+    query = query.order_by(Incident.incident_date.desc())
+    result = await db.execute(query)
+    rows = []
+    for inc, reporter_u, student_u in result.all():
+        rows.append({
+            "Title": inc.title,
+            "Category": inc.category.value,
+            "Severity": inc.severity.value,
+            "Status": inc.status.value,
+            "Incident Date": inc.incident_date,
+            "Location": inc.location,
+            "Reported By": reporter_u.full_name,
+            "Involved Student": student_u.full_name if student_u else "",
+            "Resolution": inc.resolution,
+        })
+    return rows
+
+
+async def _fetch_incident_categories(db: AsyncSession, date_from, date_to) -> list[dict]:
+    query = select(Incident)
+    if date_from:
+        query = query.where(Incident.incident_date >= date_from)
+    if date_to:
+        query = query.where(Incident.incident_date <= date_to)
+    result = await db.execute(query)
+    stats: dict[str, dict] = {}
+    for inc in result.scalars().all():
+        entry = stats.setdefault(inc.category.value, {
+            "Category": inc.category.value.title(),
+            "Total": 0, "Open": 0, "Under Review": 0, "Resolved": 0, "Closed": 0,
+        })
+        entry["Total"] += 1
+        key = inc.status.value
+        if key == "open":
+            entry["Open"] += 1
+        elif key == "under_review":
+            entry["Under Review"] += 1
+        elif key == "resolved":
+            entry["Resolved"] += 1
+        elif key == "closed":
+            entry["Closed"] += 1
+    return sorted(stats.values(), key=lambda x: x["Total"], reverse=True)
+
+
+async def _fetch_incident_summary(db: AsyncSession, date_from, date_to) -> list[dict]:
+    query = select(Incident)
+    if date_from:
+        query = query.where(Incident.incident_date >= date_from)
+    if date_to:
+        query = query.where(Incident.incident_date <= date_to)
+    result = await db.execute(query)
+    incidents = result.scalars().all()
+    status_counts: dict[str, int] = {"open": 0, "under_review": 0, "resolved": 0, "closed": 0}
+    severity_counts: dict[str, int] = {"low": 0, "medium": 0, "high": 0, "critical": 0}
+    for inc in incidents:
+        status_counts[inc.status.value] = status_counts.get(inc.status.value, 0) + 1
+        severity_counts[inc.severity.value] = severity_counts.get(inc.severity.value, 0) + 1
+    return [
+        {"Metric": "Total Incidents", "Value": len(incidents)},
+        {"Metric": "Open", "Value": status_counts["open"]},
+        {"Metric": "Under Review", "Value": status_counts["under_review"]},
+        {"Metric": "Resolved", "Value": status_counts["resolved"]},
+        {"Metric": "Closed", "Value": status_counts["closed"]},
+        {"Metric": "Low Severity", "Value": severity_counts["low"]},
+        {"Metric": "Medium Severity", "Value": severity_counts["medium"]},
+        {"Metric": "High Severity", "Value": severity_counts["high"]},
+        {"Metric": "Critical Severity", "Value": severity_counts["critical"]},
+    ]
+
+
+async def _incident_report(
+    _user: NotStudent,
+    db: AsyncSession,
+    fetch,
+    title: str,
+    slug: str,
+    date_from: date | None,
+    date_to: date | None,
+    format: str,
+) -> StreamingResponse | list:
+    rows = await fetch(db, _day_start(date_from), _day_end(date_to))
+    headers = ["Title", "Category", "Severity", "Status", "Incident Date", "Location",
+               "Reported By", "Involved Student", "Resolution"]
+    return await _export_rows(db, _user, rows, headers, title,
+                              _range_label(date_from, date_to), format, slug, slug, date_from, date_to)
+
+
+@router.get("/incidents/reports", response_model=None, summary="Incident reports log")
+async def incident_reports_log(
+    _user: NotStudent,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
+    format: str = Query("json", pattern="^(json|csv|xlsx|pdf)$"),
+) -> StreamingResponse | list:
+    return await _incident_report(_user, db, _fetch_incident_reports,
+                                  "Incident Reports", "incident-reports", date_from, date_to, format)
+
+
+@router.get("/incidents/categories", response_model=None, summary="Incident categories report")
+async def incident_categories_log(
+    _user: NotStudent,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
+    format: str = Query("json", pattern="^(json|csv|xlsx|pdf)$"),
+) -> StreamingResponse | list:
+    rows = await _fetch_incident_categories(db, _day_start(date_from), _day_end(date_to))
+    headers = ["Category", "Total", "Open", "Under Review", "Resolved", "Closed"]
+    return await _export_rows(db, _user, rows, headers, "Incident Categories Report",
+                              _range_label(date_from, date_to), format,
+                              "incident-categories", "incident-categories", date_from, date_to)
+
+
+@router.get("/incidents/summary", response_model=None, summary="Incident summary report")
+async def incident_summary_log(
+    _user: NotStudent,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
+    format: str = Query("json", pattern="^(json|csv|xlsx|pdf)$"),
+) -> StreamingResponse | list:
+    rows = await _fetch_incident_summary(db, _day_start(date_from), _day_end(date_to))
+    headers = ["Metric", "Value"]
+    return await _export_rows(db, _user, rows, headers, "Incident Summary Report",
+                              _range_label(date_from, date_to), format,
+                              "incident-summary", "incident-summary", date_from, date_to)
+
+
+# ── Sanctions Reports ──────────────────────────────────────────────────────────
+
+async def _fetch_sanctions(db: AsyncSession, statuses: list | None, date_from, date_to) -> list[dict]:
+    student = aliased(User)
+    issuer = aliased(User)
+    query = (
+        select(Sanction, student, issuer)
+        .join(student, student.id == Sanction.student_id)
+        .join(issuer, issuer.id == Sanction.issued_by_id)
+    )
+    if statuses:
+        query = query.where(Sanction.status.in_(statuses))
+    if date_from:
+        query = query.where(Sanction.created_at >= date_from)
+    if date_to:
+        query = query.where(Sanction.created_at <= date_to)
+    query = query.order_by(Sanction.created_at.desc())
+    result = await db.execute(query)
+    rows = []
+    for s, stud, iss in result.all():
+        rows.append({
+            "Student Name": stud.full_name,
+            "Student ID": stud.student_id or "",
+            "Violation": s.violation_type.value,
+            "Severity": s.severity.value,
+            "Status": s.status.value,
+            "Violation Date": s.violation_date,
+            "Start Date": s.start_date,
+            "End Date": s.end_date,
+            "Issued By": iss.full_name,
+            "Penalty": s.penalty,
+            "Compliant": s.is_compliant,
+            "Acknowledged": s.acknowledged_by_student,
+        })
+    return rows
+
+
+async def _sanction_report(
+    _user: NotStudent,
+    db: AsyncSession,
+    statuses: list | None,
+    title: str,
+    slug: str,
+    date_from: date | None,
+    date_to: date | None,
+    format: str,
+) -> StreamingResponse | list:
+    rows = await _fetch_sanctions(db, statuses, _day_start(date_from), _day_end(date_to))
+    headers = ["Student Name", "Student ID", "Violation", "Severity", "Status",
+               "Violation Date", "Start Date", "End Date", "Issued By", "Penalty",
+               "Compliant", "Acknowledged"]
+    return await _export_rows(db, _user, rows, headers, title,
+                              _range_label(date_from, date_to), format, slug, slug, date_from, date_to)
+
+
+@router.get("/sanctions/active", response_model=None, summary="Active sanctions report")
+async def active_sanctions_report(
+    _user: NotStudent,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
+    format: str = Query("json", pattern="^(json|csv|xlsx|pdf)$"),
+) -> StreamingResponse | list:
+    return await _sanction_report(_user, db, [SanctionStatus.ACTIVE],
+                                  "Active Sanctions Report", "active-sanctions",
+                                  date_from, date_to, format)
+
+
+@router.get("/sanctions/completed", response_model=None, summary="Completed sanctions report")
+async def completed_sanctions_report(
+    _user: NotStudent,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
+    format: str = Query("json", pattern="^(json|csv|xlsx|pdf)$"),
+) -> StreamingResponse | list:
+    return await _sanction_report(_user, db, [SanctionStatus.SERVED],
+                                  "Completed Sanctions Report", "completed-sanctions",
+                                  date_from, date_to, format)
+
+
+@router.get("/sanctions/history", response_model=None, summary="Sanction history report")
+async def sanction_history_report(
+    _user: NotStudent,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
+    format: str = Query("json", pattern="^(json|csv|xlsx|pdf)$"),
+) -> StreamingResponse | list:
+    return await _sanction_report(_user, db, None,
+                                  "Sanction History Report", "sanction-history",
+                                  date_from, date_to, format)
