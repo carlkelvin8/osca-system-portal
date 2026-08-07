@@ -19,15 +19,21 @@ import {
   CalendarPlus,
   AlertTriangle,
 } from "lucide-react";
-import type { Facility, PaginatedResponse, ReservationCreate } from "@/types";
+import type { Facility, PaginatedResponse, ReservationCreate, VenueReservation } from "@/types";
 
 type VenueDef = { name: string; image: string };
+
+const RES_STATUS: Record<string, { label: string; className: string }> = {
+  pending: { label: "Pending", className: "bg-yellow-100 text-yellow-800" },
+  approved: { label: "Approved", className: "bg-green-100 text-green-800" },
+  rejected: { label: "Rejected", className: "bg-red-100 text-red-800" },
+};
 
 const VENUES: VenueDef[] = [
   { name: "Covered Court", image: "/covered_court.png" },
   { name: "Upper Gym", image: "/upper_gym.png" },
   { name: "Band Room", image: "/band_room.jpg" },
-  { name: "CAU Studio", image: "/cau_studio.jpg" },
+  { name: "CAU Studio", image: "/cau_studio.png" },
   { name: "Open Ground", image: "/open_ground.png" },
   { name: "Weights Room", image: "/weights_room.jpg" },
 ];
@@ -126,6 +132,13 @@ export default function FacilitiesPage() {
   const { data, isLoading } = useQuery<PaginatedResponse<Facility>>({
     queryKey: ["facilities"],
     queryFn: async () => (await facilitiesApi.list({ page_size: 50 })).data,
+  });
+
+  const { data: venueReservations, isLoading: resLoading } = useQuery<VenueReservation[]>({
+    queryKey: ["venue-reservations", viewFacility?.id],
+    queryFn: async () =>
+      viewFacility ? (await facilitiesApi.listVenueReservations(viewFacility.id)).data : [],
+    enabled: !!viewFacility,
   });
 
   const facilities = data?.items ?? [];
@@ -321,7 +334,7 @@ export default function FacilitiesPage() {
               {STATUS_BADGE(viewFacility.status)}
               <h2 className="absolute bottom-3 left-4 text-white font-bold text-xl drop-shadow">{viewFacility.name}</h2>
             </div>
-            <div className="p-5">
+            <div className="p-5 overflow-y-auto flex-1">
               <div className="flex items-center justify-between py-3 border-b border-gray-100">
                 <div className="flex items-center gap-2 text-sm text-gray-500">
                   <Activity size={15} className="text-[#9ca3af] shrink-0" /> Status
@@ -334,11 +347,53 @@ export default function FacilitiesPage() {
                 </div>
                 <span className="text-sm font-medium text-[#111827]">{formatDateTime(viewFacility.created_at)}</span>
               </div>
-              <div className="flex items-center justify-between py-3">
+              <div className="flex items-center justify-between py-3 border-b border-gray-100">
                 <div className="flex items-center gap-2 text-sm text-gray-500">
                   <Clock size={15} className="text-[#9ca3af] shrink-0" /> Last Updated
                 </div>
                 <span className="text-sm font-medium text-[#111827]">{formatDateTime(viewFacility.updated_at)}</span>
+              </div>
+
+              <div className="py-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-[#111827]">Upcoming Reservations</h3>
+                  {resLoading && <Loader2 size={14} className="animate-spin text-gray-400" />}
+                </div>
+                {!resLoading && venueReservations && venueReservations.length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center py-3 border border-dashed border-gray-200 rounded-lg">
+                    No upcoming reservations
+                  </p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="text-left text-[10px] uppercase tracking-wide text-gray-400 border-b border-gray-100">
+                          <th className="py-2 pr-2 font-semibold">Date</th>
+                          <th className="py-2 pr-2 font-semibold">Time</th>
+                          <th className="py-2 pr-2 font-semibold">Purpose</th>
+                          <th className="py-2 font-semibold text-right">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(venueReservations ?? []).map((r) => {
+                          const rs = RES_STATUS[r.status] ?? RES_STATUS.pending;
+                          return (
+                            <tr key={r.id} className="border-b last:border-0 border-gray-50">
+                              <td className="py-2 pr-2 whitespace-nowrap text-[#374151]">{r.reservation_date}</td>
+                              <td className="py-2 pr-2 whitespace-nowrap text-[#374151]">
+                                {formatTime(r.start_time)} – {formatTime(r.end_time)}
+                              </td>
+                              <td className="py-2 pr-2 text-[#374151] max-w-[9rem] truncate" title={r.purpose}>{r.purpose}</td>
+                              <td className="py-2 text-right">
+                                <span className={`inline-block px-2 py-0.5 rounded-full font-semibold ${rs.className}`}>{rs.label}</span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -585,8 +640,13 @@ export default function FacilitiesPage() {
                 >
                   <option value="" disabled>Select a venue...</option>
                   {facilities.map((f) => (
-                    <option key={f.id} value={f.id} disabled={f.status === "reserved"}>
-                      {f.name}{f.status === "reserved" ? " (Reserved)" : ""}
+                    <option
+                      key={f.id}
+                      value={f.id}
+                      disabled={f.status === "maintenance" || f.status === "closed"}
+                    >
+                      {f.name}
+                      {f.status === "maintenance" ? " (Under Maintenance)" : f.status === "closed" ? " (Closed)" : ""}
                     </option>
                   ))}
                 </select>

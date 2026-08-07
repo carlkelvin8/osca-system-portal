@@ -287,6 +287,8 @@ export const facilitiesApi = {
     api.post(`/facilities/${id}/image`, formData),
   listReservations: (params?: Record<string, string | number | boolean>) =>
     api.get("/facilities/reservations", { params }),
+  listVenueReservations: (id: string) =>
+    api.get(`/facilities/${id}/reservations`),
   createReservation: (data: Record<string, unknown>) =>
     api.post("/facilities/reservations", data),
   approveReservation: (id: string) =>

@@ -500,7 +500,7 @@ async def list_venue_reservations(
     if not facility:
         raise HTTPException(status_code=404, detail="Facility not found.")
 
-    today = datetime.now().date()
+    today = dt_datetime.now().date()
     query = (
         select(VenueReservationRequest)
         .where(
