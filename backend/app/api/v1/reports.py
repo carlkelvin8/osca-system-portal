@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 from xhtml2pdf import pisa
 
-from app.core.dependencies import CurrentUser, NotStudent, get_db
+from app.core.dependencies import AdminOnly, CurrentUser, NotStudent, get_db
 from app.models.attendance import AttendanceRecord, Session
 from app.models.eligibility import AthleteEligibility, EligibilityStatus
 from app.models.facility import Facility
@@ -207,7 +207,7 @@ async def dashboard_summary(
     response_model=None,
 )
 async def inventory_monthly(
-    _user: NotStudent,
+    _user: AdminOnly,
     db: Annotated[AsyncSession, Depends(get_db)],
     year: int = Query(..., ge=2020, le=2100, description="Report year"),
     month: int = Query(..., ge=1, le=12, description="Report month (1-12)"),
@@ -797,7 +797,7 @@ async def _fetch_lost_damaged(db: AsyncSession, date_from, date_to) -> list[dict
     summary="Equipment inventory report (all formats)",
 )
 async def equipment_inventory_report(
-    _user: NotStudent,
+    _user: AdminOnly,
     db: Annotated[AsyncSession, Depends(get_db)],
     format: str = Query("json", pattern="^(json|csv|xlsx|pdf)$"),
 ) -> StreamingResponse | list:
@@ -815,7 +815,7 @@ async def equipment_inventory_report(
     summary="Borrowing history report",
 )
 async def borrowing_history_report(
-    _user: NotStudent,
+    _user: AdminOnly,
     db: Annotated[AsyncSession, Depends(get_db)],
     date_from: date | None = Query(None),
     date_to: date | None = Query(None),
@@ -835,7 +835,7 @@ async def borrowing_history_report(
     summary="Returned equipment report",
 )
 async def returned_equipment_report(
-    _user: NotStudent,
+    _user: AdminOnly,
     db: Annotated[AsyncSession, Depends(get_db)],
     date_from: date | None = Query(None),
     date_to: date | None = Query(None),
@@ -854,7 +854,7 @@ async def returned_equipment_report(
     summary="Lost / damaged equipment report",
 )
 async def lost_damaged_equipment_report(
-    _user: NotStudent,
+    _user: AdminOnly,
     db: Annotated[AsyncSession, Depends(get_db)],
     date_from: date | None = Query(None),
     date_to: date | None = Query(None),
