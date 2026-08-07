@@ -17,6 +17,18 @@ from app.services.audit_service import audit_log
 router = APIRouter()
 
 
+def _jsonable(d: dict) -> dict:
+    """Convert UUID / date / time / datetime values to strings for JSONB audit columns."""
+    from datetime import date as _date, datetime as _datetime, time as _time
+
+    def conv(v):
+        if isinstance(v, (uuid.UUID, _date, _datetime, _time)):
+            return str(v)
+        return v
+
+    return {k: conv(v) for k, v in d.items()}
+
+
 @router.get("", response_model=PaginatedResponse[SanctionRead], summary="List sanctions")
 async def list_sanctions(
     current_user: CurrentUser,
@@ -64,7 +76,7 @@ async def create_sanction(
         description=f"Issued sanction to student {body.student_id} ({body.violation_type})",
         resource_type="Sanction",
         resource_id=str(sanction.id),
-        new_values=body.model_dump(),
+        new_values=_jsonable(body.model_dump()),
         current_user=user,
     )
     await db.commit()
@@ -94,7 +106,7 @@ async def update_sanction(
         description=f"Updated sanction for student {sanction.student_id}",
         resource_type="Sanction",
         resource_id=str(sanction_id),
-        new_values=updates,
+        new_values=_jsonable(updates),
         current_user=user,
     )
     await db.flush()

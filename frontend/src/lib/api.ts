@@ -317,6 +317,8 @@ export const notificationsApi = {
 export const eligibilityApi = {
   list: (params?: Record<string, string | number | boolean>) =>
     api.get("/eligibility", { params }),
+  listStudents: (params?: Record<string, string | number | boolean>) =>
+    api.get("/eligibility/students", { params }),
   create: (data: Record<string, unknown>) =>
     api.post("/eligibility", data),
   update: (id: string, data: Record<string, unknown>) =>

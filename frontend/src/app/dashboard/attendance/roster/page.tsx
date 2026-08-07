@@ -21,7 +21,10 @@ interface Student {
 export default function PlayerRosterPage() {
   const { user } = useAuthStore();
   const router = useRouter();
-  const sport = user?.sport_or_art ?? null;
+  const sport =
+    user?.role === "coach"
+      ? user?.assigned_sport ?? null
+      : user?.sport_or_art ?? null;
 
   // Fetch all students in coach's sport
   const { data: studentsData, isLoading: studentsLoading } = useQuery<

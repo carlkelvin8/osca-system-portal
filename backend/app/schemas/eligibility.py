@@ -42,5 +42,7 @@ class EligibilityRead(BaseModel):
     created_by_id: uuid.UUID | None
     created_at: datetime
     updated_at: datetime
+    student_registered_id: str | None = None
+    student_full_name: str | None = None
 
     model_config = {"from_attributes": True}

@@ -103,6 +103,8 @@ async def create_user(
         hashed_password=hash_password(body.password),
         biometric_consent_date=datetime.now(UTC) if body.biometric_consent else None,
     )
+    if not isinstance(user.role, UserRole):
+        user.role = UserRole(user.role)
     db.add(user)
     await audit_log(
         db=db,

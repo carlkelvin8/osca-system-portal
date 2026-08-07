@@ -518,6 +518,8 @@ export interface AthleteEligibility {
   created_by_id: string | null;
   created_at: string;
   updated_at: string;
+  student_registered_id: string | null;
+  student_full_name: string | null;
 }
 
 // ── Incidents ─────────────────────────────────────────────────────────────────

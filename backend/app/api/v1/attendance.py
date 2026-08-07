@@ -72,6 +72,77 @@ def _performed_by(user: User | None) -> str:
     return role.value if hasattr(role, "value") else str(role) if role else "system"
 
 
+def _jsonable(data: dict) -> dict:
+    """Stringify UUID / date / datetime / time values so dicts are JSONB-safe for audit logs."""
+    import datetime as _dt
+
+    out = {}
+    for k, v in data.items():
+        if isinstance(v, (_dt.date, _dt.datetime, _dt.time)) or isinstance(v, uuid.UUID):
+            out[k] = str(v)
+        elif isinstance(v, dict):
+            out[k] = _jsonable(v)
+        elif isinstance(v, list):
+            out[k] = [_jsonable(i) if isinstance(i, dict) else i for i in v]
+        else:
+            out[k] = v
+    return out
+
+
+def _validate_coach_session_sport(current_user: User, sport_or_art: str | None) -> None:
+    """Coaches may only create/manage sessions for their assigned sport or art."""
+    if current_user.role != UserRole.COACH:
+        return
+    if not current_user.assigned_sport or sport_or_art != current_user.assigned_sport:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Coaches can only create/manage sessions for their assigned sport or art",
+        )
+
+
+async def _enforce_coach_session_scope(
+    db: AsyncSession,
+    current_user: User,
+    session: Session,
+    *,
+    action: str = "ATTENDANCE_ATTEMPT_BLOCKED",
+    method: str | None = None,
+    scan_type: AttendanceScanType | None = None,
+) -> None:
+    """
+    Coaches may only manage/scan sessions for their assigned sport or art.
+
+    Non-coaches pass through. A coach with a mismatched (or missing) assigned
+    sport gets an audit-logged block + 403.
+    """
+    if current_user.role != UserRole.COACH:
+        return
+    if not current_user.assigned_sport or session.sport_or_art != current_user.assigned_sport:
+        await _attendance_audit(
+            db=db,
+            action=action,
+            description=(
+                f"Coach '{current_user.full_name}' blocked from session '{session.name}' "
+                f"({session.sport_or_art or 'N/A'}) — assigned sport/art is "
+                f"'{current_user.assigned_sport or 'N/A'}'"
+            ),
+            status="failure",
+            method=method,
+            result="blocked",
+            failure_reason="Session is not in the coach's assigned sport or art",
+            session=session,
+            scan_type=scan_type,
+            performer=current_user,
+            resource_type="Session",
+            resource_id=str(session.id),
+        )
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This session is not in your assigned sport or art",
+        )
+
+
 async def _attendance_audit(
     db: AsyncSession,
     *,
@@ -114,7 +185,7 @@ async def _attendance_audit(
         "date_time": datetime.now(UTC).isoformat(),
         "attendance_status": attendance_record.status if attendance_record else None,
         "method": method,
-        "scan_type": scan_type.value if scan_type else None,
+        "scan_type": getattr(scan_type, "value", scan_type) if scan_type else None,
         "action": action,
         "performed_by": _performed_by(performer),
         "result": result,
@@ -161,6 +232,8 @@ async def create_session(
     current_user: AdminOrCoach,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SessionRead:
+    _validate_coach_session_sport(current_user, body.sport_or_art)
+
     session = Session(
         **body.model_dump(),
         created_by_id=current_user.id,
@@ -256,6 +329,10 @@ async def get_session(
     if not session:
         raise NotFoundError("Session", str(session_id))
 
+    await _enforce_coach_session_scope(
+        db, current_user, session, action="SESSION_ACCESS_DENIED", method="manual"
+    )
+
     count_result = await db.execute(
         select(func.count(AttendanceRecord.id)).where(AttendanceRecord.session_id == session.id)
     )
@@ -280,7 +357,14 @@ async def update_session(
     if not session:
         raise NotFoundError("Session", str(session_id))
 
+    await _enforce_coach_session_scope(
+        db, current_user, session, action="SESSION_ACCESS_DENIED", method="manual"
+    )
+
     update_data = body.model_dump(exclude_unset=True)
+
+    if "sport_or_art" in update_data:
+        _validate_coach_session_sport(current_user, update_data["sport_or_art"])
 
     # Validate scheduled_end > scheduled_start if both are being set
     new_start = update_data.get("scheduled_start", session.scheduled_start)
@@ -304,7 +388,7 @@ async def update_session(
         performer=current_user,
         resource_type="Session",
         resource_id=str(session_id),
-        new_values=update_data,
+        new_values=_jsonable(update_data),
     )
     await db.commit()
     await db.refresh(session)
@@ -336,6 +420,10 @@ async def end_session(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Session is already closed",
         )
+
+    await _enforce_coach_session_scope(
+        db, current_user, session, action="SESSION_ACCESS_DENIED", method="manual"
+    )
 
     session.is_active = False
     await _attendance_audit(
@@ -382,6 +470,10 @@ async def open_session(
             detail="Session is already open",
         )
 
+    await _enforce_coach_session_scope(
+        db, current_user, session, action="SESSION_ACCESS_DENIED", method="manual"
+    )
+
     session.is_active = True
     await _attendance_audit(
         db=db,
@@ -421,6 +513,10 @@ async def delete_session(
     session = result.scalar_one_or_none()
     if not session:
         raise NotFoundError("Session", str(session_id))
+
+    await _enforce_coach_session_scope(
+        db, current_user, session, action="SESSION_ACCESS_DENIED", method="manual"
+    )
 
     record_count = (
         await db.execute(
@@ -478,6 +574,14 @@ async def enroll_face(
     user = result.scalar_one_or_none()
     if not user:
         raise NotFoundError("User", str(body.user_id))
+
+    # Coaches may only enroll students from their assigned sport/art
+    if current_user.role == UserRole.COACH:
+        if user.role != UserRole.STUDENT or user.sport_or_art != current_user.assigned_sport:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Coaches can only enroll students from their assigned sport or art",
+            )
     if not user.biometric_consent:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -625,6 +729,14 @@ async def face_scan(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="PE Instructors are not allowed to scan attendance",
         )
+
+    # Coaches may only scan sessions for their assigned sport/art
+    await _enforce_coach_session_scope(
+        db, current_staff, session,
+        action="ATTENDANCE_ATTEMPT_BLOCKED",
+        method="facial_recognition",
+        scan_type=body.scan_type,
+    )
 
     # Students can only scan sessions matching their assigned sport_or_art
     if current_staff.role == UserRole.STUDENT and current_staff.sport_or_art and session.sport_or_art:
@@ -1046,6 +1158,10 @@ async def get_attendance_records(
     elif student_id:
         query = query.where(AttendanceRecord.student_id == student_id)
 
+    # Coaches only see records for their assigned sport's sessions
+    if current_user.role == UserRole.COACH and current_user.assigned_sport:
+        query = query.where(Session.sport_or_art == current_user.assigned_sport)
+
     if session_id:
         query = query.where(AttendanceRecord.session_id == session_id)
 
@@ -1107,6 +1223,10 @@ async def add_manual_attendance(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AttendanceRecordRead:
     session, student = await _load_manual_context(db, body.session_id, body.student_id)
+
+    await _enforce_coach_session_scope(
+        db, current_user, session, action="MANUAL_ATTENDANCE_BLOCKED", method="manual"
+    )
 
     # Prevent duplicates (unique index: student_id + session_id)
     dup = await db.execute(
@@ -1222,6 +1342,16 @@ async def edit_manual_attendance(
 
     sres = await db.execute(select(Session).where(Session.id == record.session_id))
     session = sres.scalar_one_or_none()
+
+    if current_user.role == UserRole.COACH:
+        if session is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This session is not in your assigned sport or art",
+            )
+        await _enforce_coach_session_scope(
+            db, current_user, session, action="MANUAL_ATTENDANCE_BLOCKED", method="manual"
+        )
 
     old_values = {
         "time_in": str(record.time_in) if record.time_in else None,
@@ -1344,6 +1474,16 @@ async def delete_manual_attendance(
 
     sres = await db.execute(select(Session).where(Session.id == record.session_id))
     session = sres.scalar_one_or_none()
+
+    if current_user.role == UserRole.COACH:
+        if session is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This session is not in your assigned sport or art",
+            )
+        await _enforce_coach_session_scope(
+            db, current_user, session, action="MANUAL_ATTENDANCE_BLOCKED", method="manual"
+        )
 
     await _attendance_audit(
         db=db,
@@ -1480,6 +1620,11 @@ async def qr_check_in(
         )
         await db.commit()
         raise HTTPException(status_code=400, detail="Session is not active")
+
+    # Coaches may only scan sessions for their assigned sport/art
+    await _enforce_coach_session_scope(
+        db, current_user, session, action="ATTENDANCE_ATTEMPT_BLOCKED", method="qr_code"
+    )
 
     # Inactive account
     if not student.is_active:

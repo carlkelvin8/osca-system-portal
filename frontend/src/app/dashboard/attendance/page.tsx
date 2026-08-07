@@ -159,7 +159,7 @@ function NewSessionModal({ onClose, defaultSport }: NewSessionModalProps) {
       attendanceApi.createSession({
         name: form.name,
         activity_type: form.activity_type,
-        sport_or_art: form.sport_or_art || null,
+        sport_or_art: defaultSport || form.sport_or_art || null,
         venue: form.venue || null,
         scheduled_start: new Date(form.scheduled_start).toISOString(),
         scheduled_end: new Date(form.scheduled_end).toISOString(),
@@ -248,10 +248,21 @@ function NewSessionModal({ onClose, defaultSport }: NewSessionModalProps) {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Sport / Art</label>
-              <SportArtCombobox
-                value={form.sport_or_art}
-                onChange={(v) => setForm((f) => ({ ...f, sport_or_art: v }))}
-              />
+              {defaultSport ? (
+                <input
+                  type="text"
+                  value={defaultSport}
+                  readOnly
+                  disabled
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
+                  title="Coaches can only create sessions for their assigned sport/art"
+                />
+              ) : (
+                <SportArtCombobox
+                  value={form.sport_or_art}
+                  onChange={(v) => setForm((f) => ({ ...f, sport_or_art: v }))}
+                />
+              )}
             </div>
           </div>
 
@@ -374,9 +385,10 @@ interface EditSessionFormData {
 interface EditSessionModalProps {
   session: Session;
   onClose: () => void;
+  isCoach?: boolean;
 }
 
-function EditSessionModal({ session, onClose }: EditSessionModalProps) {
+function EditSessionModal({ session, onClose, isCoach = false }: EditSessionModalProps) {
   const queryClient = useQueryClient();
   const toLocal = (iso: string) => {
     const d = new Date(iso);
@@ -400,7 +412,7 @@ function EditSessionModal({ session, onClose }: EditSessionModalProps) {
       attendanceApi.updateSession(session.id, {
         name: form.name,
         activity_type: form.activity_type,
-        sport_or_art: form.sport_or_art || null,
+        sport_or_art: isCoach ? session.sport_or_art : form.sport_or_art || null,
         venue: form.venue || null,
         scheduled_start: new Date(form.scheduled_start).toISOString(),
         scheduled_end: new Date(form.scheduled_end).toISOString(),
@@ -461,7 +473,18 @@ function EditSessionModal({ session, onClose }: EditSessionModalProps) {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Sport / Art</label>
-              <SportArtCombobox value={form.sport_or_art} onChange={(v) => setForm((f) => ({ ...f, sport_or_art: v }))} />
+              {isCoach ? (
+                <input
+                  type="text"
+                  value={session.sport_or_art ?? ""}
+                  readOnly
+                  disabled
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
+                  title="Coaches can only manage sessions for their assigned sport/art"
+                />
+              ) : (
+                <SportArtCombobox value={form.sport_or_art} onChange={(v) => setForm((f) => ({ ...f, sport_or_art: v }))} />
+              )}
             </div>
           </div>
 
@@ -517,7 +540,7 @@ export default function AttendancePage() {
   const isCoach = user?.role === "coach";
   const isStudent = user?.role === "student";
   const isPE = user?.role === "pe_instructor";
-  const userSport = user?.sport_or_art ?? undefined;
+  const userSport = (isCoach ? user?.assigned_sport : user?.sport_or_art) ?? undefined;
 
   // PE Instructors are not allowed in the attendance module
   useEffect(() => {
@@ -613,7 +636,7 @@ export default function AttendancePage() {
     <>
       {showNewSession && <NewSessionModal onClose={() => setShowNewSession(false)} defaultSport={userSport} />}
       {editingSession && (
-        <EditSessionModal session={editingSession} onClose={() => setEditingSession(null)} />
+        <EditSessionModal session={editingSession} onClose={() => setEditingSession(null)} isCoach={isCoach} />
       )}
       {endingSession && (
         <div
