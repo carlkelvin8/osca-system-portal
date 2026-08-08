@@ -117,7 +117,7 @@ const navItems: NavItem[] = [
       href: "/dashboard/reports",
       label: "Reports",
       icon: BarChart3,
-      roles: ["admin", "director", "coach"],
+      roles: ["admin", "director", "coach", "staff"],
     },
     {
       href: "/dashboard/analytics",
