@@ -3,11 +3,11 @@
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { attendanceApi } from "@/lib/api";
+import { attendanceApi, facilitiesApi } from "@/lib/api";
 import { useAuthStore } from "@/store/useAuthStore";
 import { CalendarCheck, Plus, X, Loader2, Users, ClipboardList, CheckCircle2, XCircle, Clock, ChevronDown } from "lucide-react";
 import Link from "next/link";
-import type { Session, ActivityType, AttendanceRecord, PaginatedResponse } from "@/types";
+import type { Session, ActivityType, AttendanceRecord, PaginatedResponse, Facility } from "@/types";
 import { format } from "date-fns";
 
 // ── Sport / Art options ──────────────────────────────────────────────────────────
@@ -141,6 +141,8 @@ const ACTIVITY_OPTIONS: { value: ActivityType; label: string }[] = [
   { value: "other",       label: "Other" },
 ];
 
+const OTHER_VENUE_VALUE = "__others__";
+
 interface NewSessionModalProps {
   onClose: () => void;
   defaultSport?: string;
@@ -153,6 +155,14 @@ function NewSessionModal({ onClose, defaultSport }: NewSessionModalProps) {
     ...(defaultSport ? { sport_or_art: defaultSport } : {}),
   });
   const [error, setError] = useState<string | null>(null);
+  const [customVenue, setCustomVenue] = useState("");
+  const isOthersVenue = form.venue === OTHER_VENUE_VALUE;
+
+  const { data: venuesData } = useQuery<PaginatedResponse<Facility>>({
+    queryKey: ["facilities"],
+    queryFn: async () => (await facilitiesApi.list({ page_size: 50 })).data,
+  });
+  const venues = venuesData?.items ?? [];
 
   const { mutate: createSession, isPending } = useMutation({
     mutationFn: () =>
@@ -160,7 +170,10 @@ function NewSessionModal({ onClose, defaultSport }: NewSessionModalProps) {
         name: form.name,
         activity_type: form.activity_type,
         sport_or_art: defaultSport || form.sport_or_art || null,
-        venue: form.venue || null,
+        venue:
+          isOthersVenue
+            ? customVenue.trim() || null
+            : form.venue || null,
         scheduled_start: new Date(form.scheduled_start).toISOString(),
         scheduled_end: new Date(form.scheduled_end).toISOString(),
         grace_period_minutes: form.grace_period_minutes,
@@ -190,6 +203,9 @@ function NewSessionModal({ onClose, defaultSport }: NewSessionModalProps) {
     if (!form.scheduled_end)   { setError("End date/time is required."); return; }
     if (new Date(form.scheduled_end) <= new Date(form.scheduled_start)) {
       setError("End time must be after start time."); return;
+    }
+    if (isOthersVenue && !customVenue.trim()) {
+      setError("Custom venue name is required."); return;
     }
     createSession();
   };
@@ -268,14 +284,39 @@ function NewSessionModal({ onClose, defaultSport }: NewSessionModalProps) {
 
           {/* Venue */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Venue</label>
-            <input
-              type="text"
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Venue <span className="text-red-500">*</span>
+            </label>
+            <select
               value={form.venue}
-              onChange={set("venue")}
-              placeholder="e.g. NAAP Gymnasium"
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]/30 focus:border-[#1E3A5F]"
-            />
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === OTHER_VENUE_VALUE) {
+                  setForm((f) => ({ ...f, venue: OTHER_VENUE_VALUE }));
+                } else {
+                  setForm((f) => ({ ...f, venue: v }));
+                  setCustomVenue("");
+                }
+              }}
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]/30 focus:border-[#1E3A5F] bg-white"
+            >
+              <option value="">-- Select Venue --</option>
+              {venues.map((venue) => (
+                <option key={venue.id} value={venue.name}>
+                  {venue.name}
+                </option>
+              ))}
+              <option value={OTHER_VENUE_VALUE}>Others</option>
+            </select>
+            {isOthersVenue && (
+              <input
+                type="text"
+                value={customVenue}
+                onChange={(e) => setCustomVenue(e.target.value)}
+                placeholder="Enter venue name..."
+                className="mt-2 w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]/30 focus:border-[#1E3A5F]"
+              />
+            )}
           </div>
 
           {/* Start / End datetimes side by side */}
