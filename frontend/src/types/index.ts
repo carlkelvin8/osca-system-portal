@@ -324,6 +324,18 @@ export interface Announcement {
   created_by_name: string;
   created_at: string;
   updated_at: string;
+  acknowledged_by_me?: boolean;
+  acknowledgement_count?: number;
+  comment_count?: number;
+}
+
+export interface AnnouncementComment {
+  id: string;
+  announcement_id: string;
+  user_id: string;
+  author_name: string;
+  content: string;
+  created_at: string;
 }
 
 // ── Facial Recognition Config ─────────────────────────────────────────────────

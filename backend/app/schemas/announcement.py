@@ -38,3 +38,26 @@ class AnnouncementRead(OSCABaseModel):
     created_by_name: str = ""
     created_at: datetime
     updated_at: datetime
+    # Acknowledgement / comment summary (populated for the requesting user)
+    acknowledged_by_me: bool = False
+    acknowledgement_count: int = 0
+    comment_count: int = 0
+
+
+class AcknowledgementRead(OSCABaseModel):
+    announcement_id: uuid.UUID
+    user_id: uuid.UUID
+    created_at: datetime
+
+
+class CommentCreate(OSCABaseModel):
+    content: str = Field(min_length=1, max_length=1000)
+
+
+class CommentRead(OSCABaseModel):
+    id: uuid.UUID
+    announcement_id: uuid.UUID
+    user_id: uuid.UUID
+    author_name: str = ""
+    content: str
+    created_at: datetime

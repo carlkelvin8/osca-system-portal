@@ -7,6 +7,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
+import { motion } from "framer-motion";
 import {
   Users,
   CalendarCheck,
@@ -15,6 +16,7 @@ import {
   LogOut,
   Camera,
   LayoutDashboard,
+  ChevronLeft,
   ChevronRight,
   Bell,
   ScanFace,
@@ -32,6 +34,7 @@ import {
 } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useThemeStore } from "@/store/useThemeStore";
+import { useSidebarStore } from "@/store/useSidebarStore";
 import { useNotificationStore } from "@/store/useNotificationStore";
 import { OfflineBanner } from "@/components/ui/OfflineBanner";
 import type { UserRole } from "@/types";
@@ -211,6 +214,36 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const { collapsed, toggle: toggleCollapsed } = useSidebarStore();
+  const [navTip, setNavTip] = useState<{ label: string; left: number; top: number } | null>(null);
+
+  // Show a floating label tooltip in icon-only (collapsed) mode
+  const showNavTip = (e: React.MouseEvent<HTMLElement>, label: string) => {
+    if (!collapsed) return;
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setNavTip({ label, left: rect.right + 12, top: rect.top + rect.height / 2 });
+  };
+  const hideNavTip = () => setNavTip(null);
+
+  useEffect(() => {
+    setNavTip(null);
+  }, [collapsed]);
+
+  // Close the mobile drawer whenever the route changes
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
+
+  // Lock body scroll while the mobile drawer is open
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = prev;
+      };
+    }
+  }, [mobileMenuOpen]);
 
   useEffect(() => {
     fetchCurrentUser();
@@ -235,7 +268,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Show spinner while auth is resolving (isLoading) or user not yet loaded
   if (isLoading || (!isAuthenticated && user === null)) {
     return (
-      <div className={`min-h-screen flex items-center justify-center ${isDark ? "bg-[#0f1219]" : "bg-[#f5f6f8]"}`}>
+      <div className={`min-h-screen flex items-center justify-center ${isDark ? "bg-[#0F172A]" : "bg-[#f2f5f9]"}`}>
         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#2563eb]" />
       </div>
     );
@@ -256,7 +289,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     (user.first_name?.[0] ?? "") + (user.last_name?.[0] ?? "");
 
   return (
-    <div className={`flex h-screen ${isDark ? "dark bg-[#0f1219]" : "bg-[#f5f6f8]"}`}>
+    <div className={`flex h-screen ${isDark ? "dark bg-[#0F172A]" : "bg-[#f2f5f9]"}`}>
       {/* ── Mobile Menu Overlay ── */}
       {mobileMenuOpen && (
         <div className="fixed inset-0 z-50 lg:hidden" onClick={() => setMobileMenuOpen(false)}>
@@ -265,31 +298,44 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       )}
 
       {/* ── Sidebar ───────────────────────────────────────────────────────── */}
-      <aside className={`${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0 fixed lg:static inset-y-0 left-0 z-50 w-52 bg-[#0f172a] text-white flex flex-col shrink-0 transition-transform duration-300`}>
+      <aside className={`${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0 fixed lg:static relative inset-y-0 left-0 z-50 w-52 bg-[#0f172a] text-white flex flex-col shrink-0 transition-[width,transform] duration-500 ease-[cubic-bezier(.16,1,.3,1)] ${collapsed ? "lg:w-[72px]" : "lg:w-52"}`}>
+        {/* Collapse toggle (desktop) */}
+        <button
+          onClick={toggleCollapsed}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          className="hidden lg:flex absolute z-50 -right-3 top-[22px] w-6 h-6 items-center justify-center rounded-full bg-[#0f172a] border border-white/15 text-white/70 shadow-lg hover:bg-[#2563eb] hover:text-white hover:border-[#2563eb] transition-colors duration-200"
+        >
+          <ChevronLeft
+            size={14}
+            className={`transition-transform duration-300 ease-[cubic-bezier(.16,1,.3,1)] ${collapsed ? "rotate-180" : ""}`}
+          />
+        </button>
+
         {/* Brand */}
         <div className="flex items-center justify-between px-4 py-4 border-b border-white/8">
-          <div className="flex items-center gap-2.5">
-           <div className="w-9 h-9 rounded-full bg-white overflow-hidden flex items-center justify-center shrink-0">
-  {/* eslint-disable-next-line @next/next/no-img-element */}
-  <img
-    src="/osca-logo.png"
-    alt="OSCA Logo"
-    className="w-full h-full object-cover"
-  />
-</div>
-            <div>
+          <Link href="/dashboard" className={`flex items-center gap-2.5 min-w-0 ${collapsed ? "lg:justify-center lg:gap-0" : ""}`}>
+            <div className="w-9 h-9 rounded-full bg-white overflow-hidden flex items-center justify-center shrink-0">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/osca-logo.png"
+                alt="OSCA Logo"
+                className="w-full h-full object-cover"
+              />
+            </div>
+            <div className={`min-w-0 overflow-hidden whitespace-nowrap transition-all duration-300 ${collapsed ? "lg:opacity-0 lg:max-w-0" : ""}`}>
               <p className="text-sm font-bold text-[#f8fafc] leading-tight">OSCA System</p>
               <p className="text-[11px] text-[#94a3b8]">NAAP-Villamor</p>
             </div>
-          </div>
-          <button onClick={() => setMobileMenuOpen(false)} className="lg:hidden p-1 text-white/50 hover:text-white">
+          </Link>
+          <button onClick={() => setMobileMenuOpen(false)} className="lg:hidden p-1 text-white/50 hover:text-white shrink-0">
             <X size={18} />
           </button>
         </div>
 
         {/* Nav */}
         <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
-          {visibleNav.map((item) => {
+          {visibleNav.map((item, index) => {
             const Icon = item.icon;
             const visibleChildren = item.children?.filter((c) => c.roles.includes(user.role)) ?? [];
             const hasActiveChild = visibleChildren.some((c) => pathname.startsWith(c.href));
@@ -300,51 +346,83 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   ? false
                   : pathname.startsWith(item.href);
             const isSectionOpen = pathname.startsWith(item.href) && item.href !== "/dashboard";
+            const showParentPill = isActive || (collapsed && hasActiveChild);
             return (
-              <div key={item.href}>
+              <motion.div
+                key={item.href}
+                initial={{ opacity: 0, x: -16 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: index * 0.035, duration: 0.4, ease: "easeOut" }}
+              >
                 <Link
                   href={item.href}
-                  className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors ${isActive
-                    ? "bg-[#2563eb] text-white"
-                    : isSectionOpen
-                      ? "text-[#e2e8f0] bg-white/6"
-                      : "text-[#94a3b8] hover:text-[#e2e8f0] hover:bg-white/6"
-                    }`}
+                  onMouseEnter={(e) => showNavTip(e, item.label)}
+                  onMouseLeave={hideNavTip}
+                  className={`group relative flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors duration-200 ${collapsed ? "lg:justify-center lg:gap-0" : ""} ${
+                    isActive
+                      ? "text-white"
+                      : isSectionOpen
+                        ? "text-[#e2e8f0]"
+                        : "text-[#94a3b8] hover:text-[#e2e8f0]"
+                  }`}
                 >
-                  <Icon size={17} className="shrink-0" />
-                  {item.label}
+                  <span className="pointer-events-none absolute inset-0 rounded-lg bg-white/6 origin-left scale-x-0 group-hover:scale-x-100 transition-transform duration-300 ease-out" />
+                  {showParentPill && (
+                    <motion.span
+                      layoutId="sidebar-active-pill"
+                      className="absolute inset-0 rounded-lg bg-[#2563eb]"
+                      transition={{ type: "spring", stiffness: 500, damping: 38 }}
+                    />
+                  )}
+                  <span className="relative z-10 flex items-center min-w-0">
+                    <Icon size={17} className="shrink-0 transition-transform duration-200 group-hover:scale-110" />
+                    <span className={`overflow-hidden whitespace-nowrap transition-all duration-300 ${collapsed ? "lg:ml-0 lg:opacity-0 lg:max-w-0" : "ml-2.5 opacity-100 max-w-40"}`}>
+                      {item.label}
+                    </span>
+                  </span>
                 </Link>
                 {isSectionOpen && visibleChildren.length > 0 && (
-                  <div className="ml-4 mt-0.5 space-y-0.5 border-l border-white/10 pl-3">
+                  <div className={`ml-4 mt-0.5 space-y-0.5 border-l border-white/10 pl-3 ${collapsed ? "lg:hidden" : ""}`}>
                     {visibleChildren.map((child) => {
                       const isChildActive = pathname.startsWith(child.href);
                       return (
                         <Link
                           key={child.href}
                           href={child.href}
-                          className={`block px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${isChildActive
-                            ? "bg-[#2563eb] text-white"
-                            : "text-[#94a3b8] hover:text-[#e2e8f0] hover:bg-white/6"
-                            }`}
+                          className={`relative block px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${
+                            isChildActive ? "text-white" : "text-[#94a3b8] hover:text-[#e2e8f0] hover:bg-white/6"
+                          }`}
                         >
-                          {child.label}
+                          {isChildActive && (
+                            <motion.span
+                              layoutId="sidebar-active-pill"
+                              className="absolute inset-0 rounded-lg bg-[#2563eb]"
+                              transition={{ type: "spring", stiffness: 500, damping: 38 }}
+                            />
+                          )}
+                          <span className="relative z-10">{child.label}</span>
                         </Link>
                       );
                     })}
                   </div>
                 )}
-              </div>
+              </motion.div>
             );
           })}
         </nav>
 
         {/* User section */}
         <div className="px-2 py-3 border-t border-white/8 space-y-0.5">
-          <Link href="/dashboard/profile" className="flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-white/6 transition-colors">
+          <Link
+            href="/dashboard/profile"
+            onMouseEnter={(e) => showNavTip(e, "Profile")}
+            onMouseLeave={hideNavTip}
+            className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors hover:bg-white/6 ${collapsed ? "lg:justify-center lg:gap-0" : ""}`}
+          >
             <div className="w-7 h-7 rounded-full bg-[#2563eb] flex items-center justify-center text-white text-xs font-semibold shrink-0">
               {initials.toUpperCase() || "?"}
             </div>
-            <div className="min-w-0">
+            <div className={`min-w-0 overflow-hidden whitespace-nowrap transition-all duration-300 ${collapsed ? "lg:opacity-0 lg:max-w-0" : ""}`}>
               <p className="text-[13px] font-medium text-[#f1f5f9] truncate leading-tight">
                 {user.full_name}
               </p>
@@ -353,18 +431,32 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </Link>
           <button
             onClick={() => setShowLogoutConfirm(true)}
-            className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-[#94a3b8] hover:text-white hover:bg-white/6 rounded-lg transition-colors"
+            onMouseEnter={(e) => showNavTip(e, "Sign Out")}
+            onMouseLeave={hideNavTip}
+            className={`w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-[#94a3b8] hover:text-white hover:bg-white/6 rounded-lg transition-colors ${collapsed ? "lg:justify-center lg:gap-0" : ""}`}
           >
             <LogOut size={15} className="shrink-0" />
-            Sign Out
+            <span className={`overflow-hidden whitespace-nowrap transition-all duration-300 ${collapsed ? "lg:opacity-0 lg:max-w-0" : "opacity-100 max-w-20"}`}>
+              Sign Out
+            </span>
           </button>
         </div>
       </aside>
 
+      {/* Collapsed-mode tooltip */}
+      {navTip && (
+        <div
+          className="fixed z-[150] pointer-events-none bg-[#0b1220] text-white text-xs font-medium px-2.5 py-1.5 rounded-md shadow-lg border border-white/10 whitespace-nowrap"
+          style={{ left: navTip.left, top: navTip.top, transform: "translateY(-50%)" }}
+        >
+          {navTip.label}
+        </div>
+      )}
+
       {/* Logout Confirmation Modal */}
       {showLogoutConfirm && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowLogoutConfirm(false)}>
-          <div className={`${isDark ? "bg-[#1a1f2e] border border-[#2a3040]" : "bg-white"} rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4`} onClick={(e) => e.stopPropagation()}>
+          <div className={`${isDark ? "bg-[#1E293B] border border-[#334155]" : "bg-white"} rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4`} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
                 <LogOut size={20} className="text-red-600" />
@@ -375,7 +467,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </div>
             </div>
             <div className="flex gap-3 mt-5">
-              <button onClick={() => setShowLogoutConfirm(false)} className={`flex-1 px-4 py-2.5 text-sm font-medium rounded-xl transition ${isDark ? "text-gray-300 bg-[#2a3040] hover:bg-[#353d4f]" : "text-gray-700 bg-gray-100 hover:bg-gray-200"}`}>Cancel</button>
+              <button onClick={() => setShowLogoutConfirm(false)} className={`flex-1 px-4 py-2.5 text-sm font-medium rounded-xl transition ${isDark ? "text-gray-300 bg-[#334155] hover:bg-[#475569]" : "text-gray-700 bg-gray-100 hover:bg-gray-200"}`}>Cancel</button>
               <button onClick={handleLogout} className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-red-600 rounded-xl hover:bg-red-700 transition">Sign Out</button>
             </div>
           </div>
@@ -385,7 +477,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* ── Main area ─────────────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Topbar */}
-        <header className={`h-14 ${isDark ? "bg-[#1a1f2e] border-[#2a2f3e]" : "bg-white border-[#e5e7eb]"} border-b flex items-center px-4 lg:px-6 gap-3 shrink-0`}>
+        <header className={`h-14 ${isDark ? "bg-[#1E293B] border-[#334155]" : "bg-white border-[#e5e7eb]"} border-b flex items-center px-4 lg:px-6 gap-3 shrink-0`}>
           {/* Mobile menu button */}
           <button onClick={() => setMobileMenuOpen(true)} className="lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 text-gray-600">
             <Menu size={20} />
@@ -434,7 +526,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
               {/* Notification dropdown */}
               {notifOpen && (
-                <div className={`absolute right-0 top-10 w-80 rounded-xl shadow-xl border z-50 ${isDark ? "bg-[#1a1f2e] border-[#2a2f3e]" : "bg-white border-gray-200"}`}>
+                <div className={`absolute right-0 top-10 w-80 rounded-xl shadow-xl border z-50 ${isDark ? "bg-[#1E293B] border-[#334155]" : "bg-white border-gray-200"}`}>
                   <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                     <span className={`text-sm font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>Notifications</span>
                     {unreadCount > 0 && (
@@ -449,7 +541,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         <button
                           key={n.id}
                           onClick={() => markRead(n.id)}
-                          className={`w-full text-left px-4 py-3 border-b last:border-0 transition-colors ${!n.read ? (isDark ? "bg-blue-900/10" : "bg-blue-50/50") : ""} ${isDark ? "border-[#2a2f3e] hover:bg-white/5" : "border-gray-50 hover:bg-gray-50"}`}
+                          className={`w-full text-left px-4 py-3 border-b last:border-0 transition-colors ${!n.read ? (isDark ? "bg-blue-900/10" : "bg-blue-50/50") : ""} ${isDark ? "border-[#334155] hover:bg-white/5" : "border-gray-50 hover:bg-gray-50"}`}
                         >
                           <p className={`text-sm font-medium ${isDark ? "text-white" : "text-gray-900"}`}>{n.title}</p>
                           <p className={`text-xs ${isDark ? "text-gray-400" : "text-gray-500"} mt-0.5`}>{n.message}</p>
@@ -472,8 +564,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <OfflineBanner />
 
         {/* Page content */}
-        <main className={`flex-1 overflow-auto ${isDark ? "bg-[#0f1219]" : ""}`}>
-          <div className="p-4 lg:p-6">{children}</div>
+        <main className={`flex-1 overflow-auto ${isDark ? "bg-[#0F172A]" : "bg-[#f2f5f9]"}`}>
+          <div className="p-5 lg:p-7">{children}</div>
         </main>
       </div>
     </div>

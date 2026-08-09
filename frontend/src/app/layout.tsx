@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
+import { ThemeSync } from "@/components/ThemeSync";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -22,8 +23,18 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=JSON.parse(localStorage.getItem("osca-theme")||"{}");if(t&&t.state&&t.state.isDark)document.documentElement.classList.add("dark");}catch(e){}})();`,
+          }}
+        />
+      </head>
       <body className={inter.className}>
-        <Providers>{children}</Providers>
+        <Providers>
+          <ThemeSync />
+          {children}
+        </Providers>
       </body>
     </html>
   );

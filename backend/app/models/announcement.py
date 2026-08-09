@@ -2,7 +2,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -42,8 +42,73 @@ class Announcement(Base):
 
     # Relationships
     created_by: Mapped["User"] = relationship("User", foreign_keys=[created_by_id])  # noqa: F821
+    acknowledgements: Mapped[list["AnnouncementAcknowledgement"]] = relationship(  # noqa: F821
+        back_populates="announcement",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    comments: Mapped[list["AnnouncementComment"]] = relationship(  # noqa: F821
+        back_populates="announcement",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
     __table_args__ = (
         Index("ix_announcements_event_date", "event_date"),
         Index("ix_announcements_is_active", "is_active"),
+    )
+
+
+class AnnouncementAcknowledgement(Base):
+    """
+    A single user's acknowledgement of an announcement.
+    One row per (announcement, user) — idempotent by unique constraint.
+    """
+    __tablename__ = "announcement_acknowledgements"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    announcement_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("announcements.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    announcement: Mapped["Announcement"] = relationship(back_populates="acknowledgements")  # noqa: F821
+    user: Mapped["User"] = relationship(  # noqa: F821
+        "User", foreign_keys=[user_id], lazy="selectin"
+    )
+
+    __table_args__ = (
+        UniqueConstraint("announcement_id", "user_id", name="uq_announcement_ack_user"),
+        Index("ix_announcement_acks_announcement", "announcement_id"),
+    )
+
+
+class AnnouncementComment(Base):
+    """A single user comment on an announcement."""
+    __tablename__ = "announcement_comments"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    announcement_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("announcements.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    announcement: Mapped["Announcement"] = relationship(back_populates="comments")  # noqa: F821
+    user: Mapped["User"] = relationship(  # noqa: F821
+        "User", foreign_keys=[user_id], lazy="selectin"
+    )
+
+    __table_args__ = (
+        Index("ix_announcement_comments_announcement", "announcement_id", "created_at"),
     )

@@ -19,7 +19,11 @@ from app.models.inventory import (
     RequestStatus,
 )
 from app.models.audit import AuditLog
-from app.models.announcement import Announcement
+from app.models.announcement import (
+    Announcement,
+    AnnouncementAcknowledgement,
+    AnnouncementComment,
+)
 from app.models.facility import Facility, FacilitySchedule, FacilityStatus, FacilityCondition
 from app.models.reservation import VenueReservationRequest, ReservationStatus
 from app.models.notification import Notification
@@ -35,7 +39,7 @@ __all__ = [
     "BorrowingID", "BorrowTransaction", "BorrowTransactionItem", "TransactionStatus",
     "EquipmentRequest", "EquipmentRequestItem", "RequestStatus",
     "AuditLog",
-    "Announcement",
+    "Announcement", "AnnouncementAcknowledgement", "AnnouncementComment",
     "Facility", "FacilitySchedule", "FacilityStatus", "FacilityCondition",
     "VenueReservationRequest", "ReservationStatus",
     "Notification",

@@ -181,11 +181,11 @@ function DetailModal({
       onClick={onClose}
     >
       <div
-        className={`w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl shadow-2xl ${isDark ? "bg-[#1a1f2e] border border-[#2a3040]" : "bg-white border border-gray-200"}`}
+        className={`w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl shadow-2xl ${isDark ? "bg-[#1E293B] border border-[#334155]" : "bg-white border border-gray-200"}`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className={`flex items-center justify-between px-6 py-4 border-b ${isDark ? "border-[#2a3040]" : "border-gray-100"}`}>
+        <div className={`flex items-center justify-between px-6 py-4 border-b ${isDark ? "border-[#334155]" : "border-gray-100"}`}>
           <div>
             <h2 className={`text-lg font-bold ${isDark ? "text-white" : "text-gray-900"}`}>
               Audit Log Detail
@@ -300,7 +300,7 @@ function FilterDropdown({
     <div className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border transition ${value ? "border-blue-500 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400" : isDark ? "border-[#2a3040] text-gray-400 hover:bg-white/5" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
+        className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border transition ${value ? "border-blue-500 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400" : isDark ? "border-[#334155] text-gray-400 hover:bg-white/5" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
       >
         <Filter size={13} />
         {label}
@@ -310,7 +310,7 @@ function FilterDropdown({
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className={`absolute right-0 top-full mt-1 z-50 w-48 max-h-60 overflow-y-auto rounded-xl shadow-xl border ${isDark ? "bg-[#1a1f2e] border-[#2a3040]" : "bg-white border-gray-200"}`}>
+          <div className={`absolute right-0 top-full mt-1 z-50 w-48 max-h-60 overflow-y-auto rounded-xl shadow-xl border ${isDark ? "bg-[#1E293B] border-[#334155]" : "bg-white border-gray-200"}`}>
             {options.map((opt) => (
               <button
                 key={opt}
@@ -458,7 +458,7 @@ export default function AuditLogsPage() {
             <button
               key={fmt}
               onClick={() => handleExport(fmt)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border transition ${isDark ? "border-[#2a3040] text-gray-400 hover:bg-white/5" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border transition ${isDark ? "border-[#334155] text-gray-400 hover:bg-white/5" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
             >
               <Download size={13} />
               {fmt.toUpperCase()}
@@ -468,8 +468,8 @@ export default function AuditLogsPage() {
       </div>
 
       {/* Search + Filters */}
-      <div className={`flex flex-wrap items-center gap-3 p-4 rounded-2xl ${isDark ? "bg-[#1a1f2e] border border-[#2a3040]" : "bg-white border border-gray-200 shadow-sm"}`}>
-        <div className={`flex items-center gap-2 flex-1 min-w-[200px] px-3 py-2 rounded-xl border ${isDark ? "border-[#2a3040] bg-[#0f1219]" : "border-gray-200 bg-gray-50"}`}>
+      <div className={`flex flex-wrap items-center gap-3 p-4 rounded-2xl ${isDark ? "bg-[#1E293B] border border-[#334155]" : "bg-white border border-gray-200 shadow-sm"}`}>
+        <div className={`flex items-center gap-2 flex-1 min-w-[200px] px-3 py-2 rounded-xl border ${isDark ? "border-[#334155] bg-[#0F172A]" : "border-gray-200 bg-gray-50"}`}>
           <Search size={15} className={isDark ? "text-gray-500" : "text-gray-400"} />
           <input
             type="text"
@@ -507,7 +507,7 @@ export default function AuditLogsPage() {
           isDark={isDark}
         />
 
-        <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${isDark ? "border-[#2a3040] bg-[#0f1219]" : "border-gray-200 bg-gray-50"}`}>
+        <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${isDark ? "border-[#334155] bg-[#0F172A]" : "border-gray-200 bg-gray-50"}`}>
           <span className={`text-xs font-medium ${isDark ? "text-gray-400" : "text-gray-500"}`}>From</span>
           <input
             type="date"
@@ -531,7 +531,7 @@ export default function AuditLogsPage() {
 
         <button
           onClick={() => setSortOrder(sortOrder === "desc" ? "asc" : "desc")}
-          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border transition ${isDark ? "border-[#2a3040] text-gray-400 hover:bg-white/5" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
+          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border transition ${isDark ? "border-[#334155] text-gray-400 hover:bg-white/5" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
           title={`Sort ${sortOrder === "desc" ? "oldest first" : "newest first"}`}
         >
           <ArrowUpDown size={13} />
@@ -540,7 +540,7 @@ export default function AuditLogsPage() {
       </div>
 
       {/* Table */}
-      <div className={`rounded-2xl border overflow-hidden ${isDark ? "bg-[#1a1f2e] border-[#2a3040]" : "bg-white border-gray-200 shadow-sm"}`}>
+      <div className={`rounded-2xl border overflow-hidden ${isDark ? "bg-[#1E293B] border-[#334155]" : "bg-white border-gray-200 shadow-sm"}`}>
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
@@ -565,7 +565,7 @@ export default function AuditLogsPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className={`border-b ${isDark ? "border-[#2a3040] bg-[#0f1219]/50" : "border-gray-100 bg-gray-50/50"}`}>
+                  <tr className={`border-b ${isDark ? "border-[#334155] bg-[#0F172A]/50" : "border-gray-100 bg-gray-50/50"}`}>
                     {["Admin", "Action", "Module", "Status", "IP Address", "Device", "Time", ""].map((h) => (
                       <th
                         key={h}
@@ -581,7 +581,7 @@ export default function AuditLogsPage() {
                     <tr
                       key={log.id}
                       onClick={() => viewDetail(log)}
-                      className={`border-b cursor-pointer transition-colors ${isDark ? "border-[#2a3040]/50 hover:bg-white/[0.02]" : "border-gray-50 hover:bg-gray-50/50"}`}
+                      className={`border-b cursor-pointer transition-colors ${isDark ? "border-[#334155]/50 hover:bg-white/[0.02]" : "border-gray-50 hover:bg-gray-50/50"}`}
                     >
                       {/* Admin */}
                       <td className="px-4 py-3">
@@ -662,7 +662,7 @@ export default function AuditLogsPage() {
             </div>
 
             {/* Pagination */}
-            <div className={`flex items-center justify-between px-4 py-3 border-t ${isDark ? "border-[#2a3040]" : "border-gray-100"}`}>
+            <div className={`flex items-center justify-between px-4 py-3 border-t ${isDark ? "border-[#334155]" : "border-gray-100"}`}>
               <p className={`text-xs ${isDark ? "text-gray-500" : "text-gray-400"}`}>
                 {data.total.toLocaleString()} records · Page {data.page} of {data.pages}
               </p>
@@ -670,7 +670,7 @@ export default function AuditLogsPage() {
                 <button
                   onClick={() => setPage(Math.max(1, page - 1))}
                   disabled={page <= 1}
-                  className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border transition ${page <= 1 ? "opacity-40 cursor-not-allowed" : ""} ${isDark ? "border-[#2a3040] text-gray-400 hover:bg-white/5" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
+                  className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border transition ${page <= 1 ? "opacity-40 cursor-not-allowed" : ""} ${isDark ? "border-[#334155] text-gray-400 hover:bg-white/5" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
                 >
                   <ChevronLeft size={14} />
                   Prev
@@ -678,7 +678,7 @@ export default function AuditLogsPage() {
                 <button
                   onClick={() => setPage(Math.min(data.pages, page + 1))}
                   disabled={page >= data.pages}
-                  className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border transition ${page >= data.pages ? "opacity-40 cursor-not-allowed" : ""} ${isDark ? "border-[#2a3040] text-gray-400 hover:bg-white/5" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
+                  className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border transition ${page >= data.pages ? "opacity-40 cursor-not-allowed" : ""} ${isDark ? "border-[#334155] text-gray-400 hover:bg-white/5" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
                 >
                   Next
                   <ChevronRight size={14} />

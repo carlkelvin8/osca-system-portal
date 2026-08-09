@@ -9,75 +9,425 @@ body {
   @apply bg-gray-50 text-gray-900 antialiased;
 }
 
-/* Dark mode overrides applied via .dark class on parent */
-.dark body, .dark {
-  --tw-bg-opacity: 1;
+/* ── Soft Dark Mode (low-contrast) ────────────────────────────────────────────
+   Applied globally via .dark on <html> (see ThemeSync + layout.tsx script).
+   Palette: page #0F172A · surface #1E293B · elevated #172033 · border #334155
+            text primary #E2E8F0 · secondary #94A3B8 · muted #64748B            */
+
+.dark body {
+  background-color: #0F172A;
+  color: #E2E8F0;
 }
 
+/* ── Surfaces ── */
 .dark .bg-white {
-  background-color: #1a1f2e !important;
+  background-color: #1E293B !important;
 }
 
-.dark .bg-gray-50, .dark .bg-\[\#f5f6f8\] {
-  background-color: #0f1219 !important;
+.dark .bg-gray-50,
+.dark .bg-gray-50\/50,
+.dark .bg-gray-50\/60,
+.dark .bg-gray-50\/70,
+.dark .bg-\[\#f5f6f8\],
+.dark .bg-\[\#f2f5f9\],
+.dark .bg-\[\#f7faff\],
+.dark .bg-\[\#f8fafc\],
+.dark .bg-\[\#f9fafb\],
+.dark .bg-\[\#fafbfc\],
+.dark .bg-\[\#f0f4ff\],
+.dark .bg-\[\#f3f4f6\],
+.dark .bg-\[\#eff6ff\] {
+  background-color: #0F172A !important;
 }
 
 .dark .bg-gray-100 {
-  background-color: #1e2433 !important;
+  background-color: #172033 !important;
 }
 
-.dark .border-gray-200, .dark .border-gray-100 {
-  border-color: #2a3040 !important;
+.dark .bg-gray-200,
+.dark .bg-gray-300 {
+  background-color: #1E293B !important;
 }
 
-.dark .text-gray-900, .dark .text-\[\#111827\] {
-  color: #f1f5f9 !important;
-}
-
-.dark .text-gray-800 {
-  color: #e2e8f0 !important;
-}
-
-.dark .text-gray-700 {
-  color: #cbd5e1 !important;
-}
-
-.dark .text-gray-600 {
-  color: #94a3b8 !important;
-}
-
-.dark .text-gray-500 {
-  color: #64748b !important;
-}
-
-.dark .text-gray-400 {
-  color: #475569 !important;
-}
-
-.dark .shadow-sm {
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important;
-}
-
-.dark .bg-gray-50.border-b, .dark thead.bg-gray-50 {
-  background-color: #1e2433 !important;
+.dark .bg-gray-50.border-b,
+.dark thead.bg-gray-50 {
+  background-color: #172033 !important;
 }
 
 .dark .hover\:bg-gray-50:hover {
-  background-color: #1e2433 !important;
+  background-color: #172033 !important;
 }
 
-.dark input, .dark select, .dark textarea {
-  background-color: #1a1f2e !important;
-  border-color: #2a3040 !important;
-  color: #e2e8f0 !important;
+.dark .hover\:bg-gray-100:hover {
+  background-color: #1E293B !important;
 }
 
-.dark input::placeholder, .dark textarea::placeholder {
-  color: #475569 !important;
+.dark .hover\:bg-gray-200:hover {
+  background-color: #334155 !important;
 }
 
-.dark .rounded-xl.shadow-sm, .dark .rounded-2xl.shadow-sm {
-  border-color: #2a3040;
+/* ── Tinted chips / status fills (low-saturation versions) ── */
+.dark .bg-red-50,
+.dark .bg-red-50\/30,
+.dark .bg-red-50\/50 {
+  background-color: rgba(239, 68, 68, 0.12) !important;
+}
+.dark .bg-red-100 {
+  background-color: rgba(239, 68, 68, 0.16) !important;
+}
+.dark .bg-green-50,
+.dark .bg-green-50\/30 {
+  background-color: rgba(34, 197, 94, 0.12) !important;
+}
+.dark .bg-green-100 {
+  background-color: rgba(34, 197, 94, 0.16) !important;
+}
+.dark .bg-blue-50,
+.dark .bg-blue-50\/50 {
+  background-color: rgba(59, 130, 246, 0.12) !important;
+}
+.dark .bg-blue-100 {
+  background-color: rgba(59, 130, 246, 0.16) !important;
+}
+.dark .bg-amber-50,
+.dark .bg-amber-50\/30 {
+  background-color: rgba(245, 158, 11, 0.12) !important;
+}
+.dark .bg-amber-100 {
+  background-color: rgba(245, 158, 11, 0.16) !important;
+}
+.dark .bg-emerald-50 {
+  background-color: rgba(16, 185, 129, 0.12) !important;
+}
+.dark .bg-emerald-100 {
+  background-color: rgba(16, 185, 129, 0.16) !important;
+}
+.dark .bg-yellow-50 {
+  background-color: rgba(234, 179, 8, 0.12) !important;
+}
+.dark .bg-yellow-100 {
+  background-color: rgba(234, 179, 8, 0.16) !important;
+}
+.dark .bg-indigo-50 {
+  background-color: rgba(99, 102, 241, 0.12) !important;
+}
+.dark .bg-indigo-100 {
+  background-color: rgba(99, 102, 241, 0.16) !important;
+}
+.dark .bg-purple-50,
+.dark .bg-violet-50 {
+  background-color: rgba(168, 85, 247, 0.12) !important;
+}
+.dark .bg-purple-100 {
+  background-color: rgba(168, 85, 247, 0.16) !important;
+}
+.dark .bg-teal-50 {
+  background-color: rgba(20, 184, 166, 0.12) !important;
+}
+.dark .bg-rose-50 {
+  background-color: rgba(244, 63, 94, 0.12) !important;
+}
+.dark .bg-pink-50 {
+  background-color: rgba(236, 72, 153, 0.12) !important;
+}
+.dark .bg-orange-50 {
+  background-color: rgba(249, 115, 22, 0.12) !important;
+}
+.dark .bg-cyan-50 {
+  background-color: rgba(6, 182, 212, 0.12) !important;
+}
+.dark .bg-slate-50 {
+  background-color: rgba(148, 163, 184, 0.12) !important;
+}
+.dark .bg-slate-100 {
+  background-color: #172033 !important;
+}
+
+/* ── Borders ── */
+.dark .border-gray-100,
+.dark .border-gray-200,
+.dark .border-gray-50,
+.dark .border-\[\#e5e7eb\],
+.dark .border-\[\#f3f4f6\],
+.dark .border-\[\#d1d5db\] {
+  border-color: #334155 !important;
+}
+
+.dark .border-gray-300,
+.dark .border-\[\#bfdbfe\] {
+  border-color: #475569 !important;
+}
+
+.dark .divide-gray-100,
+.dark .divide-gray-50 {
+  border-color: #334155 !important;
+}
+
+.dark .border-red-200 {
+  border-color: rgba(239, 68, 68, 0.25) !important;
+}
+.dark .border-red-300 {
+  border-color: rgba(239, 68, 68, 0.35) !important;
+}
+.dark .border-green-200 {
+  border-color: rgba(34, 197, 94, 0.25) !important;
+}
+.dark .border-green-300 {
+  border-color: rgba(34, 197, 94, 0.35) !important;
+}
+.dark .border-amber-200 {
+  border-color: rgba(245, 158, 11, 0.25) !important;
+}
+.dark .border-amber-300 {
+  border-color: rgba(245, 158, 11, 0.35) !important;
+}
+.dark .border-blue-200 {
+  border-color: rgba(59, 130, 246, 0.25) !important;
+}
+.dark .border-blue-300 {
+  border-color: rgba(59, 130, 246, 0.35) !important;
+}
+.dark .border-yellow-200 {
+  border-color: rgba(234, 179, 8, 0.25) !important;
+}
+.dark .border-emerald-200 {
+  border-color: rgba(16, 185, 129, 0.25) !important;
+}
+.dark .border-indigo-200 {
+  border-color: rgba(99, 102, 241, 0.25) !important;
+}
+.dark .border-purple-200 {
+  border-color: rgba(168, 85, 247, 0.25) !important;
+}
+
+/* ── Text: neutral grays (soft hierarchy) ── */
+.dark .text-gray-900,
+.dark .text-gray-800,
+.dark .text-\[\#111827\],
+.dark .text-\[\#0B1F3A\],
+.dark .text-\[\#0c1c33\],
+.dark .text-\[\#1f2937\],
+.dark .text-\[\#374151\] {
+  color: #E2E8F0 !important;
+}
+
+.dark .text-gray-700 {
+  color: #CBD5E1 !important;
+}
+
+.dark .text-gray-600,
+.dark .text-\[\#6b7280\],
+.dark .text-slate-600,
+.dark .text-slate-700 {
+  color: #94A3B8 !important;
+}
+
+.dark .text-gray-500,
+.dark .text-slate-500 {
+  color: #94A3B8 !important;
+}
+
+.dark .text-gray-400,
+.dark .text-gray-300,
+.dark .text-\[\#9ca3af\],
+.dark .text-\[\#d1d5db\],
+.dark .text-slate-400 {
+  color: #64748B !important;
+}
+
+.dark .text-gray-200,
+.dark .text-\[\#f1f5f9\] {
+  color: #CBD5E1 !important;
+}
+
+.dark .text-black {
+  color: #E2E8F0 !important;
+}
+
+.dark .text-white\/95,
+.dark .text-white\/90,
+.dark .text-white\/80,
+.dark .text-white\/70,
+.dark .text-white\/60,
+.dark .text-white\/50,
+.dark .text-white\/40,
+.dark .text-white\/30,
+.dark .text-white\/25,
+.dark .text-white\/15,
+.dark .text-white\/10 {
+  color: #94A3B8 !important;
+}
+
+/* ── Text: brand navy/blue accents → softer blue in dark ── */
+.dark .text-\[\#1E3A5F\],
+.dark .text-\[\#123D78\],
+.dark .text-\[\#1557C0\],
+.dark .text-\[\#2563eb\],
+.dark .text-\[\#1d4ed8\],
+.dark .text-\[\#2f5ce8\] {
+  color: #93C5FD !important;
+}
+
+/* ── Text: status colors (low-contrast versions) ── */
+.dark .text-red-500,
+.dark .text-red-600 {
+  color: #FCA5A5 !important;
+}
+.dark .text-red-400,
+.dark .text-red-700,
+.dark .text-red-800,
+.dark .text-red-900 {
+  color: #F87171 !important;
+}
+.dark .text-green-500,
+.dark .text-green-600,
+.dark .text-green-700 {
+  color: #86EFAC !important;
+}
+.dark .text-green-400,
+.dark .text-green-800 {
+  color: #4ADE80 !important;
+}
+.dark .text-blue-500,
+.dark .text-blue-600,
+.dark .text-blue-700,
+.dark .text-blue-800 {
+  color: #93C5FD !important;
+}
+.dark .text-amber-400,
+.dark .text-amber-500,
+.dark .text-amber-600 {
+  color: #FCD34D !important;
+}
+.dark .text-amber-700,
+.dark .text-amber-800 {
+  color: #FDE68A !important;
+}
+.dark .text-emerald-500,
+.dark .text-emerald-600,
+.dark .text-emerald-700 {
+  color: #6EE7B7 !important;
+}
+.dark .text-emerald-400 {
+  color: #34D399 !important;
+}
+.dark .text-yellow-500,
+.dark .text-yellow-600,
+.dark .text-yellow-700,
+.dark .text-yellow-800 {
+  color: #FDE047 !important;
+}
+.dark .text-indigo-500,
+.dark .text-indigo-600,
+.dark .text-indigo-700,
+.dark .text-indigo-800 {
+  color: #A5B4FC !important;
+}
+.dark .text-purple-500,
+.dark .text-purple-600,
+.dark .text-purple-700,
+.dark .text-purple-800,
+.dark .text-violet-600 {
+  color: #C4B5FD !important;
+}
+.dark .text-teal-500,
+.dark .text-teal-600,
+.dark .text-teal-700 {
+  color: #2DD4BF !important;
+}
+.dark .text-orange-500,
+.dark .text-orange-600,
+.dark .text-orange-700,
+.dark .text-orange-800 {
+  color: #FDBA74 !important;
+}
+.dark .text-rose-500,
+.dark .text-rose-600,
+.dark .text-rose-700 {
+  color: #FDA4AF !important;
+}
+.dark .text-pink-500,
+.dark .text-pink-700 {
+  color: #F9A8D4 !important;
+}
+.dark .text-cyan-400,
+.dark .text-cyan-600,
+.dark .text-cyan-700 {
+  color: #22D3EE !important;
+}
+.dark .text-blue-300 {
+  color: #BFDBFE !important;
+}
+.dark .text-blue-200 {
+  color: #93C5FD !important;
+}
+.dark .text-blue-100 {
+  color: #BFDBFE !important;
+}
+.dark .text-green-300 {
+  color: #BBF7D0 !important;
+}
+
+/* ── Shadows (soften) ── */
+.dark .shadow-sm {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35) !important;
+}
+
+/* ── Inputs / selects ── */
+.dark input,
+.dark select,
+.dark textarea {
+  background-color: #172033 !important;
+  border-color: #334155 !important;
+  color: #E2E8F0 !important;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #64748B !important;
+}
+
+.dark select option {
+  background-color: #172033;
+  color: #E2E8F0;
+}
+
+.dark .rounded-xl.shadow-sm,
+.dark .rounded-2xl.shadow-sm {
+  border-color: #334155;
+}
+
+/* ── Recharts dark theming (inline SVG attrs are not reachable via CSS) ── */
+.dark .recharts-cartesian-grid line {
+  stroke: #334155;
+}
+.dark .recharts-cartesian-axis-line,
+.dark .recharts-cartesian-axis-tick-line {
+  stroke: #475569;
+}
+.dark .recharts-text {
+  fill: #94A3B8 !important;
+}
+.dark .recharts-default-tooltip {
+  background-color: #1E293B !important;
+  border: 1px solid #334155 !important;
+  color: #E2E8F0 !important;
+}
+.dark .recharts-default-tooltip .recharts-tooltip-label,
+.dark .recharts-default-tooltip .recharts-tooltip-item {
+  color: #E2E8F0 !important;
+}
+.dark .recharts-legend-item-text {
+  color: #94A3B8 !important;
+}
+.dark .recharts-bar-rectangle path[fill="#1557C0"] {
+  fill: #60A5FA !important;
+}
+.dark .recharts-line-curve[stroke="#2563eb"] {
+  stroke: #60A5FA !important;
+}
+.dark .recharts-dot[fill="#2563eb"] {
+  fill: #60A5FA !important;
 }
 
 /* ── Print styles ───────────────────────────────────────────────────────────── */
