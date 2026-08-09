@@ -142,7 +142,7 @@ function StatCard({
 }) {
   const t = TONES[tone] ?? TONES.blue;
   return (
-    <div className="group relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_12px_32px_-16px_rgba(16,24,40,0.10)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_2px_4px_rgba(16,24,40,0.06),0_16px_40px_-16px_rgba(16,24,40,0.18)]">
+    <div className="group relative w-full max-w-[280px] overflow-hidden rounded-2xl border border-gray-100 bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_12px_32px_-16px_rgba(16,24,40,0.10)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_2px_4px_rgba(16,24,40,0.06),0_16px_40px_-16px_rgba(16,24,40,0.18)]">
       <div className="flex items-start justify-between">
         <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${t.chip}`}>
           <Icon size={20} strokeWidth={1.8} />
@@ -909,7 +909,7 @@ function ManagerView({
       )}
 
       {/* KPI cards */}
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="flex flex-wrap gap-5">
         <StatCard
           icon={Users}
           label="Total Students"
@@ -1096,7 +1096,7 @@ function RoleView({
   return (
     <div className="space-y-7">
       {/* Role-specific stat cards */}
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="flex flex-wrap gap-5">
         {stats.map((stat) => (
           <StatCard
             key={stat.key}
