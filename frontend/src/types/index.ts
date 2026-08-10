@@ -316,6 +316,7 @@ export interface Announcement {
   title: string;
   content: string;
   image_url: string | null;
+  image_urls?: string[];
   event_date: string | null;
   tag: string | null;
   pinned: boolean;

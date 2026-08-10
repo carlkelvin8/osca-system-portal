@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useRef, useMemo, useEffect } from "react";
+import { useState, useRef, useMemo, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { reportsApi, announcementsApi, usersApi, attendanceApi } from "@/lib/api";
+import { createPortal } from "react-dom";
+import { reportsApi, announcementsApi, usersApi, attendanceApi, eligibilityApi } from "@/lib/api";
 import {
   Users,
   CheckCircle,
@@ -31,9 +32,20 @@ import {
   TrendingUp,
   History,
   Gauge,
+  Trophy,
+  ShieldCheck,
+  UserCheck,
+  ScanFace,
+  Percent,
+  Award,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import type { User, UserSummary } from "@/types";
-import type { DashboardSummary, Announcement, AnnouncementComment, AttendanceRecord, PaginatedResponse, UserRole } from "@/types";
+import type { DashboardSummary, Announcement, AnnouncementComment, AttendanceRecord, PaginatedResponse, UserRole, AthleteEligibility } from "@/types";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useThemeStore } from "@/store/useThemeStore";
 import { format, formatDistanceToNow } from "date-fns";
@@ -131,6 +143,7 @@ function StatCard({
   tone = "blue",
   valueCls,
   badge,
+  wide = false,
 }: {
   icon: React.ElementType;
   label: string;
@@ -139,10 +152,11 @@ function StatCard({
   tone?: string;
   valueCls?: string;
   badge?: React.ReactNode;
+  wide?: boolean;
 }) {
   const t = TONES[tone] ?? TONES.blue;
   return (
-    <div className="group relative w-full max-w-[280px] overflow-hidden rounded-2xl border border-gray-100 bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_12px_32px_-16px_rgba(16,24,40,0.10)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_2px_4px_rgba(16,24,40,0.06),0_16px_40px_-16px_rgba(16,24,40,0.18)]">
+    <div className={`group relative w-full overflow-hidden rounded-2xl border border-gray-100 bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_12px_32px_-16px_rgba(16,24,40,0.10)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_2px_4px_rgba(16,24,40,0.06),0_16px_40px_-16px_rgba(16,24,40,0.18)] ${wide ? "" : "max-w-[280px]"}`}>
       <div className="flex items-start justify-between">
         <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${t.chip}`}>
           <Icon size={20} strokeWidth={1.8} />
@@ -265,6 +279,15 @@ interface AnnouncementFormProps {
   onClose: () => void;
 }
 
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+
+function announcementImages(ann: Announcement | undefined): string[] {
+  if (!ann) return [];
+  if (ann.image_urls && ann.image_urls.length) return ann.image_urls;
+  return ann.image_url ? [ann.image_url] : [];
+}
+
 function AnnouncementFormModal({ existing, onClose }: AnnouncementFormProps) {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -277,8 +300,9 @@ function AnnouncementFormModal({ existing, onClose }: AnnouncementFormProps) {
   );
   const [tag, setTag] = useState<string>(existing?.tag ?? "notice");
   const [pinned, setPinned] = useState(existing?.pinned ?? false);
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(existing?.image_url ?? null);
+  const [newImages, setNewImages] = useState<{ id: string; file: File; preview: string }[]>([]);
+  const [existingImages] = useState<string[]>(() => announcementImages(existing));
+  const [removedExisting, setRemovedExisting] = useState<number[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const { mutate: saveAnnouncement, isPending } = useMutation({
@@ -290,20 +314,26 @@ function AnnouncementFormModal({ existing, onClose }: AnnouncementFormProps) {
         tag,
         pinned,
       };
+      let annId: string;
       if (existing) {
         await announcementsApi.update(existing.id, payload);
-        if (imageFile) {
-          await announcementsApi.uploadImage(existing.id, imageFile);
-        }
+        annId = existing.id;
       } else {
         const res = await announcementsApi.create(payload);
-        const newId = res.data.id as string;
-        if (imageFile) {
-          await announcementsApi.uploadImage(newId, imageFile);
-        }
+        annId = res.data.id as string;
+      }
+      // Upload new images (backend appends them after existing ones)
+      for (const img of newImages) {
+        await announcementsApi.uploadImage(annId, img.file);
+      }
+      // Remove existing images — descending index keeps remaining indices valid
+      const toRemove = [...removedExisting].sort((a, b) => b - a);
+      for (const idx of toRemove) {
+        await announcementsApi.deleteImage(annId, idx);
       }
     },
     onSuccess: () => {
+      newImages.forEach((img) => URL.revokeObjectURL(img.preview));
       queryClient.invalidateQueries({ queryKey: ["announcements"] });
       onClose();
     },
@@ -315,16 +345,36 @@ function AnnouncementFormModal({ existing, onClose }: AnnouncementFormProps) {
     },
   });
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      setError("Image must be 5 MB or smaller.");
-      return;
+  const handleFilesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
+    const accepted: { id: string; file: File; preview: string }[] = [];
+    let rejected = "";
+    for (const file of files) {
+      if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+        rejected = "Only JPEG, PNG, and WebP images are allowed.";
+        continue;
+      }
+      if (file.size > MAX_IMAGE_SIZE) {
+        rejected = "Each image must be 5 MB or smaller.";
+        continue;
+      }
+      accepted.push({ id: crypto.randomUUID(), file, preview: URL.createObjectURL(file) });
     }
-    setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
-    setError(null);
+    if (accepted.length) {
+      setNewImages((prev) => [...prev, ...accepted]);
+      setError(null);
+    }
+    if (rejected) setError(rejected);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const removeNewImage = (id: string) => {
+    setNewImages((prev) => {
+      const target = prev.find((img) => img.id === id);
+      if (target) URL.revokeObjectURL(target.preview);
+      return prev.filter((img) => img.id !== id);
+    });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -335,12 +385,17 @@ function AnnouncementFormModal({ existing, onClose }: AnnouncementFormProps) {
     saveAnnouncement();
   };
 
+  const visibleExisting = existingImages
+    .map((url, idx) => ({ url, idx, removed: removedExisting.includes(idx) }))
+    .filter((img) => !img.removed);
+  const totalImages = visibleExisting.length + newImages.length;
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="text-lg font-bold text-gray-900">
             {existing ? "Edit Announcement" : "New Announcement"}
@@ -349,7 +404,7 @@ function AnnouncementFormModal({ existing, onClose }: AnnouncementFormProps) {
             <X size={18} />
           </button>
         </div>
-        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4 max-h-[calc(100vh-12rem)] overflow-y-auto">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Title <span className="text-red-500">*</span>
@@ -411,39 +466,81 @@ function AnnouncementFormModal({ existing, onClose }: AnnouncementFormProps) {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Image <span className="text-gray-400 font-normal">(optional — max 5 MB)</span>
+              Images <span className="text-gray-400 font-normal">(optional — JPEG, PNG, WebP · max 5 MB each)</span>
             </label>
             <input
               ref={fileInputRef}
               type="file"
               accept="image/jpeg,image/png,image/webp"
-              onChange={handleImageChange}
+              multiple
+              onChange={handleFilesChange}
               className="hidden"
             />
-            {imagePreview ? (
-              <div className="relative inline-block w-full">
-                <img
-                  src={imagePreview}
-                  alt="Preview"
-                  className="w-full max-h-40 object-cover rounded-lg border border-gray-200"
-                />
-                <button
-                  type="button"
-                  onClick={() => { setImageFile(null); setImagePreview(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}
-                  className="absolute top-2 right-2 p-1 bg-white/80 rounded-full text-gray-500 hover:text-red-500 hover:bg-white transition"
-                >
-                  <X size={14} />
-                </button>
+            {totalImages > 0 && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3">
+                {visibleExisting.map(({ url, idx }) => (
+                  <div key={`ex-${idx}`} className="relative group aspect-square bg-gray-50 border border-gray-200 rounded-lg overflow-hidden">
+                    <img
+                      src={url}
+                      alt="Existing"
+                      className="w-full h-full object-contain"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setRemovedExisting((prev) => [...prev, idx])}
+                      className="absolute top-1.5 right-1.5 p-1 bg-black/50 rounded-full text-white opacity-0 group-hover:opacity-100 transition"
+                      title="Remove image"
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
+                ))}
+                {newImages.map((img) => (
+                  <div key={img.id} className="relative group aspect-square bg-gray-50 border border-gray-200 rounded-lg overflow-hidden">
+                    <img
+                      src={img.preview}
+                      alt="Preview"
+                      className="w-full h-full object-contain"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeNewImage(img.id)}
+                      className="absolute top-1.5 right-1.5 p-1 bg-black/50 rounded-full text-white opacity-0 group-hover:opacity-100 transition"
+                      title="Remove image"
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
+                ))}
               </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-500 border border-dashed border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition w-full justify-center"
-              >
-                <ImagePlus size={16} /> Choose image
-              </button>
             )}
+            {removedExisting.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-3">
+                {existingImages
+                  .map((url, idx) => ({ url, idx, removed: removedExisting.includes(idx) }))
+                  .filter((img) => img.removed)
+                  .map(({ url, idx }) => (
+                    <button
+                      key={`rm-${idx}`}
+                      type="button"
+                      onClick={() => setRemovedExisting((prev) => prev.filter((i) => i !== idx))}
+                      className="flex items-center gap-1.5 text-xs text-gray-500 border border-dashed border-gray-300 rounded-lg px-2.5 py-1.5 hover:bg-gray-50 transition"
+                      title="Restore image"
+                    >
+                      <img src={url} alt="" className="w-6 h-6 object-contain rounded" />
+                      <span className="line-through">Removed</span>
+                    </button>
+                  ))}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-500 border border-dashed border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition w-full justify-center"
+            >
+              <ImagePlus size={16} />
+              {totalImages > 0 ? "Add more images" : "Choose images"}
+            </button>
           </div>
           <label className="flex items-center gap-2.5 cursor-pointer select-none">
             <input
@@ -519,16 +616,9 @@ function AnnouncementsFeed({ announcements, isEditor, onCreate, onEdit, onDelete
   );
 }
 
-// ── Announcement Card (Acknowledge + Comment) ─────────────────────────────────
+// ── Announcement actions (shared by card + photo viewer) ──────────────────────
 
-interface AnnouncementCardProps {
-  ann: Announcement;
-  isEditor: boolean;
-  onEdit: (a: Announcement) => void;
-  onDelete: (id: string) => void;
-}
-
-function AnnouncementCard({ ann, isEditor, onEdit, onDelete }: AnnouncementCardProps) {
+function useAnnouncementActions(ann: Announcement) {
   const queryClient = useQueryClient();
   const [acknowledged, setAcknowledged] = useState(ann.acknowledged_by_me ?? false);
   const [ackCount, setAckCount] = useState(ann.acknowledgement_count ?? 0);
@@ -545,7 +635,7 @@ function AnnouncementCard({ ann, isEditor, onEdit, onDelete }: AnnouncementCardP
     enabled: commentsOpen,
   });
 
-  const handleAck = async () => {
+  const handleAck = useCallback(async () => {
     if (ackLoading) return;
     setAckLoading(true);
     setError(null);
@@ -567,31 +657,155 @@ function AnnouncementCard({ ann, isEditor, onEdit, onDelete }: AnnouncementCardP
     } finally {
       setAckLoading(false);
     }
-  };
+  }, [ackLoading, acknowledged, ann.id]);
 
-  const handleCommentSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const content = commentText.trim();
-    if (!content || commentLoading) return;
-    setCommentLoading(true);
-    setError(null);
-    try {
-      await announcementsApi.addComment(ann.id, { content });
-      setCommentText("");
-      setCommentCount((c) => c + 1);
-      queryClient.invalidateQueries({ queryKey: ["announcements", ann.id, "comments"] });
-      queryClient.invalidateQueries({ queryKey: ["announcements"] });
-    } catch (err) {
-      setError(
-        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
-          "Failed to post comment. Please try again."
-      );
-    } finally {
-      setCommentLoading(false);
-    }
-  };
+  const handleCommentSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      const content = commentText.trim();
+      if (!content || commentLoading) return;
+      setCommentLoading(true);
+      setError(null);
+      try {
+        await announcementsApi.addComment(ann.id, { content });
+        setCommentText("");
+        setCommentCount((c) => c + 1);
+        queryClient.invalidateQueries({ queryKey: ["announcements", ann.id, "comments"] });
+        queryClient.invalidateQueries({ queryKey: ["announcements"] });
+      } catch (err) {
+        setError(
+          (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
+            "Failed to post comment. Please try again."
+        );
+      } finally {
+        setCommentLoading(false);
+      }
+    },
+    [commentText, commentLoading, ann.id, queryClient]
+  );
 
+  return {
+    acknowledged,
+    ackCount,
+    commentCount,
+    ackLoading,
+    commentsOpen,
+    setCommentsOpen,
+    commentText,
+    setCommentText,
+    commentLoading,
+    error,
+    commentsQuery,
+    handleAck,
+    handleCommentSubmit,
+  };
+}
+
+type AnnouncementActions = ReturnType<typeof useAnnouncementActions>;
+
+function AckButton({ actions, size = "sm" }: { actions: AnnouncementActions; size?: "sm" | "md" }) {
+  const { acknowledged, ackCount, ackLoading, handleAck } = actions;
+  const pad = size === "md" ? "px-4 py-2 text-sm" : "px-3 py-1.5 text-xs";
+  return (
+    <button
+      onClick={handleAck}
+      disabled={ackLoading}
+      className={`flex items-center gap-1.5 rounded-lg font-medium transition disabled:opacity-60 ${pad} ${
+        acknowledged ? "text-[#1557C0] bg-blue-50 hover:bg-blue-100" : "text-gray-500 hover:bg-gray-100"
+      }`}
+    >
+      {ackLoading ? (
+        <Loader2 size={13} className="animate-spin" />
+      ) : acknowledged ? (
+        <CheckCircle size={13} />
+      ) : (
+        <ThumbsUp size={13} />
+      )}
+      {ackLoading ? "Saving…" : acknowledged ? "Acknowledged" : "Acknowledge"}
+      {ackCount > 0 && (
+        <span className="ml-0.5 bg-gray-100 text-gray-600 rounded-full px-1.5 py-0.5 text-[10px] font-semibold">
+          {ackCount}
+        </span>
+      )}
+    </button>
+  );
+}
+
+function CommentSection({ actions, autoFocus }: { actions: AnnouncementActions; autoFocus?: boolean }) {
+  const { commentText, setCommentText, commentLoading, error, commentsQuery, handleCommentSubmit } = actions;
+  return (
+    <div>
+      <form onSubmit={handleCommentSubmit} className="flex items-center gap-2">
+        <input
+          value={commentText}
+          onChange={(e) => setCommentText(e.target.value)}
+          placeholder="Write a comment…"
+          autoFocus={autoFocus}
+          className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]/30 focus:border-[#1E3A5F]"
+        />
+        <button
+          type="submit"
+          disabled={commentLoading || !commentText.trim()}
+          className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-white bg-[#1E3A5F] rounded-lg hover:bg-[#16304f] transition disabled:opacity-50"
+        >
+          {commentLoading ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+          {commentLoading ? "Posting…" : "Post"}
+        </button>
+      </form>
+
+      {error && (
+        <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mt-2">{error}</p>
+      )}
+
+      <div className="mt-3 space-y-2.5">
+        {commentsQuery.isLoading && (
+          <p className="text-xs text-gray-400 flex items-center gap-1.5">
+            <Loader2 size={12} className="animate-spin" /> Loading comments…
+          </p>
+        )}
+        {!commentsQuery.isLoading && commentsQuery.data?.length === 0 && (
+          <p className="text-xs text-gray-400">No comments yet. Be the first to comment.</p>
+        )}
+        {(commentsQuery.data ?? []).map((c) => (
+          <div key={c.id} className="flex items-start gap-2.5">
+            <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 text-xs font-semibold shrink-0">
+              {(c.author_name || "U").charAt(0).toUpperCase()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-baseline gap-2">
+                <p className="text-xs font-semibold text-gray-800">{c.author_name || "User"}</p>
+                <p className="text-[10px] text-gray-400">{formatDistanceToNow(new Date(c.created_at), { addSuffix: true })}</p>
+              </div>
+              <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line break-words">{c.content}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Announcement Card (Acknowledge + Comment + clickable image) ───────────────
+
+interface AnnouncementCardProps {
+  ann: Announcement;
+  isEditor: boolean;
+  onEdit: (a: Announcement) => void;
+  onDelete: (id: string) => void;
+}
+
+function AnnouncementCard({ ann, isEditor, onEdit, onDelete }: AnnouncementCardProps) {
+  const actions = useAnnouncementActions(ann);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerIndex, setViewerIndex] = useState(0);
   const tc = ann.tag ? tagConfig[ann.tag] : null;
+  const images = announcementImages(ann);
+
+  const openViewer = (index = 0) => {
+    actions.setCommentsOpen(true);
+    setViewerIndex(index);
+    setViewerOpen(true);
+  };
 
   return (
     <div className={`group border rounded-xl overflow-hidden transition ${ann.pinned ? "border-amber-200 bg-amber-50/30" : "border-gray-100 bg-white"}`}>
@@ -644,14 +858,61 @@ function AnnouncementCard({ ann, isEditor, onEdit, onDelete }: AnnouncementCardP
         <p className="text-sm text-gray-600 mt-1 leading-relaxed whitespace-pre-line">{ann.content}</p>
       </div>
 
-      {/* Image */}
-      {ann.image_url && (
+      {/* Images — aspect-preserving gallery; single image keeps the plain layout */}
+      {images.length > 0 && (
         <div className="px-4 pb-2">
-          <img
-            src={ann.image_url}
-            alt={ann.title}
-            className="w-full max-h-64 object-cover rounded-lg border border-gray-100"
-          />
+          {images.length === 1 ? (
+            <button
+              type="button"
+              onClick={() => openViewer(0)}
+              className="block w-full cursor-zoom-in text-left"
+              title="View full image"
+            >
+              <img
+                src={images[0]}
+                alt={ann.title}
+                className="mx-auto max-h-64 w-auto max-w-full object-contain rounded-lg border border-gray-100"
+              />
+            </button>
+          ) : images.length === 2 ? (
+            <div className="grid grid-cols-2 gap-1.5">
+              {images.map((src, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => openViewer(i)}
+                  className="block cursor-zoom-in text-left overflow-hidden rounded-lg border border-gray-100"
+                  title="View full image"
+                >
+                  <img src={src} alt={ann.title} className="h-44 w-full object-contain bg-gray-50" />
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+              {images.slice(0, 6).map((src, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => openViewer(i)}
+                  className="block cursor-zoom-in text-left overflow-hidden rounded-lg border border-gray-100"
+                  title="View full image"
+                >
+                  <img src={src} alt={ann.title} className="h-32 w-full object-contain bg-gray-50" />
+                </button>
+              ))}
+              {images.length > 6 && (
+                <button
+                  type="button"
+                  onClick={() => openViewer(6)}
+                  className="flex h-32 items-center justify-center rounded-lg border border-gray-100 bg-gray-50 text-sm font-semibold text-gray-500 hover:bg-gray-100 cursor-zoom-in transition"
+                  title="View all images"
+                >
+                  +{images.length - 6}
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -666,92 +927,252 @@ function AnnouncementCard({ ann, isEditor, onEdit, onDelete }: AnnouncementCardP
       {/* Actions: Acknowledge + Comment */}
       <div className="border-t border-gray-100 mx-4" />
       <div className="flex items-center gap-1 px-4 py-2">
+        <AckButton actions={actions} />
         <button
-          onClick={handleAck}
-          disabled={ackLoading}
-          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition disabled:opacity-60 ${
-            acknowledged ? "text-[#1557C0] bg-blue-50 hover:bg-blue-100" : "text-gray-500 hover:bg-gray-100"
-          }`}
-        >
-          {ackLoading ? (
-            <Loader2 size={13} className="animate-spin" />
-          ) : acknowledged ? (
-            <CheckCircle size={13} />
-          ) : (
-            <ThumbsUp size={13} />
-          )}
-          {ackLoading ? "Saving…" : acknowledged ? "Acknowledged" : "Acknowledge"}
-          {ackCount > 0 && (
-            <span className="ml-0.5 bg-gray-100 text-gray-600 rounded-full px-1.5 py-0.5 text-[10px] font-semibold">
-              {ackCount}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setCommentsOpen((v) => !v)}
+          onClick={() => actions.setCommentsOpen((v) => !v)}
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-100 rounded-lg transition"
         >
           <MessageSquare size={13} />
-          {commentsOpen ? "Hide Comments" : "Comment"}
-          {commentCount > 0 && (
+          {actions.commentsOpen ? "Hide Comments" : "Comment"}
+          {actions.commentCount > 0 && (
             <span className="ml-0.5 bg-gray-100 text-gray-600 rounded-full px-1.5 py-0.5 text-[10px] font-semibold">
-              {commentCount}
+              {actions.commentCount}
             </span>
           )}
         </button>
       </div>
 
       {/* Comment section */}
-      {commentsOpen && (
+      {actions.commentsOpen && (
         <div className="px-4 pb-4">
-          <form onSubmit={handleCommentSubmit} className="flex items-center gap-2">
-            <input
-              value={commentText}
-              onChange={(e) => setCommentText(e.target.value)}
-              placeholder="Write a comment…"
-              className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]/30 focus:border-[#1E3A5F]"
-            />
-            <button
-              type="submit"
-              disabled={commentLoading || !commentText.trim()}
-              className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-white bg-[#1E3A5F] rounded-lg hover:bg-[#16304f] transition disabled:opacity-50"
-            >
-              {commentLoading ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
-              {commentLoading ? "Posting…" : "Post"}
-            </button>
-          </form>
-
-          {error && (
-            <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mt-2">{error}</p>
-          )}
-
-          <div className="mt-3 space-y-2.5">
-            {commentsQuery.isLoading && (
-              <p className="text-xs text-gray-400 flex items-center gap-1.5">
-                <Loader2 size={12} className="animate-spin" /> Loading comments…
-              </p>
-            )}
-            {!commentsQuery.isLoading && commentsQuery.data?.length === 0 && (
-              <p className="text-xs text-gray-400">No comments yet. Be the first to comment.</p>
-            )}
-            {(commentsQuery.data ?? []).map((c) => (
-              <div key={c.id} className="flex items-start gap-2.5">
-                <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 text-xs font-semibold shrink-0">
-                  {(c.author_name || "U").charAt(0).toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-baseline gap-2">
-                    <p className="text-xs font-semibold text-gray-800">{c.author_name || "User"}</p>
-                    <p className="text-[10px] text-gray-400">{formatDistanceToNow(new Date(c.created_at), { addSuffix: true })}</p>
-                  </div>
-                  <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line break-words">{c.content}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+          <CommentSection actions={actions} />
         </div>
       )}
+
+      {/* Photo viewer modal */}
+      {viewerOpen && (
+        <AnnouncementPhotoViewer
+          ann={ann}
+          images={images}
+          initialIndex={viewerIndex}
+          actions={actions}
+          isEditor={isEditor}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          onClose={() => setViewerOpen(false)}
+        />
+      )}
     </div>
+  );
+}
+
+// ── Announcement Photo Viewer (Facebook-style lightbox) ───────────────────────
+
+function AnnouncementPhotoViewer({
+  ann,
+  images,
+  initialIndex,
+  actions,
+  isEditor,
+  onEdit,
+  onDelete,
+  onClose,
+}: {
+  ann: Announcement;
+  images: string[];
+  initialIndex: number;
+  actions: AnnouncementActions;
+  isEditor: boolean;
+  onEdit: (a: Announcement) => void;
+  onDelete: (id: string) => void;
+  onClose: () => void;
+}) {
+  const total = images.length;
+  const [index, setIndex] = useState(() => Math.min(Math.max(initialIndex, 0), total - 1));
+  const [zoom, setZoom] = useState(1);
+  const tc = ann.tag ? tagConfig[ann.tag] : null;
+
+  const goTo = (next: number) => {
+    setIndex(Math.min(Math.max(next, 0), total - 1));
+    setZoom(1);
+  };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+      else if (e.key === "ArrowLeft") goTo(index - 1);
+      else if (e.key === "ArrowRight") goTo(index + 1);
+    };
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [onClose, index]);
+
+  const zoomIn = () => setZoom((z) => Math.min(4, +(z + 0.25).toFixed(2)));
+  const zoomOut = () => setZoom((z) => Math.max(1, +(z - 0.25).toFixed(2)));
+  const resetZoom = () => setZoom(1);
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Photo viewer"
+    >
+      {/* Dark semi-transparent overlay */}
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+
+      <div
+        className="relative z-10 flex h-full max-h-full w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl lg:flex-row"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Close button (upper-right) */}
+        <button
+          onClick={onClose}
+          className="absolute right-3 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white transition hover:bg-black/80"
+          aria-label="Close"
+        >
+          <X size={18} />
+        </button>
+
+        {/* LEFT: large image viewer */}
+        <div className="relative flex min-h-[45vh] flex-1 items-center justify-center overflow-hidden bg-black lg:min-h-0">
+          <img
+            key={images[index] ?? ""}
+            src={images[index] ?? ""}
+            alt={ann.title}
+            className="max-h-full max-w-full select-none object-contain"
+            style={{ transform: `scale(${zoom})`, transition: "transform 0.15s ease-out" }}
+          />
+
+          {/* Image counter */}
+          <div className="absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded-full bg-black/70 px-3 py-1 text-xs font-semibold text-white tabular-nums">
+            {total > 0 ? `${index + 1} / ${total}` : "0 / 0"}
+          </div>
+
+          {/* Prev / Next navigation */}
+          {total > 1 && (
+            <>
+              <button
+                onClick={() => goTo(index - 1)}
+                disabled={index === 0}
+                className="absolute left-2 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/60 text-white transition hover:bg-black/80 disabled:opacity-30 disabled:hover:bg-black/60"
+                aria-label="Previous image"
+                title="Previous"
+              >
+                <ChevronLeft size={18} />
+              </button>
+              <button
+                onClick={() => goTo(index + 1)}
+                disabled={index === total - 1}
+                className="absolute right-2 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/60 text-white transition hover:bg-black/80 disabled:opacity-30 disabled:hover:bg-black/60"
+                aria-label="Next image"
+                title="Next"
+              >
+                <ChevronRight size={18} />
+              </button>
+            </>
+          )}
+
+          {/* Zoom controls */}
+          <div className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 rounded-full bg-black/70 px-2 py-1.5 text-white">
+            <button
+              onClick={zoomOut}
+              className="rounded-full p-1.5 transition hover:bg-white/20"
+              aria-label="Zoom out"
+              title="Zoom out"
+            >
+              <ZoomOut size={16} />
+            </button>
+            <span className="w-12 text-center text-xs font-semibold tabular-nums">{Math.round(zoom * 100)}%</span>
+            <button
+              onClick={zoomIn}
+              className="rounded-full p-1.5 transition hover:bg-white/20"
+              aria-label="Zoom in"
+              title="Zoom in"
+            >
+              <ZoomIn size={16} />
+            </button>
+            <button
+              onClick={resetZoom}
+              className="rounded-full p-1.5 transition hover:bg-white/20"
+              aria-label="Reset zoom"
+              title="Reset zoom"
+            >
+              <RotateCcw size={14} />
+            </button>
+          </div>
+        </div>
+
+        {/* RIGHT: announcement details + comments panel */}
+        <div className="flex w-full flex-col overflow-y-auto bg-white lg:w-[400px] lg:shrink-0 lg:border-l lg:border-gray-100">
+          {/* Author / profile info */}
+          <div className="flex items-center gap-3 border-b border-gray-100 px-5 py-4">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#1E3A5F] text-sm font-semibold text-white">
+              {(ann.created_by_name || "OSCA").charAt(0).toUpperCase()}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-gray-900">{ann.created_by_name || "OSCA Admin"}</p>
+              <p className="text-xs text-gray-400">{format(new Date(ann.created_at), "MMM d, yyyy · h:mm a")}</p>
+            </div>
+            <div className="flex shrink-0 items-center gap-1.5">
+              {ann.pinned && (
+                <span className="flex items-center gap-1 text-[11px] font-medium text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full">
+                  <Pin size={10} /> Pinned
+                </span>
+              )}
+              {tc && (
+                <span className={`flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${tc.bg} ${tc.text} border ${tc.border}`}>
+                  <tc.icon size={10} /> {tc.label}
+                </span>
+              )}
+              {isEditor && (
+                <div className="flex items-center gap-0.5">
+                  <button onClick={() => onEdit(ann)} className="p-1 hover:bg-gray-200 rounded text-gray-500" title="Edit">
+                    <Pencil size={12} />
+                  </button>
+                  <button onClick={() => onDelete(ann.id)} className="p-1 hover:bg-red-100 rounded text-red-400" title="Delete">
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Title + content */}
+          <div className="px-5 py-4">
+            <h3 className="text-base font-bold text-gray-900">{ann.title}</h3>
+            <p className="mt-1.5 text-sm text-gray-600 leading-relaxed whitespace-pre-line">{ann.content}</p>
+            {ann.event_date && (
+              <div className="mt-2 flex items-center gap-1.5 text-xs text-[#1E3A5F] font-medium">
+                <Calendar size={12} />
+                {format(new Date(ann.event_date), "MMM d, yyyy · h:mm a")}
+              </div>
+            )}
+          </div>
+
+          {/* Acknowledge + comment counts */}
+          <div className="flex items-center justify-between border-y border-gray-100 px-5 py-3">
+            <AckButton actions={actions} size="md" />
+            <span className="flex items-center gap-1 text-sm font-medium text-gray-500">
+              <MessageSquare size={15} />
+              {actions.commentCount} comment{actions.commentCount === 1 ? "" : "s"}
+            </span>
+          </div>
+
+          {/* Existing comments + input */}
+          <div className="px-5 py-4">
+            <CommentSection actions={actions} autoFocus />
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }
 
@@ -766,20 +1187,31 @@ const WELCOME_SUBTITLES: Record<UserRole, string> = {
   student: "Here's your attendance, updates, and account overview.",
 };
 
-// ── OSCA Header Banner (shared by ALL roles) ─────────────────────────────────
-// Wide NAAP campus banner with a dark navy overlay, subtle wave decoration,
-// and a live clock — one consistent header for every role.
+// ── Welcome Section (shared by ALL roles, role-specific subtitle) ─────────────
 
-function WelcomeHeader() {
-  const [now, setNow] = useState(new Date());
+function WelcomeSection({ user }: { user: User }) {
+  return (
+    <div className={`${CARD} p-6`}>
+      <h2 className="text-xl font-bold text-[#0B1F3A] md:text-2xl">
+        Welcome back, {user.first_name}! 👋
+      </h2>
+      <p className="mt-1 text-sm text-gray-500">
+        {WELCOME_SUBTITLES[user.role] ?? "Here's what's happening with OSCA today."}
+      </p>
+    </div>
+  );
+}
+
+// ── OSCA NAAP banner (Dashboard page ONLY) ────────────────────────────────────
+// Spans the full main width (breaks out of the layout padding) and sits directly
+// below the sticky top navigation. Sticky so it stays visible while the Dashboard
+// content scrolls beneath it. No date/time, no "System Online".
+
+function OSCABanner() {
   const { isDark } = useThemeStore();
-  useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
 
   return (
-    <div className="sticky top-0 z-30 -mx-5 -mt-5 mb-6 overflow-hidden lg:-mx-7 lg:-mt-7 lg:mb-7">
+    <div className="sticky top-0 z-30 -mx-5 -mt-5 mb-6 overflow-hidden rounded-b-[20px] lg:-mx-7 lg:-mt-7 lg:mb-7">
       {/* NAAP campus photo */}
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
@@ -798,7 +1230,7 @@ function WelcomeHeader() {
         }
       />
 
-      {/* Smooth curved wave along the bottom edge — blends into page bg */}
+      {/* Smooth curved wave along the bottom edge — blends into the page background */}
       <svg
         className="pointer-events-none absolute bottom-[-1px] left-0 h-[38px] w-full md:h-[45px]"
         viewBox="0 0 1440 100"
@@ -831,33 +1263,7 @@ function WelcomeHeader() {
             <p className={`text-[11px] font-medium md:text-[13px] ${isDark ? "text-blue-300/80" : "text-blue-100/90"}`}>NAAP – Villamor Campus</p>
           </div>
         </div>
-
-        {/* Right: current date + live time (glass panel) */}
-        <div className={`flex shrink-0 items-center gap-3 self-start rounded-2xl border px-4 py-3 shadow-lg backdrop-blur-md md:self-center md:px-5 ${isDark ? "border-white/10 bg-white/[0.06]" : "border-white/20 bg-white/10"}`}>
-          <Calendar className={`shrink-0 ${isDark ? "text-blue-300/70" : "text-blue-100"}`} size={20} />
-          <div className="min-w-0">
-            <p className={`text-xs font-medium ${isDark ? "text-blue-300/80" : "text-blue-100"}`}>{format(now, "EEEE, MMMM d, yyyy")}</p>
-            <p className={`font-mono text-lg font-bold leading-tight tabular-nums ${isDark ? "text-[#E2E8F0]" : "text-white"}`}>
-              {format(now, "hh:mm:ss a")}
-            </p>
-          </div>
-        </div>
       </div>
-    </div>
-  );
-}
-
-// ── Welcome Section (shared by ALL roles, role-specific subtitle) ─────────────
-
-function WelcomeSection({ user }: { user: User }) {
-  return (
-    <div>
-      <h2 className="text-xl font-bold text-[#0B1F3A] md:text-2xl">
-        Welcome back, {user.first_name}! 👋
-      </h2>
-      <p className="mt-1 text-sm text-gray-500">
-        {WELCOME_SUBTITLES[user.role] ?? "Here's what's happening with OSCA today."}
-      </p>
     </div>
   );
 }
@@ -909,8 +1315,9 @@ function ManagerView({
       )}
 
       {/* KPI cards */}
-      <div className="flex flex-wrap gap-5">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
+          wide
           icon={Users}
           label="Total Students"
           value={summary?.students.total ?? 0}
@@ -918,6 +1325,7 @@ function ManagerView({
           tone="blue"
         />
         <StatCard
+          wide
           icon={CheckCircle}
           label="Attendance Today"
           value={summary?.attendance.today ?? 0}
@@ -925,6 +1333,7 @@ function ManagerView({
           tone="green"
         />
         <StatCard
+          wide
           icon={Package}
           label="Equipment Available"
           value={summary?.equipment.available ?? 0}
@@ -932,6 +1341,7 @@ function ManagerView({
           tone="indigo"
         />
         <StatCard
+          wide
           icon={AlertTriangle}
           label="Overdue Returns"
           value={summary?.transactions.overdue ?? 0}
@@ -942,8 +1352,8 @@ function ManagerView({
       </div>
 
       {/* Attendance chart (wide) + Quick Actions (right) */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <div className="lg:col-span-7 xl:col-span-8">
           {/* Attendance This Week */}
           <SectionCard
             title="Attendance This Week"
@@ -960,7 +1370,7 @@ function ManagerView({
               )
             }
           >
-            <div className="h-[220px]">
+            <div className="h-[240px]">
               {weeklyLoading ? (
                 <div className="flex h-full items-center justify-center">
                   <Loader2 className="animate-spin text-gray-300" size={28} />
@@ -985,7 +1395,7 @@ function ManagerView({
           title="Quick Actions"
           subtitle="Jump straight to the tools you use most"
           icon={LayoutDashboard}
-          className="h-full"
+          className="lg:col-span-5 xl:col-span-4 h-full"
         >
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
             {quickActions.map((action) => {
@@ -1096,10 +1506,11 @@ function RoleView({
   return (
     <div className="space-y-7">
       {/* Role-specific stat cards */}
-      <div className="flex flex-wrap gap-5">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
         {stats.map((stat) => (
           <StatCard
             key={stat.key}
+            wide
             icon={stat.icon}
             label={stat.label}
             value={stat.value}
@@ -1110,14 +1521,15 @@ function RoleView({
       </div>
 
       {/* Charts grid */}
-      <div className={`grid grid-cols-1 ${role === "student" ? "lg:grid-cols-1" : "lg:grid-cols-2"} gap-6`}>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         {/* Attendance Trend */}
         <SectionCard
           title="Attendance This Week"
           subtitle="Your scans from the past seven days"
           icon={TrendingUp}
+          className="lg:col-span-7 xl:col-span-8"
         >
-          <div className="h-[220px]">
+          <div className="h-[240px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={attendanceTrend} barCategoryGap="30%">
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -1136,13 +1548,14 @@ function RoleView({
             title="Equipment Status"
             subtitle="Current availability across the inventory"
             icon={Package}
+            className="lg:col-span-5 xl:col-span-4"
           >
             <div className="mb-4 flex flex-wrap gap-2.5">
               {equipmentChartData.map((e) => (
                 <MiniStat key={e.name} label={e.name} value={e.qty} />
               ))}
             </div>
-            <div className="h-[220px]">
+            <div className="h-[240px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={equipmentChartData} barCategoryGap="40%">
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -1173,6 +1586,217 @@ function RoleView({
       <p className="text-xs text-gray-400 text-right">
         Last updated: {summary ? new Date(summary.generated_at).toLocaleString("en-PH") : "—"}
       </p>
+    </div>
+  );
+}
+
+// ── Student Dashboard (full-width, 12-col grid) ───────────────────────────────
+
+function eligibilityTone(status?: AthleteEligibility["status"] | null): string {
+  if (status === "eligible") return "green";
+  if (status === "restricted") return "amber";
+  if (status === "ineligible") return "red";
+  return "blue"; // pending_clearance or no record
+}
+
+function InfoTile({
+  icon: Icon,
+  label,
+  value,
+  tone = "blue",
+}: {
+  icon: React.ElementType;
+  label: string;
+  value: string;
+  tone?: string;
+}) {
+  const t = TONES[tone] ?? TONES.blue;
+  return (
+    <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+      <div className="flex items-center gap-3">
+        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${t.chip}`}>
+          <Icon size={18} strokeWidth={1.8} />
+        </span>
+        <div className="min-w-0">
+          <p className="text-xs font-medium text-gray-400">{label}</p>
+          <p className="truncate text-sm font-bold capitalize text-[#0B1F3A]">{value}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface StudentViewProps {
+  user: User;
+  studentRecords?: PaginatedResponse<AttendanceRecord>;
+  studentTodayAttendance: number;
+  attendanceTrend: { day: string; scans: number }[];
+  announcements: Announcement[];
+  isEditor: boolean;
+  summary?: DashboardSummary;
+  onCreateAnnouncement: () => void;
+  onEditAnnouncement: (a: Announcement) => void;
+  onDeleteAnnouncement: (id: string) => void;
+}
+
+function StudentView({
+  user,
+  studentRecords,
+  studentTodayAttendance,
+  attendanceTrend,
+  announcements,
+  isEditor,
+  onCreateAnnouncement,
+  onEditAnnouncement,
+  onDeleteAnnouncement,
+}: StudentViewProps) {
+  // Weekly stats from the student's own attendance records
+  const weekStats = useMemo(() => {
+    const items = studentRecords?.items ?? [];
+    let present = 0,
+      late = 0,
+      absent = 0,
+      excused = 0;
+    for (const r of items) {
+      const s = r.status?.toLowerCase();
+      if (s === "present") present++;
+      else if (s === "late") late++;
+      else if (s === "absent") absent++;
+      else if (s === "excused") excused++;
+    }
+    const total = present + late + absent + excused;
+    const rate = total > 0 ? Math.round(((present + late) / total) * 100) : 0;
+    return { present, late, absent, excused, rate };
+  }, [studentRecords]);
+
+  // Eligibility status (backend auto-filters to own record for students)
+  const { data: eligibilityData } = useQuery<PaginatedResponse<AthleteEligibility>>({
+    queryKey: ["student-eligibility", user?.id],
+    queryFn: async () => {
+      const res = await eligibilityApi.list({ page_size: 1 });
+      return res.data;
+    },
+    enabled: !!user?.id,
+  });
+  const eligibility = eligibilityData?.items?.[0] ?? null;
+
+  return (
+    <div className="space-y-7">
+      {/* Welcome card */}
+      <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_12px_32px_-16px_rgba(16,24,40,0.10)]">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-bold text-[#0B1F3A] md:text-2xl">
+              Welcome back, {user.first_name}! 👋
+            </h2>
+            <p className="mt-1 text-sm text-gray-500">
+              Here's your attendance, updates, and account overview.
+            </p>
+          </div>
+          {user.sport_or_art && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#1557C0]/10 px-3 py-1 text-xs font-semibold text-[#1557C0]">
+              <Trophy size={14} /> {user.sport_or_art}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Summary cards */}
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          wide
+          icon={CheckCircle}
+          label="Attendance Today"
+          value={studentTodayAttendance}
+          sub="Your scans today"
+          tone="green"
+        />
+        <StatCard wide icon={Percent} label="Attendance Rate" value={`${weekStats.rate}%`} sub="This week" tone="blue" />
+        <StatCard wide icon={Award} label="Present" value={weekStats.present} sub="This week" tone="indigo" />
+        <StatCard
+          wide
+          icon={Clock}
+          label="Late / Absent"
+          value={`${weekStats.late} / ${weekStats.absent}`}
+          sub="This week"
+          tone="amber"
+        />
+      </div>
+
+      {/* Attendance overview */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <div className="lg:col-span-7 xl:col-span-8">
+          <SectionCard title="Attendance This Week" subtitle="Your scans from the past seven days" icon={TrendingUp}>
+            <div className="h-[240px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={attendanceTrend} barCategoryGap="30%">
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="day" tick={{ fontSize: 12 }} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
+                  <Tooltip />
+                  <Bar dataKey="scans" fill="#1557C0" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </SectionCard>
+        </div>
+        <div className="lg:col-span-5 xl:col-span-4">
+          <SectionCard title="My Attendance" subtitle="This week's breakdown" icon={CalendarCheck}>
+            <div className="space-y-2.5">
+              {[
+                { label: "Present", value: weekStats.present, cls: "text-emerald-600" },
+                { label: "Late", value: weekStats.late, cls: "text-amber-600" },
+                { label: "Absent", value: weekStats.absent, cls: "text-red-500" },
+                { label: "Excused", value: weekStats.excused, cls: "text-blue-600" },
+              ].map((row) => (
+                <div
+                  key={row.label}
+                  className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50/60 px-4 py-3"
+                >
+                  <span className="text-sm font-medium text-gray-500">{row.label}</span>
+                  <span className={`text-xl font-extrabold tabular-nums ${row.cls}`}>{row.value}</span>
+                </div>
+              ))}
+              <div className="flex items-center justify-between rounded-xl bg-[#1557C0]/5 px-4 py-3">
+                <span className="text-sm font-medium text-[#1557C0]">Attendance Rate</span>
+                <span className="text-xl font-extrabold tabular-nums text-[#1557C0]">{weekStats.rate}%</span>
+              </div>
+            </div>
+          </SectionCard>
+        </div>
+      </div>
+
+      {/* Updates & Notices */}
+      <AnnouncementsFeed
+        announcements={announcements}
+        isEditor={isEditor}
+        onCreate={onCreateAnnouncement}
+        onEdit={onEditAnnouncement}
+        onDelete={onDeleteAnnouncement}
+      />
+
+      {/* Student Quick Info */}
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+        <InfoTile icon={Trophy} label="Assigned Sport / Art" value={user.sport_or_art ?? "—"} />
+        <InfoTile
+          icon={ShieldCheck}
+          label="Eligibility Status"
+          value={eligibility ? eligibility.status.replace("_", " ") : "No record"}
+          tone={eligibilityTone(eligibility?.status)}
+        />
+        <InfoTile
+          icon={UserCheck}
+          label="Account Status"
+          value={user.is_active ? "Active" : "Inactive"}
+          tone={user.is_active ? "green" : "red"}
+        />
+        <InfoTile
+          icon={ScanFace}
+          label="Face Recognition"
+          value={user.is_face_enrolled ? "Enrolled" : "Not Enrolled"}
+          tone={user.is_face_enrolled ? "green" : "amber"}
+        />
+      </div>
     </div>
   );
 }
@@ -1386,6 +2010,9 @@ export default function DashboardPage() {
 
   return (
     <>
+      {/* OSCA NAAP banner — Dashboard page only, directly below the sticky top nav */}
+      <OSCABanner />
+
       {announcementModal && (
         <AnnouncementFormModal
           existing={announcementModal === "new" ? undefined : announcementModal}
@@ -1393,38 +2020,47 @@ export default function DashboardPage() {
         />
       )}
 
-      {/* Full-width NAAP banner header — flush against the left sidebar */}
-      <WelcomeHeader />
+      {role === "student" ? (
+        <StudentView
+          user={user}
+          studentRecords={studentRecords}
+          studentTodayAttendance={studentTodayAttendance}
+          attendanceTrend={attendanceTrend}
+          announcements={announcements}
+          isEditor={isEditor}
+          {...announcementHandlers}
+        />
+      ) : (
+        <div className="space-y-7">
+          {/* Shared welcome section (role-specific subtitle) */}
+          <WelcomeSection user={user} />
 
-      <div className="mx-auto max-w-7xl space-y-7">
-        {/* Shared welcome section (role-specific subtitle) */}
-        <WelcomeSection user={user} />
-
-        {isManager ? (
-          <ManagerView
-            user={user}
-            summary={summary}
-            pendingCount={pendingCount}
-            attendanceTrend={managerAttendanceTrend}
-            weeklyLoading={weeklyLoading}
-            equipmentChartData={equipmentChartData}
-            announcements={announcements}
-            isEditor={isEditor}
-            {...announcementHandlers}
-          />
-        ) : (
-          <RoleView
-            role={role as string}
-            stats={stats}
-            attendanceTrend={attendanceTrend}
-            equipmentChartData={equipmentChartData}
-            announcements={announcements}
-            isEditor={isEditor}
-            summary={summary}
-            {...announcementHandlers}
-          />
-        )}
-      </div>
+          {isManager ? (
+            <ManagerView
+              user={user}
+              summary={summary}
+              pendingCount={pendingCount}
+              attendanceTrend={managerAttendanceTrend}
+              weeklyLoading={weeklyLoading}
+              equipmentChartData={equipmentChartData}
+              announcements={announcements}
+              isEditor={isEditor}
+              {...announcementHandlers}
+            />
+          ) : (
+            <RoleView
+              role={role as string}
+              stats={stats}
+              attendanceTrend={attendanceTrend}
+              equipmentChartData={equipmentChartData}
+              announcements={announcements}
+              isEditor={isEditor}
+              summary={summary}
+              {...announcementHandlers}
+            />
+          )}
+        </div>
+      )}
     </>
   );
 }

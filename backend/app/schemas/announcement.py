@@ -2,7 +2,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import Field
+from pydantic import Field, field_validator, model_validator
 
 from app.schemas.common import OSCABaseModel
 
@@ -30,6 +30,7 @@ class AnnouncementRead(OSCABaseModel):
     title: str
     content: str
     image_url: str | None = None
+    image_urls: list[str] = Field(default_factory=list)
     event_date: datetime | None
     tag: str | None = None
     pinned: bool = False
@@ -42,6 +43,21 @@ class AnnouncementRead(OSCABaseModel):
     acknowledged_by_me: bool = False
     acknowledgement_count: int = 0
     comment_count: int = 0
+
+    @field_validator("image_urls", mode="before")
+    @classmethod
+    def _images_none_to_empty(cls, v: object) -> object:
+        # JSONB column is NULL for legacy/current rows; treat as empty list.
+        if v is None:
+            return []
+        return v
+
+    @model_validator(mode="after")
+    def _normalize_image_urls(self) -> "AnnouncementRead":
+        # Legacy announcements have only image_url. Mirror it as the sole entry.
+        if not self.image_urls and self.image_url:
+            self.image_urls = [self.image_url]
+        return self
 
 
 class AcknowledgementRead(OSCABaseModel):

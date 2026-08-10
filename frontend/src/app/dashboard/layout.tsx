@@ -31,6 +31,8 @@ import {
   Sun,
   Menu,
   X,
+  Search,
+  CornerDownLeft,
 } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useThemeStore } from "@/store/useThemeStore";
@@ -76,6 +78,12 @@ const navItems: NavItem[] = [
       ],
     },
     {
+      href: "/kiosk",
+      label: "Attendance Scan",
+      icon: Camera,
+      roles: ["admin", "coach"],
+    },
+    {
       href: "/dashboard/inventory",
       label: "Inventory",
       icon: Package,
@@ -105,28 +113,10 @@ const navItems: NavItem[] = [
       roles: ["admin", "director", "staff"],
     },
     {
-      href: "/dashboard/audit-logs",
-      label: "Audit Logs",
-      icon: ScrollText,
-      roles: ["admin"],
-    },
-    {
-      href: "/dashboard/admin/fr-config",
-      label: "FR Config",
-      icon: ScanFace,
-      roles: ["admin", "director"],
-    },
-    {
-      href: "/dashboard/reports",
-      label: "Reports",
-      icon: BarChart3,
-      roles: ["admin", "director", "coach", "staff"],
-    },
-    {
-      href: "/dashboard/analytics",
-      label: "Analytics",
-      icon: TrendingUp,
-      roles: ["admin", "director", "coach"],
+      href: "/dashboard/eligibility",
+      label: "Eligibility",
+      icon: ShieldCheck,
+      roles: ["admin", "director", "coach", "student"],
     },
     {
       href: "/dashboard/facilities",
@@ -142,12 +132,6 @@ const navItems: NavItem[] = [
       ],
     },
     {
-      href: "/dashboard/eligibility",
-      label: "Eligibility",
-      icon: ShieldCheck,
-      roles: ["admin", "director", "coach", "student"],
-    },
-    {
       href: "/dashboard/incidents",
       label: "Incidents",
       icon: AlertTriangle,
@@ -160,10 +144,28 @@ const navItems: NavItem[] = [
       roles: ["admin", "director", "coach", "student"],
     },
     {
-      href: "/kiosk",
-      label: "Attendance Scan",
-      icon: Camera,
-      roles: ["admin", "coach"],
+      href: "/dashboard/audit-logs",
+      label: "Audit Logs",
+      icon: ScrollText,
+      roles: ["admin"],
+    },
+    {
+      href: "/dashboard/reports",
+      label: "Reports",
+      icon: BarChart3,
+      roles: ["admin", "director", "coach", "staff"],
+    },
+    {
+      href: "/dashboard/analytics",
+      label: "Analytics",
+      icon: TrendingUp,
+      roles: ["admin", "director", "coach"],
+    },
+    {
+      href: "/dashboard/admin/fr-config",
+      label: "FR Config",
+      icon: ScanFace,
+      roles: ["admin", "director"],
     },
     {
       href: "/dashboard/profile",
@@ -184,22 +186,44 @@ const roleLabel: Record<UserRole, string> = {
   staff: "Staff",
 };
 
-// ── Breadcrumb helper ─────────────────────────────────────────────────────────
+// ── Page title helper ─────────────────────────────────────────────────────────
 
-function useBreadcrumb(pathname: string) {
-  const segments = pathname.replace("/dashboard", "").split("/").filter(Boolean);
-  const crumbs: { label: string; href: string }[] = [
-    { label: "Dashboard", href: "/dashboard" },
-  ];
-  let path = "/dashboard";
-  for (const seg of segments) {
-    path += `/${seg}`;
-    crumbs.push({
-      label: seg.charAt(0).toUpperCase() + seg.slice(1).replace(/-/g, " "),
-      href: path,
-    });
-  }
-  return crumbs;
+function pageTitleFor(pathname: string): string {
+  const flat = navItems.flatMap((item) => [
+    { label: item.label, href: item.href },
+    ...(item.children ?? []).map((c) => ({ label: c.label, href: c.href })),
+  ]);
+  const sorted = [...flat].sort((a, b) => b.href.length - a.href.length);
+  const match = sorted.find(
+    (f) => pathname === f.href || pathname.startsWith(f.href + "/")
+  );
+  return match?.label ?? "Dashboard";
+}
+
+// ── Breadcrumb (lives INSIDE the sticky top navigation) ───────────────────────
+// Dashboard > Current Page. Rendered on every authenticated dashboard page.
+
+function TopbarBreadcrumb({ pageTitle }: { pageTitle: string }) {
+  const { isDark } = useThemeStore();
+  const isHome = pageTitle === "Dashboard";
+
+  return (
+    <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5">
+      <Link
+        href="/dashboard"
+        className={`flex shrink-0 items-center gap-1.5 transition-colors ${isHome ? "font-bold text-[#1557C0]" : isDark ? "text-gray-400 hover:text-white" : "text-gray-500 hover:text-[#1557C0]"}`}
+      >
+        <LayoutDashboard size={15} />
+        Dashboard
+      </Link>
+      {!isHome && (
+        <>
+          <ChevronRight size={14} className={`shrink-0 ${isDark ? "text-gray-600" : "text-gray-300"}`} />
+          <span className={`truncate font-bold ${isDark ? "text-white" : "text-[#0B1F3A]"}`}>{pageTitle}</span>
+        </>
+      )}
+    </nav>
+  );
 }
 
 // ── Layout ────────────────────────────────────────────────────────────────────
@@ -210,9 +234,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { notifications, unreadCount, markAllRead, markRead, fetch: fetchNotifications } = useNotificationStore();
   const router = useRouter();
   const pathname = usePathname();
-  const crumbs = useBreadcrumb(pathname);
+  const pageTitle = pageTitleFor(pathname);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const { collapsed, toggle: toggleCollapsed } = useSidebarStore();
   const [navTip, setNavTip] = useState<{ label: string; left: number; top: number } | null>(null);
@@ -278,6 +304,34 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (!user) return null;
 
   const visibleNav = navItems.filter((item) => item.roles.includes(user.role));
+
+  // Search: filter the user's visible nav entries (top-level + children).
+  // Computed inline (not useMemo) because this runs AFTER the auth guard —
+  // a hook here would change the hook count between the loading and authed
+  // renders and crash React ("rendered more hooks than during the previous render").
+  const q = searchQuery.trim().toLowerCase();
+  const searchResults: { label: string; href: string }[] = [];
+  if (q) {
+    for (const item of visibleNav) {
+      if (searchResults.length >= 8) break;
+      if (item.label.toLowerCase().includes(q)) searchResults.push({ label: item.label, href: item.href });
+      for (const child of item.children ?? []) {
+        if (searchResults.length >= 8) break;
+        if (
+          child.roles.includes(user.role) &&
+          child.label.toLowerCase().includes(q)
+        ) {
+          searchResults.push({ label: child.label, href: child.href });
+        }
+      }
+    }
+  }
+
+  const handleSearchNav = (href: string) => {
+    router.push(href);
+    setSearchQuery("");
+    setSearchOpen(false);
+  };
 
   const handleLogout = async () => {
     await logout();
@@ -477,48 +531,83 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* ── Main area ─────────────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Topbar */}
-        <header className={`h-14 ${isDark ? "bg-[#1E293B] border-[#334155]" : "bg-white border-[#e5e7eb]"} border-b flex items-center px-4 lg:px-6 gap-3 shrink-0`}>
-          {/* Mobile menu button */}
-          <button onClick={() => setMobileMenuOpen(true)} className="lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 text-gray-600">
-            <Menu size={20} />
-          </button>
+        <header className={`h-16 ${isDark ? "bg-[#1E293B] border-[#334155]" : "bg-white border-[#e5e7eb]"} border-b flex items-center gap-4 px-4 lg:px-6 shrink-0`}>
+          {/* Left: breadcrumb (Dashboard > Current Page) */}
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <button onClick={() => setMobileMenuOpen(true)} className="lg:hidden p-2 -ml-1 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 text-gray-600 dark:text-gray-300 shrink-0">
+              <Menu size={20} />
+            </button>
+            <TopbarBreadcrumb pageTitle={pageTitle} />
+          </div>
 
-          {/* Breadcrumb */}
-          <nav className="flex items-center gap-1.5 text-xs text-[#6b7280] flex-1 min-w-0">
-            {crumbs.map((crumb, i) => (
-              <span key={crumb.href} className="flex items-center gap-1.5">
-                {i > 0 && <ChevronRight size={12} className="text-[#d1d5db]" />}
-                {i === crumbs.length - 1 ? (
-                  <span className={`font-medium ${isDark ? "text-white" : "text-[#111827]"}`}>{crumb.label}</span>
-                ) : (
-                  <Link href={crumb.href} className="hover:text-[#374151] transition-colors">
-                    {crumb.label}
-                  </Link>
-                )}
-              </span>
-            ))}
-          </nav>
+          {/* Center: search */}
+          <div className="flex-1 flex justify-center">
+            <div className="relative w-full max-w-md">
+              <Search size={15} className={`absolute left-3.5 top-1/2 -translate-y-1/2 ${isDark ? "text-gray-500" : "text-gray-400"}`} />
+              <input
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setSearchOpen(true);
+                }}
+                onFocus={() => setSearchOpen(true)}
+                onBlur={() => setTimeout(() => setSearchOpen(false), 150)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") setSearchOpen(false);
+                  if (e.key === "Enter" && searchResults.length > 0) {
+                    handleSearchNav(searchResults[0].href);
+                  }
+                }}
+                placeholder="Search anything..."
+                className={`w-full h-9 pl-9 pr-3 text-sm rounded-full border transition-colors focus:outline-none focus:ring-2 ${
+                  isDark
+                    ? "bg-[#0F172A]/60 border-[#334155] text-white placeholder:text-gray-500 focus:border-[#2563eb] focus:ring-[#2563eb]/20"
+                    : "bg-[#f2f5f9] border-transparent text-gray-700 placeholder:text-gray-400 hover:bg-gray-100 focus:bg-white focus:border-[#2563eb] focus:ring-[#2563eb]/15"
+                }`}
+              />
+
+              {/* Search results dropdown */}
+              {searchOpen && searchResults.length > 0 && (
+                <div className={`absolute left-0 right-0 top-full mt-2 rounded-xl shadow-xl border z-50 overflow-hidden ${isDark ? "bg-[#1E293B] border-[#334155]" : "bg-white border-gray-200"}`}>
+                  {searchResults.map((r) => (
+                    <button
+                      key={r.href}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        handleSearchNav(r.href);
+                      }}
+                      className={`w-full flex items-center justify-between gap-3 px-4 py-2.5 text-sm text-left transition-colors ${isDark ? "text-gray-200 hover:bg-white/5" : "text-gray-700 hover:bg-gray-50"}`}
+                    >
+                      <span className="truncate">{r.label}</span>
+                      <CornerDownLeft size={13} className={`shrink-0 ${isDark ? "text-gray-500" : "text-gray-300"}`} />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
 
           {/* Right side */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 flex-1 justify-end">
             {/* Dark mode toggle */}
             <button
               onClick={toggleTheme}
-              className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${isDark ? "text-yellow-400 hover:bg-white/5" : "text-gray-500 hover:bg-gray-100"}`}
+              className={`w-9 h-9 flex items-center justify-center rounded-full transition-colors ${isDark ? "text-yellow-400 hover:bg-white/5" : "text-gray-500 hover:bg-gray-100"}`}
               title={isDark ? "Light mode" : "Dark mode"}
             >
-              {isDark ? <Sun size={16} /> : <Moon size={16} />}
+              {isDark ? <Sun size={17} /> : <Moon size={17} />}
             </button>
 
             {/* Notifications */}
             <div className="relative">
               <button
                 onClick={() => setNotifOpen(!notifOpen)}
-                className={`relative w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${isDark ? "text-gray-400 hover:bg-white/5" : "text-gray-500 hover:bg-gray-100"}`}
+                className={`relative w-9 h-9 flex items-center justify-center rounded-full transition-colors ${isDark ? "text-gray-400 hover:bg-white/5" : "text-gray-500 hover:bg-gray-100"}`}
+                title="Notifications"
               >
-                <Bell size={16} />
+                <Bell size={17} />
                 {unreadCount > 0 && (
-                  <span className="absolute top-0.5 right-0.5 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                  <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
                     {unreadCount > 9 ? "9+" : unreadCount}
                   </span>
                 )}
@@ -526,7 +615,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
               {/* Notification dropdown */}
               {notifOpen && (
-                <div className={`absolute right-0 top-10 w-80 rounded-xl shadow-xl border z-50 ${isDark ? "bg-[#1E293B] border-[#334155]" : "bg-white border-gray-200"}`}>
+                <div className={`absolute right-0 top-12 w-80 rounded-xl shadow-xl border z-50 ${isDark ? "bg-[#1E293B] border-[#334155]" : "bg-white border-gray-200"}`}>
                   <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                     <span className={`text-sm font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>Notifications</span>
                     {unreadCount > 0 && (
@@ -553,10 +642,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               )}
             </div>
 
-            {/* Avatar */}
-            <div className="w-8 h-8 rounded-full bg-[#2563eb] flex items-center justify-center text-white text-xs font-semibold">
+            {/* Avatar → Profile */}
+            <Link
+              href="/dashboard/profile"
+              title={user.full_name}
+              className="ml-1 w-9 h-9 rounded-full bg-[#2563eb] flex items-center justify-center text-white text-xs font-semibold hover:ring-2 hover:ring-[#2563eb]/40 transition-shadow shrink-0"
+            >
               {initials.toUpperCase() || "?"}
-            </div>
+            </Link>
           </div>
         </header>
 

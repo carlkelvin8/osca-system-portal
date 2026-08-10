@@ -40,6 +40,7 @@ import type { LucideIcon } from "lucide-react";
 import type { FaceScanResponse, PaginatedResponse, Session } from "@/types";
 import { attendanceApi } from "@/lib/api";
 import { useAuthStore } from "@/store/useAuthStore";
+import { useThemeStore } from "@/store/useThemeStore";
 import { format } from "date-fns";
 import Link from "next/link";
 
@@ -57,79 +58,56 @@ function DecoBg() {
   );
 }
 
-/* ── Shared hero: NAAP photo + navy gradient + logo/branding + glass clock + wave ── */
+/* ── OSCA NAAP banner — same approved design as the Dashboard, sticky ── */
+// Sticky so it stays visible at the top while the Kiosk content scrolls.
+// Bottom edge fades into the page background (theme-aware: #f7faff light, #0F172A dark).
 
 function KioskBanner() {
-  const [now, setNow] = useState(new Date());
-
-  useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
+  const { isDark } = useThemeStore();
 
   return (
-    <header className="relative overflow-hidden bg-[#0c1c33]">
-      {/* Campus photo background (served from /public) */}
+    <header className="sticky top-0 z-30 overflow-hidden rounded-b-[20px]">
+      {/* NAAP campus photo */}
       <div
-        className="absolute inset-0 bg-cover bg-center opacity-40"
-        style={{ backgroundImage: "url('/NAAP.png')" }}
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+        style={{
+          backgroundImage: "url('/NAAP.png')",
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }}
       />
-      {/* Dark navy overlay keeps text readable while the photo stays subtly visible */}
-      <div className="absolute inset-0 bg-gradient-to-r from-[#071A3A]/95 via-[#123D78]/85 to-[#071A3A]/95" />
+      {/* Soft deep-navy overlay — photo stays visible underneath */}
+      <div className="absolute inset-0 bg-gradient-to-r from-[#061a38]/95 via-[#123b68]/75 to-[#123b68]/45" />
 
-      <div className="relative z-10 mx-auto flex min-h-[170px] w-full max-w-6xl flex-col gap-5 px-6 pb-24 pt-8 md:min-h-[190px] md:flex-row md:items-center md:justify-between md:pb-24">
-        {/* Left: OSCA logo + branding */}
-        <div className="flex items-center gap-4">
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/10 ring-2 ring-white/30 backdrop-blur-sm">
-            <Image
-              src="/osca-logo.png"
-              alt="OSCA Logo"
-              width={56}
-              height={56}
-              className="h-full w-full object-cover"
-              priority
-            />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-white md:text-2xl">
+      {/* Smooth theme-aware fade into the page background — no hard wave/border */}
+      <div
+        aria-hidden
+        className={`pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-gradient-to-b from-transparent md:h-16 ${
+          isDark ? "to-[#0F172A]" : "to-[#f7faff]"
+        }`}
+      />
+
+      <div className="relative z-10 flex h-[150px] flex-col justify-center gap-4 px-6 py-6 md:h-[165px] md:flex-row md:items-center md:justify-between md:gap-5 md:px-10">
+        {/* Left: OSCA branding (logo sits directly on the photo, no white box) */}
+        <div className="flex items-center gap-3 md:gap-4">
+          <Image
+            src="/osca-logo.png"
+            alt="OSCA Logo"
+            width={64}
+            height={64}
+            className="h-12 w-12 shrink-0 object-contain md:h-16 md:w-16"
+          />
+          <div className="min-w-0">
+            <h1 className="text-[20px] font-extrabold leading-tight tracking-tight text-white md:text-[30px]">
               OSCA Management System
             </h1>
-            <p className="text-sm font-medium text-blue-200">Office of Sports and Cultural Affairs</p>
-            <p className="text-xs text-blue-300/80">NAAP – Villamor Campus</p>
-          </div>
-        </div>
-
-        {/* Right: live clock glass card */}
-        <div className="flex items-center gap-3 self-start rounded-2xl border border-white/20 bg-white/10 px-4 py-3 shadow-lg backdrop-blur-md md:self-center">
-          <Calendar className="shrink-0 text-blue-200" size={20} />
-          <div className="min-w-0">
-            <p className="text-xs font-medium text-blue-100">{format(now, "EEEE, MMMM d, yyyy")}</p>
-            <p className="font-mono text-xl font-bold leading-tight tabular-nums text-white">
-              {format(now, "hh:mm:ss a")}
+            <p className="mt-1 text-[13px] font-medium leading-snug text-white/95 md:text-[16px]">
+              Office of Sports and Cultural Affairs
             </p>
+            <p className="text-[11px] font-medium text-blue-100/90 md:text-[13px]">NAAP – Villamor Campus</p>
           </div>
-          <span className="ml-2 flex shrink-0 items-center gap-1.5 rounded-full bg-green-500/15 px-2.5 py-1">
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
-            </span>
-            <span className="text-[11px] font-semibold text-green-300">System Online</span>
-          </span>
         </div>
       </div>
-
-      {/* Curved / wave transition into the light-blue page background */}
-      <svg
-        className="absolute bottom-[-1px] left-0 z-[5] h-[90px] w-full"
-        viewBox="0 0 1440 120"
-        preserveAspectRatio="none"
-        aria-hidden="true"
-      >
-        <path
-          d="M0,70 C360,115 720,15 1080,55 C1240,75 1360,70 1440,55 L1440,120 L0,120 Z"
-          fill="#f7faff"
-        />
-      </svg>
     </header>
   );
 }

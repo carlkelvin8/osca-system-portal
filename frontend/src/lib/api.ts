@@ -308,6 +308,8 @@ export const announcementsApi = {
     formData.append("file", file);
     return api.post(`/announcements/${id}/image`, formData);
   },
+  deleteImage: (id: string, index: number) =>
+    api.delete(`/announcements/${id}/images/${index}`),
   acknowledge: (id: string) => api.post(`/announcements/${id}/acknowledge`),
   unacknowledge: (id: string) => api.delete(`/announcements/${id}/acknowledge`),
   comments: (id: string) => api.get(`/announcements/${id}/comments`),

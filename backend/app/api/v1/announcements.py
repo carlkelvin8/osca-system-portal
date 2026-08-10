@@ -253,14 +253,14 @@ async def upload_announcement_image(
     if file.content_type not in allowed_types:
         raise ForbiddenError("Only JPEG, PNG, and WebP images are allowed.")
 
-    # Validate file size (max 5 MB)
+    # Validate file size (max 5 MB per file)
     contents = await file.read()
     if len(contents) > 5 * 1024 * 1024:
         raise ForbiddenError("Image must be 5 MB or smaller.")
 
     storage = StorageService()
-    ext = "jpg" if "jpeg" in (file.content_type or "") else "png"
-    key = f"announcements/{announcement_id}/image.{ext}"
+    ext = "jpg" if "jpeg" in (file.content_type or "") else ("webp" if "webp" in (file.content_type or "") else "png")
+    key = f"announcements/{announcement_id}/{uuid.uuid4().hex[:8]}.{ext}"
     await storage.upload_bytes(
         bucket="osca-reports",
         key=key,
@@ -269,7 +269,12 @@ async def upload_announcement_image(
     )
 
     image_url = storage.get_presigned_url("osca-reports", key, expires_in=86400)
-    ann.image_url = image_url
+
+    # Append to the ordered list (no fixed limit). image_url mirrors the first entry.
+    urls = list(ann.image_urls or [])
+    urls.append(image_url)
+    ann.image_urls = urls
+    ann.image_url = urls[0] if urls else None
     await audit_log(
         db=db,
         action="ANNOUNCEMENT_IMAGE_UPLOADED",
@@ -286,6 +291,57 @@ async def upload_announcement_image(
     creator = await db.get(type(ann).created_by.property.mapper.class_, ann.created_by_id)
     r.created_by_name = creator.full_name if creator else ""
     return r
+
+
+@router.delete(
+    "/{announcement_id}/images/{index}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Remove an announcement image (Admin / Director)",
+)
+async def remove_announcement_image(
+    announcement_id: uuid.UUID,
+    index: int,
+    current_user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> None:
+    if current_user.role not in _EDITOR_ROLES:
+        raise ForbiddenError("Only admin and director may update announcements.")
+
+    ann = await db.get(Announcement, announcement_id)
+    if not ann or not ann.is_active:
+        raise NotFoundError("Announcement", str(announcement_id))
+
+    urls = list(ann.image_urls or [])
+    if index < 0 or index >= len(urls):
+        raise NotFoundError("Announcement image", str(index))
+
+    removed_url = urls.pop(index)
+    ann.image_urls = urls or None
+    ann.image_url = urls[0] if urls else None
+
+    # Best-effort purge of the object from MinIO (ignore failures).
+    try:
+        storage = StorageService()
+        from urllib.parse import urlparse
+        parsed = urlparse(removed_url)
+        path = parsed.path.lstrip("/")
+        bucket_prefix = "osca-reports/"
+        if path.startswith(bucket_prefix):
+            await storage.delete_object("osca-reports", path[len(bucket_prefix):])
+    except Exception:
+        pass
+
+    await audit_log(
+        db=db,
+        action="ANNOUNCEMENT_IMAGE_REMOVED",
+        module="Announcements",
+        description=f"Removed an image from announcement '{ann.title}'",
+        resource_type="Announcement",
+        resource_id=str(announcement_id),
+        current_user=current_user,
+    )
+    await db.commit()
+    logger.info("announcement_image_removed", announcement_id=str(announcement_id), index=index)
 
 
 @router.post(

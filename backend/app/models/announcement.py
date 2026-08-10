@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, Text, UniqueConstraint, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -20,6 +20,8 @@ class Announcement(Base):
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    image_urls: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True,
+        comment="All attached image URLs (ordered). image_url mirrors the first entry for backward compat.")
     event_date: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True,
         comment="Set when this is an upcoming event; None for general notices"
