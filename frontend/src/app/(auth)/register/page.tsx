@@ -126,10 +126,16 @@ const registerSchema = z
   })
   .superRefine((data, ctx) => {
     if (data.role === "student_athlete" || data.role === "student_artist") {
-      if (!data.student_id || data.student_id.length < 4) {
+      if (!data.student_id) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           message: "Student ID is required",
+          path: ["student_id"],
+        });
+      } else if (!/^\d{5}[A-Z]{2}-\d{6}$/.test(data.student_id)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Student ID must follow the format 12345MN-000000 (5 digits, 2 uppercase letters, hyphen, 6 digits)",
           path: ["student_id"],
         });
       }
@@ -852,9 +858,14 @@ export default function RegisterPage() {
                 <>
                   <Field label="Student ID" error={errors.student_id?.message} required>
                     <input
-                      {...register("student_id")}
+                      {...register("student_id", {
+                        onChange: (e) => {
+                          e.target.value = e.target.value.toUpperCase();
+                        },
+                      })}
                       className={inputCls}
-                      placeholder="e.g. 2024-0001"
+                      placeholder="12345MN-000000"
+                      maxLength={14}
                     />
                   </Field>
                   <div className="grid grid-cols-2 gap-3">

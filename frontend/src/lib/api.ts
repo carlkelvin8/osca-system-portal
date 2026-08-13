@@ -147,6 +147,10 @@ export const attendanceApi = {
     api.get("/attendance/sessions", { params }),
   getSession: (id: string) =>
     api.get(`/attendance/sessions/${id}`),
+  getSessionStats: (id: string) =>
+    api.get(`/attendance/sessions/${id}/stats`),
+  getSessionLatest: (id: string) =>
+    api.get(`/attendance/sessions/${id}/latest-attendance`),
   scan: (data: Record<string, unknown>) =>
     api.post("/attendance/scan", data),
   enroll: (data: Record<string, unknown>) =>

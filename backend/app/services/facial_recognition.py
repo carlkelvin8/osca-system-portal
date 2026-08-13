@@ -27,6 +27,11 @@ from app.services.storage_service import StorageService
 
 logger = structlog.get_logger(__name__)
 
+# Minimum gap between the top-2 cosine similarities required to accept a match.
+# If two registered faces score within this margin, we refuse to guess and ask
+# for another scan (prevents misidentifying people whose embeddings are close).
+AMBIGUITY_MARGIN = 0.02
+
 
 @dataclass
 class FRMatchResult:
@@ -197,7 +202,13 @@ class FacialRecognitionService:
         _live_enabled = liveness_enabled if liveness_enabled is not None else settings.FR_LIVENESS_ENABLED
 
         def _run():
-            img = self._decode_image(image_bytes)
+            try:
+                img = self._decode_image(image_bytes)
+            except Exception:
+                return FRMatchResult(
+                    result=ScanResult.NO_FACE_DETECTED,
+                    failure_reason="Invalid image frame. Please ensure a valid camera image.",
+                )
             img_rgb = self._preprocess(img)
 
             # Liveness check
@@ -226,13 +237,17 @@ class FacialRecognitionService:
             # Compare against all stored embeddings
             best_score = -1.0
             best_user_id = None
+            second_score = -1.0
 
             for user_id, stored_emb in stored_embeddings:
                 stored_arr = np.array(stored_emb)
                 score = self._cosine_similarity(query_arr, stored_arr)
                 if score > best_score:
+                    second_score = best_score
                     best_score = score
                     best_user_id = user_id
+                elif score > second_score:
+                    second_score = score
 
             if best_score < _sim_threshold:
                 return FRMatchResult(
@@ -243,6 +258,19 @@ class FacialRecognitionService:
                         f"Face not recognized (confidence={best_score:.3f}, "
                         f"threshold={_sim_threshold}). "
                         "Ensure good lighting and face the camera directly."
+                    ),
+                )
+
+            # Safety: if two profiles score almost equally, do not guess — ask to rescan.
+            if second_score >= 0 and (best_score - second_score) < AMBIGUITY_MARGIN:
+                return FRMatchResult(
+                    result=ScanResult.FAILED_RECOGNITION,
+                    confidence=best_score,
+                    liveness_score=liveness_score,
+                    failure_reason=(
+                        f"Multiple possible matches found (closest scores "
+                        f"{best_score:.3f} and {second_score:.3f}). "
+                        "Please scan again with clear lighting."
                     ),
                 )
 

@@ -8,7 +8,7 @@
  */
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Image from "next/image";
 import Webcam from "react-webcam";
 import { useFacialRecognition } from "@/hooks/useFacialRecognition";
@@ -37,7 +37,7 @@ import {
   XCircle,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import type { FaceScanResponse, PaginatedResponse, Session } from "@/types";
+import type { FaceScanResponse, LatestAttendance, PaginatedResponse, Session, SessionStats } from "@/types";
 import { attendanceApi } from "@/lib/api";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useThemeStore } from "@/store/useThemeStore";
@@ -45,6 +45,11 @@ import { format } from "date-fns";
 import Link from "next/link";
 
 const ALLOWED_ROLES = ["admin", "coach", "pe_instructor"] as const;
+
+/* ── Shared card token — matches the Dashboard design system (Student reference) ── */
+
+const CARD =
+  "rounded-2xl border border-gray-100 bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04),0_12px_32px_-16px_rgba(16,24,40,0.10)]";
 
 /* ── Subtle decorative background (soft blue blobs behind the cards) ── */
 
@@ -124,7 +129,7 @@ function MetaRow({
   value: string;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-lg bg-gray-50 px-3 py-2.5">
+    <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50/60 px-4 py-3">
       <Icon className="shrink-0 text-[#1E3A5F]" size={18} />
       <div className="min-w-0">
         <p className="text-xs text-gray-400">{label}</p>
@@ -148,7 +153,9 @@ function StatTile({
   bgCls: string;
 }) {
   return (
-    <div className={`rounded-2xl border border-gray-100 p-4 text-center ${bgCls}`}>
+    <div
+      className={`rounded-2xl border border-gray-100 p-5 text-center shadow-[0_1px_2px_rgba(16,24,40,0.04),0_12px_32px_-16px_rgba(16,24,40,0.10)] ${bgCls}`}
+    >
       <Icon className={iconCls} size={22} />
       <p className="mt-1.5 text-2xl font-bold tabular-nums text-gray-900">{value}</p>
       <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
@@ -182,7 +189,6 @@ export default function KioskPage() {
     name?: string;
   } | null>(null);
   const [consecutiveFailures, setConsecutiveFailures] = useState(0);
-  const [lastSuccess, setLastSuccess] = useState<{ name: string; at: Date } | null>(null);
 
   // ── Auth check ────────────────────────────────────────────────────────────
 
@@ -217,22 +223,33 @@ export default function KioskPage() {
   const activeSessions = sessionsData?.items ?? [];
 
   // ── Today's overview stats ────────────────────────────────────────────────
-  // TODO: Wire the real stats endpoint. `attendanceApi.getSessionStats()` does not
-  // exist in lib/api.ts yet. Once added, replace the queryFn below with:
-  //   const res = await attendanceApi.getSessionStats(selectedSessionId);
-  //   return res.data;
-  // and set `enabled` to true (keep retry: false so a failure is silent).
-  const { data: sessionStats } = useQuery<{
-    present?: number;
-    late?: number;
-    absent?: number;
-    total?: number;
-  } | null>({
+
+  const { data: sessionStats } = useQuery<SessionStats | null>({
     queryKey: ["kiosk-session-stats", selectedSessionId],
-    queryFn: async () => null,
-    enabled: false,
+    queryFn: async () => {
+      if (!selectedSessionId) return null;
+      const res = await attendanceApi.getSessionStats(selectedSessionId);
+      return res.data;
+    },
+    enabled: !!selectedSessionId,
     retry: false,
     staleTime: 30_000,
+  });
+
+  // ── Last successful attendance (fetched from the backend, not local state) ──
+
+  const queryClient = useQueryClient();
+  const { data: latestAttendance } = useQuery<LatestAttendance | null>({
+    queryKey: ["kiosk-latest-attendance", selectedSessionId],
+    queryFn: async () => {
+      if (!selectedSessionId) return null;
+      const res = await attendanceApi.getSessionLatest(selectedSessionId);
+      return res.data;
+    },
+    enabled: !!selectedSessionId,
+    retry: false,
+    staleTime: 30_000,
+    placeholderData: (prev) => prev,
   });
 
   // ── Facial recognition hook ───────────────────────────────────────────────
@@ -242,16 +259,26 @@ export default function KioskPage() {
     scanType,
     onSuccess: (result: FaceScanResponse) => {
       setConsecutiveFailures(0);
+      // A non-student match is identity verification only — no attendance recorded.
+      const isStaff = !!result.matched_user_role && result.matched_user_role !== "student";
       setFeedback({
         type: "success",
-        message: scanType === "time_in" ? "Time-In Recorded!" : "Time-Out Recorded!",
+        message: isStaff
+          ? "Face Recognized!"
+          : scanType === "time_in"
+          ? "Time-In Recorded!"
+          : "Time-Out Recorded!",
         name: result.matched_user_name ?? undefined,
       });
-      setLastSuccess({
-        name: result.matched_user_name ?? "Student",
-        at: new Date(),
-      });
       setTimeout(() => setFeedback(null), 4000);
+      if (selectedSessionId) {
+        queryClient.invalidateQueries({
+          queryKey: ["kiosk-latest-attendance", selectedSessionId],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["kiosk-session-stats", selectedSessionId],
+        });
+      }
     },
     onFailure: (result: FaceScanResponse) => {
       const newCount = consecutiveFailures + 1;
@@ -283,18 +310,22 @@ export default function KioskPage() {
 
   if (!selectedSessionId) {
     return (
-      <div className="relative flex min-h-screen flex-col bg-[#f7faff]">
+      <div className="relative flex flex-col bg-[#f7faff]">
         <DecoBg />
         <KioskBanner />
 
-        <main className="relative z-10 mx-auto flex w-full max-w-2xl flex-1 flex-col px-6 py-10">
+        <main className="relative z-10 mx-auto flex w-full max-w-2xl flex-col space-y-4 px-6 pb-8 pt-4">
           {/* Back to dashboard */}
-          <div className="mb-5">
+          <div className="-ml-6">
             <Link
               href="/dashboard"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-[#1E3A5F] shadow-sm transition hover:text-[#0c1c33]"
+              className="group inline-flex items-center gap-1.5 text-sm font-semibold text-[#1E3A5F] transition-colors duration-300 hover:text-[#0c1c33] dark:text-blue-100 dark:hover:text-white"
             >
-              <ArrowLeft size={15} /> Dashboard
+              <ArrowLeft
+                size={15}
+                className="transition-transform duration-300 group-hover:-translate-x-0.5"
+              />
+              Back to Dashboard
             </Link>
           </div>
 
@@ -313,7 +344,7 @@ export default function KioskPage() {
           </div>
 
           {/* Session list card */}
-          <div className="mt-8 rounded-2xl border border-gray-100 bg-white p-6 shadow-md">
+          <div className={`${CARD} p-6`}>
             <h2 className="text-xs font-bold uppercase tracking-wider text-[#1E3A5F]">
               Active Sessions
             </h2>
@@ -331,7 +362,7 @@ export default function KioskPage() {
                 </p>
               </div>
             ) : (
-              <div className="mt-4 space-y-2">
+              <div className="mt-5 space-y-2">
                 {activeSessions.map((session) => (
                   <button
                     key={session.id}
@@ -370,6 +401,32 @@ export default function KioskPage() {
       : { cls: "bg-amber-500/95 text-white", Icon: AlertCircle }
     : null;
 
+  // ── Last successful attendance (derived from the backend query) ───────────
+
+  const latestIsStaff =
+    !!latestAttendance?.person_role && latestAttendance.person_role !== "student";
+  const latestBadge = latestIsStaff
+    ? (latestAttendance?.person_role ?? "Personnel").replace("_", " ").toUpperCase()
+    : latestAttendance?.status === "late"
+    ? "Late"
+    : latestAttendance?.status === "present"
+    ? "Present"
+    : latestIsStaff
+    ? "Personnel"
+    : "Attended";
+  const latestTime = latestAttendance?.time
+    ? `${format(new Date(latestAttendance.time), "hh:mm:ss a")} · ${format(
+        new Date(latestAttendance.time),
+        "MMM d, yyyy",
+      )}`
+    : null;
+  const latestSessionLine = [
+    latestAttendance?.session_sport_or_art,
+    latestAttendance?.session_name,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   // ── Main scan interface ───────────────────────────────────────────────────
 
   return (
@@ -377,14 +434,18 @@ export default function KioskPage() {
       <DecoBg />
       <KioskBanner />
 
-      <main className="relative z-10 mx-auto w-full max-w-6xl flex-1 px-6 py-8">
+      <main className="relative z-10 mx-auto w-full max-w-6xl flex-1 space-y-7 px-6 py-10">
         {/* Back to dashboard */}
-        <div className="mb-5">
+        <div>
           <Link
             href="/dashboard"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-[#1E3A5F] shadow-sm transition hover:text-[#0c1c33]"
+            className="group inline-flex items-center gap-1.5 text-sm font-semibold text-[#1E3A5F] transition-colors duration-300 hover:text-[#0c1c33] dark:text-blue-100 dark:hover:text-white"
           >
-            <ArrowLeft size={15} /> Dashboard
+            <ArrowLeft
+              size={15}
+              className="transition-transform duration-300 group-hover:-translate-x-0.5"
+            />
+            Back to Dashboard
           </Link>
         </div>
 
@@ -396,17 +457,18 @@ export default function KioskPage() {
           <h1 className="mt-4 text-3xl font-bold tracking-tight text-[#0c1c33]">OSCA Attendance Scan</h1>
           <p className="mt-1.5 text-sm font-semibold text-[#1557C0]">Kiosk Mode – Facial Recognition</p>
           <p className="mt-1 text-xs text-gray-500">
-            Please position your face in the camera frame to record your attendance.
+            Position your face in the camera frame. Students record attendance; OSCA
+            personnel are recognized for identity verification only.
           </p>
           <div className="mx-auto mt-3 h-0.5 w-16 rounded-full bg-[#1557C0]" />
         </div>
 
         {/* Two-column layout */}
-        <div className="mt-8 grid gap-6 lg:grid-cols-3">
+        <div className="grid gap-6 lg:grid-cols-3">
           {/* Left column (wider) */}
-          <div className="space-y-6 lg:col-span-2">
+          <div className="space-y-7 lg:col-span-2">
             {/* Active attendance session card */}
-            <div className="rounded-2xl border border-gray-100 border-l-4 border-l-[#1557C0] bg-white p-6 shadow-sm">
+            <div className={`${CARD} border-l-4 border-l-[#1557C0] p-6`}>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <h2 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#1E3A5F]">
                   <Calendar size={15} /> Active attendance session
@@ -439,7 +501,7 @@ export default function KioskPage() {
                     </div>
                   </div>
 
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2">
                     <MetaRow
                       icon={Clock}
                       label="Start – End"
@@ -479,13 +541,13 @@ export default function KioskPage() {
             </div>
 
             {/* Facial recognition scan card */}
-            <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+            <div className={`${CARD} p-6`}>
               <h2 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#1E3A5F]">
                 <ScanFace size={15} /> Facial recognition scan
               </h2>
 
               {/* Scan type toggle */}
-              <div className="mt-4 flex gap-2">
+              <div className="mt-5 flex gap-2">
                 {(["time_in", "time_out"] as const).map((type) => (
                   <button
                     key={type}
@@ -502,7 +564,7 @@ export default function KioskPage() {
               </div>
 
               {/* Camera frame */}
-              <div className="relative mt-4 overflow-hidden rounded-2xl border border-gray-200 bg-black">
+              <div className="relative mt-5 overflow-hidden rounded-2xl border border-gray-200 bg-black">
                 <Webcam
                   ref={webcamRef as React.RefObject<Webcam>}
                   audio={false}
@@ -555,7 +617,7 @@ export default function KioskPage() {
               <button
                 onClick={captureAndScan}
                 disabled={isScanning || !selectedSessionId}
-                className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-[#1557C0] px-6 py-3.5 text-base font-bold text-white shadow-lg shadow-[#1557C0]/20 transition hover:bg-[#123D78] disabled:cursor-not-allowed disabled:opacity-50"
+                className="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-[#1557C0] px-6 py-3.5 text-base font-bold text-white shadow-lg shadow-[#1557C0]/20 transition hover:bg-[#123D78] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isScanning ? (
                   <>
@@ -575,13 +637,13 @@ export default function KioskPage() {
           </div>
 
           {/* Right column (narrower) */}
-          <div className="space-y-6">
+          <div className="space-y-7">
             {/* Today's attendance overview */}
-            <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+            <div className={`${CARD} p-6`}>
               <h2 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#1E3A5F]">
                 <Calendar size={15} /> Today&apos;s attendance overview
               </h2>
-              <div className="mt-4 grid grid-cols-2 gap-3">
+              <div className="mt-5 grid grid-cols-2 gap-5">
                 <StatTile
                   icon={UserCheck}
                   label="Present"
@@ -611,29 +673,40 @@ export default function KioskPage() {
                   bgCls="bg-blue-50"
                 />
               </div>
-              <p className="mt-3 text-[11px] text-gray-400">
-                Live stats load once the session stats endpoint is wired.
-              </p>
+                  <p className="mt-3 text-[11px] text-gray-400">
+                    Live counts for the selected session.
+                  </p>
             </div>
 
             {/* Last successful attendance */}
-            <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+            <div className={`${CARD} p-6`}>
               <h2 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#1E3A5F]">
                 <Award size={15} /> Last successful attendance
               </h2>
-              {lastSuccess ? (
-                <div className="mt-4 flex items-center gap-3">
+              {latestAttendance?.has_record ? (
+                <div className="mt-5 flex items-center gap-3">
                   <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-green-400 to-green-600 text-white shadow">
                     <UserCheck size={22} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-semibold text-gray-900">{lastSuccess.name}</p>
-                    <p className="text-xs text-gray-500">
-                      {format(lastSuccess.at, "hh:mm:ss a")} · {format(lastSuccess.at, "MMM d, yyyy")}
+                    <p className="truncate font-semibold text-gray-900">
+                      {latestAttendance.person_name}
                     </p>
+                    {latestTime && (
+                      <p className="text-xs text-gray-500">{latestTime}</p>
+                    )}
+                    {latestSessionLine && (
+                      <p className="mt-0.5 truncate text-[11px] text-gray-400">
+                        {latestSessionLine}
+                      </p>
+                    )}
                   </div>
-                  <span className="shrink-0 rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700">
-                    Present
+                  <span
+                    className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                      latestIsStaff ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"
+                    }`}
+                  >
+                    {latestBadge}
                   </span>
                 </div>
               ) : (
@@ -647,7 +720,7 @@ export default function KioskPage() {
         </div>
 
         {/* Reminders strip */}
-        <div className="mt-6 grid gap-4 rounded-2xl border border-[#1557C0]/10 bg-[#1557C0]/5 p-5 sm:grid-cols-2">
+        <div className="grid gap-4 rounded-2xl border border-[#1557C0]/10 bg-[#1557C0]/5 p-5 sm:grid-cols-2">
           <div className="flex items-start gap-3">
             <Info className="mt-0.5 shrink-0 text-[#1557C0]" size={18} />
             <p className="text-sm text-gray-600">
@@ -665,7 +738,7 @@ export default function KioskPage() {
       </main>
 
       {/* Bottom status bar */}
-      <footer className="relative z-10 mt-6 border-t border-white/10 bg-[#0c1c33] px-6 py-4">
+      <footer className="relative z-10 mt-7 border-t border-white/10 bg-[#0c1c33] px-6 py-4">
         <div className="mx-auto grid w-full max-w-6xl grid-cols-1 items-center gap-3 text-center sm:grid-cols-3">
           <p className="flex items-center justify-center gap-2 text-xs font-medium text-blue-200 sm:justify-start">
             <Shield size={14} className="text-green-400" /> Secure. Accurate. Reliable.

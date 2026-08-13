@@ -198,6 +198,10 @@ class ScanAttempt(Base):
     matched_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+    # Session the scan was performed against (null for scans outside a session)
+    session_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("sessions.id", ondelete="CASCADE"), nullable=True
+    )
     confidence_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     liveness_score: Mapped[float | None] = mapped_column(Float, nullable=True)
 

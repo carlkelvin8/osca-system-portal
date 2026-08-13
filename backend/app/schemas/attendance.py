@@ -54,6 +54,14 @@ class SessionRead(OSCABaseModel):
     attendance_count: int = 0
 
 
+class SessionStatsRead(OSCABaseModel):
+    session_id: uuid.UUID
+    present: int = 0
+    late: int = 0
+    absent: int = 0
+    total: int = 0
+
+
 # ── Attendance Record Schemas ──────────────────────────────────────────────────
 
 class AttendanceRecordRead(OSCABaseModel):
@@ -136,6 +144,7 @@ class FaceScanResponse(OSCABaseModel):
     result: ScanResult
     matched_user_id: uuid.UUID | None = None
     matched_user_name: str | None = None
+    matched_user_role: str | None = None
     confidence_score: float | None = None
     liveness_score: float | None = None
     attendance_record_id: uuid.UUID | None = None
@@ -166,6 +175,24 @@ class EnrollmentResponse(OSCABaseModel):
 
 
 # ── Dashboard / Report Input Schemas ──────────────────────────────────────────
+
+class LatestAttendanceRead(OSCABaseModel):
+    """
+    Last successful attendance for a session (kiosk display).
+    Students carry attendance status/time-in/time-out; non-students carry only
+    the identity-verification event (no attendance record).
+    """
+    has_record: bool = False
+    person_name: str | None = None
+    person_role: str | None = None
+    time: datetime | None = None
+    time_out: datetime | None = None
+    duration_minutes: int | None = None
+    status: str | None = None
+    session_name: str | None = None
+    session_sport_or_art: str | None = None
+    confidence_score: float | None = None
+
 
 class AttendanceReportFilter(OSCABaseModel):
     sport_or_art: str | None = None

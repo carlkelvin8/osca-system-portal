@@ -32,11 +32,13 @@ from app.schemas.attendance import (
     EnrollmentResponse,
     FaceScanRequest,
     FaceScanResponse,
+    LatestAttendanceRead,
     ManualAttendanceCreate,
     ManualAttendanceUpdate,
     QrCheckInRequest,
     SessionCreate,
     SessionRead,
+    SessionStatsRead,
     SessionUpdate,
 )
 from app.schemas.common import MessageResponse, PaginatedResponse
@@ -341,6 +343,158 @@ async def get_session(
     return sr
 
 
+@router.get(
+    "/sessions/{session_id}/stats",
+    response_model=SessionStatsRead,
+    summary="Get attendance counts (present/late/absent/total) for a session",
+)
+async def get_session_stats(
+    session_id: uuid.UUID,
+    current_user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SessionStatsRead:
+    if current_user.role == UserRole.PE_INSTRUCTOR:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="PE Instructors are not allowed to access attendance",
+        )
+    result = await db.execute(select(Session).where(Session.id == session_id))
+    session = result.scalar_one_or_none()
+    if not session:
+        raise NotFoundError("Session", str(session_id))
+
+    await _enforce_coach_session_scope(
+        db, current_user, session, action="SESSION_STATS_ACCESS_DENIED", method="manual"
+    )
+
+    stats = {"present": 0, "late": 0, "absent": 0}
+    total = 0
+    rows = (
+        await db.execute(
+            select(AttendanceRecord.status, func.count(AttendanceRecord.id))
+            .where(AttendanceRecord.session_id == session.id)
+            .group_by(AttendanceRecord.status)
+        )
+    ).all()
+    for status_value, count in rows:
+        key = (status_value or "").lower()
+        if key in stats:
+            stats[key] = count
+        total += count
+    stats["total"] = total
+    return SessionStatsRead(session_id=session.id, **stats)
+
+
+@router.get(
+    "/sessions/{session_id}/latest-attendance",
+    response_model=LatestAttendanceRead,
+    summary="Get the last successful attendance for a session (kiosk display)",
+)
+async def get_latest_attendance(
+    session_id: uuid.UUID,
+    current_user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> LatestAttendanceRead:
+    if current_user.role == UserRole.PE_INSTRUCTOR:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="PE Instructors are not allowed to access attendance",
+        )
+    result = await db.execute(select(Session).where(Session.id == session_id))
+    session = result.scalar_one_or_none()
+    if not session:
+        raise NotFoundError("Session", str(session_id))
+
+    await _enforce_coach_session_scope(
+        db, current_user, session, action="SESSION_LATEST_ATTENDANCE_DENIED", method="manual"
+    )
+
+    def _response(scan_time=None, time_out=None, status_val=None, duration=None,
+                  person_name=None, person_role=None, confidence=None, has_record=True):
+        return LatestAttendanceRead(
+            has_record=has_record,
+            person_name=person_name,
+            person_role=person_role,
+            time=scan_time,
+            time_out=time_out,
+            duration_minutes=duration,
+            status=status_val,
+            session_name=session.name,
+            session_sport_or_art=session.sport_or_art,
+            confidence_score=confidence,
+        )
+
+    # 1) Prefer the latest successful face scan performed against this session.
+    scan_row = (
+        await db.execute(
+            select(ScanAttempt, User)
+            .join(User, User.id == ScanAttempt.matched_user_id)
+            .where(
+                ScanAttempt.session_id == session.id,
+                ScanAttempt.result == ScanResult.SUCCESS,
+            )
+            .order_by(ScanAttempt.attempted_at.desc())
+            .limit(1)
+        )
+    ).first()
+    if scan_row:
+        scan, scanned_user = scan_row
+
+        # Enrich with the attendance record when the matched user is a student.
+        record = None
+        if scanned_user.role == UserRole.STUDENT:
+            rec = await db.execute(
+                select(AttendanceRecord)
+                .where(
+                    AttendanceRecord.session_id == session.id,
+                    AttendanceRecord.student_id == scanned_user.id,
+                )
+                .order_by(AttendanceRecord.updated_at.desc())
+                .limit(1)
+            )
+            record = rec.scalar_one_or_none()
+
+        duration = None
+        if record and record.time_in and record.time_out:
+            duration = int((record.time_out - record.time_in).total_seconds() // 60)
+
+        return _response(
+            scan_time=scan.attempted_at,
+            time_out=record.time_out if record else None,
+            status_val=record.status if record else None,
+            duration=duration,
+            person_name=scanned_user.full_name,
+            person_role=scanned_user.role.value if record is None else "student",
+            confidence=scan.confidence_score,
+        )
+
+    # 2) Fallback: latest attendance record (covers pre-session_id scan history).
+    rec_row = (
+        await db.execute(
+            select(AttendanceRecord, User)
+            .join(User, User.id == AttendanceRecord.student_id)
+            .where(AttendanceRecord.session_id == session.id)
+            .order_by(AttendanceRecord.time_in.desc())
+            .limit(1)
+        )
+    ).first()
+    if rec_row:
+        record, student = rec_row
+        duration = None
+        if record.time_in and record.time_out:
+            duration = int((record.time_out - record.time_in).total_seconds() // 60)
+        return _response(
+            scan_time=record.time_in,
+            time_out=record.time_out,
+            status_val=record.status,
+            duration=duration,
+            person_name=student.full_name,
+            person_role="student",
+        )
+
+    return _response(has_record=False)
+
+
 @router.patch(
     "/sessions/{session_id}",
     response_model=SessionRead,
@@ -562,8 +716,15 @@ async def enroll_face(
     db: Annotated[AsyncSession, Depends(get_db)],
     fr_service: Annotated[FacialRecognitionService, Depends(_get_fr_service)],
 ) -> EnrollmentResponse:
-    # Students can only enroll their own face — admins may enroll anyone
-    if current_user.role == UserRole.STUDENT and current_user.id != body.user_id:
+    # Face enrollment rules:
+    #   - Any user may enroll their OWN face (includes Admin/Director/Staff/Coach/
+    #     PE Instructor, so OSCA personnel can register biometrics for kiosk
+    #     identity verification — no student attendance is ever recorded for them).
+    #   - Students may only enroll their own face.
+    #   - Coaches may enroll students from their assigned sport/art.
+    #   - Admin may enroll anyone.
+    is_self = current_user.id == body.user_id
+    if not is_self and current_user.role == UserRole.STUDENT:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Students can only enroll their own face.",
@@ -576,7 +737,7 @@ async def enroll_face(
         raise NotFoundError("User", str(body.user_id))
 
     # Coaches may only enroll students from their assigned sport/art
-    if current_user.role == UserRole.COACH:
+    if not is_self and current_user.role == UserRole.COACH:
         if user.role != UserRole.STUDENT or user.sport_or_art != current_user.assigned_sport:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -585,7 +746,7 @@ async def enroll_face(
     if not user.biometric_consent:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Student has not provided biometric consent (R.A. 10173)",
+            detail="User has not provided biometric consent (R.A. 10173)",
         )
 
     # Decode images
@@ -812,6 +973,7 @@ async def face_scan(
         scan_type=body.scan_type,
         result=match_result.result,
         matched_user_id=match_result.user_id,
+        session_id=body.session_id,
         confidence_score=match_result.confidence,
         liveness_score=match_result.liveness_score,
         kiosk_ip=kiosk_ip,
@@ -901,6 +1063,50 @@ async def face_scan(
             message="Student account is inactive",
         )
 
+    # Non-students (Admin / Director / Staff / Coach / PE Instructor) are matched
+    # for identity verification ONLY — never recorded as student attendance.
+    if matched_user.role != UserRole.STUDENT:
+        await _attendance_audit(
+            db=db,
+            action="FACE_RECOGNIZED_STAFF",
+            description=(
+                f"Face recognized for {matched_user.full_name} "
+                f"({matched_user.role.value}) during session '{session.name}' — "
+                "no attendance record created"
+            ),
+            status="success",
+            method="facial_recognition",
+            result="recognized",
+            student=matched_user,
+            session=session,
+            scan_type=body.scan_type,
+            performer=current_staff,
+            new_values={
+                "matched_user_id": str(user_id),
+                "role": matched_user.role.value,
+                "confidence": round(match_result.confidence or 0, 4),
+                "attendance_recorded": False,
+            },
+        )
+        await db.commit()
+        logger.info(
+            "face_recognized_staff",
+            user_id=str(user_id),
+            role=matched_user.role.value,
+            confidence=match_result.confidence,
+            processing_ms=processing_ms,
+        )
+        return FaceScanResponse(
+            result=ScanResult.SUCCESS,
+            matched_user_id=user_id,
+            matched_user_name=matched_user.full_name,
+            matched_user_role=matched_user.role.value,
+            confidence_score=match_result.confidence,
+            liveness_score=match_result.liveness_score,
+            processing_time_ms=processing_ms,
+            message="Face Recognized",
+        )
+
     # Blocked: active sanction
     active_sanction_result = await db.execute(
         select(Sanction)
@@ -971,6 +1177,7 @@ async def face_scan(
                 result=ScanResult.SUCCESS,
                 matched_user_id=user_id,
                 matched_user_name=matched_user.full_name,
+                matched_user_role=matched_user.role.value,
                 confidence_score=match_result.confidence,
                 liveness_score=match_result.liveness_score,
                 attendance_record_id=record.id,
@@ -1122,6 +1329,7 @@ async def face_scan(
         result=ScanResult.SUCCESS,
         matched_user_id=user_id,
         matched_user_name=matched_user.full_name if matched_user else None,
+        matched_user_role=matched_user.role.value if matched_user else None,
         confidence_score=match_result.confidence,
         liveness_score=match_result.liveness_score,
         attendance_record_id=record.id,

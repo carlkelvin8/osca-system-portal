@@ -141,6 +141,14 @@ export interface Session {
   created_at: string;
 }
 
+export interface SessionStats {
+  session_id: string;
+  present: number;
+  late: number;
+  absent: number;
+  total: number;
+}
+
 export interface AttendanceRecord {
   id: string;
   student_id: string;
@@ -162,11 +170,25 @@ export interface FaceScanResponse {
   result: ScanResult;
   matched_user_id: string | null;
   matched_user_name: string | null;
+  matched_user_role: string | null;
   confidence_score: number | null;
   liveness_score: number | null;
   attendance_record_id: string | null;
   processing_time_ms: number;
   message: string;
+}
+
+export interface LatestAttendance {
+  has_record: boolean;
+  person_name: string | null;
+  person_role: string | null;
+  time: string | null;
+  time_out: string | null;
+  duration_minutes: number | null;
+  status: string | null;
+  session_name: string | null;
+  session_sport_or_art: string | null;
+  confidence_score: number | null;
 }
 
 // ── Inventory ─────────────────────────────────────────────────────────────────
