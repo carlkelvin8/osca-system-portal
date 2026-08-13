@@ -340,20 +340,21 @@ def _build_attendance_html(rows: list[dict], title: str, period: str) -> str:
             <td>{r['student_role']}</td>
             <td>{r['sport_or_art']}</td>
             <td>{r['status']}</td>
-            <td>{r['time_in']}</td>
-            <td>{r['time_out']}</td>
-            <td>{r['attendance_date']}</td>
+            <td>{_fmt_iso_time(r['time_in'])}</td>
+            <td>{_fmt_iso_time(r['time_out'])}</td>
+            <td>{_fmt_iso_date(r['attendance_date'])}</td>
         </tr>"""
 
     return f"""
     <html><head><meta charset="UTF-8">
     <style>
-        body {{ font-family: Helvetica, sans-serif; font-size: 10px; margin: 20px; }}
-        h1 {{ color: #1E3A5F; font-size: 16px; }}
-        p {{ color: #666; font-size: 10px; }}
-        table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
-        th {{ background: #1E3A5F; color: white; padding: 6px 4px; text-align: left; font-size: 8px; }}
-        td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 8px; }}
+        @page {{ size: A4 landscape; margin: 12mm 9mm; }}
+        body {{ font-family: Helvetica, sans-serif; font-size: 9pt; }}
+        h1 {{ color: #1E3A5F; font-size: 14pt; }}
+        p {{ color: #666; font-size: 8pt; }}
+        table {{ width: 100%; table-layout: fixed; border-collapse: collapse; margin-top: 10px; }}
+        th {{ background: #1E3A5F; color: white; padding: 5px 6px; text-align: left; font-size: 8pt; word-wrap: break-word; }}
+        td {{ padding: 4px 6px; border-bottom: 1px solid #ddd; font-size: 8pt; word-wrap: break-word; }}
     </style></head><body>
         <h1>OSCA — {title}</h1>
         <p>{period} | Records: {len(rows)} | Generated: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}</p>
@@ -517,16 +518,44 @@ async def monthly_attendance(
 # ── Shared row renderers (CSV / XLSX / PDF) ────────────────────────────────────
 
 def _fmt_val(v):
-    """Stringify a value for CSV/PDF output."""
+    """Stringify a value for CSV/PDF output (human-readable datetimes)."""
     if v is None:
         return ""
-    if isinstance(v, (datetime, date, time)):
-        return v.isoformat()
+    if isinstance(v, datetime):
+        if v.tzinfo is not None:
+            v = v.astimezone(UTC)
+        return v.strftime("%B %d, %Y %I:%M %p")
+    if isinstance(v, date):
+        return v.strftime("%B %d, %Y")
+    if isinstance(v, time):
+        return v.strftime("%I:%M %p")
     if isinstance(v, bool):
         return "Yes" if v else "No"
     if hasattr(v, "value"):
         return v.value
     return str(v)
+
+
+def _fmt_iso_time(value: str) -> str:
+    """Format an ISO datetime string (e.g. time_in) as 03:17 PM; '—' when unavailable."""
+    if not value:
+        return "—"
+    try:
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return value
+    return dt.strftime("%I:%M %p")
+
+
+def _fmt_iso_date(value: str) -> str:
+    """Format an ISO date string (e.g. attendance_date) as August 13, 2026; '—' when unavailable."""
+    if not value:
+        return "—"
+    try:
+        d = date.fromisoformat(value[:10])
+    except ValueError:
+        return value
+    return d.strftime("%B %d, %Y")
 
 
 def _xlsx_val(v):
@@ -578,24 +607,22 @@ def _rows_to_xlsx(rows: list[dict], headers: list[str], title: str) -> bytes:
 
 
 def _rows_to_pdf(rows: list[dict], headers: list[str], title: str, subtitle: str) -> bytes:
-    wide = len(headers) > 5
-    orientation = "landscape" if wide else "portrait"
     thead = "".join(f"<th>{h}</th>" for h in headers)
     body = ""
     for i, r in enumerate(rows):
         bg = "#EBF0F7" if i % 2 == 0 else "#FFFFFF"
-        cells = "".join(f"<td>{_fmt_val(r.get(h))}</td>" for h in headers)
+        cells = "".join(f"<td>{_fmt_val(r.get(h)) or '—'}</td>" for h in headers)
         body += f'<tr style="background:{bg}">{cells}</tr>'
     html = f"""
     <!DOCTYPE html><html><head><meta charset="UTF-8">
     <style>
-        @page {{ size: A4 {orientation}; margin: 15mm 10mm; }}
-        body {{ font-family: Arial, sans-serif; font-size: 10pt; }}
+        @page {{ size: A4 landscape; margin: 12mm 9mm; }}
+        body {{ font-family: Arial, sans-serif; font-size: 9pt; }}
         h1 {{ color: #1E3A5F; font-size: 14pt; }}
-        p {{ color: #666; font-size: 9pt; }}
+        p {{ color: #666; font-size: 8pt; }}
         table {{ width: 100%; table-layout: fixed; border-collapse: collapse; margin-top: 10px; }}
-        th {{ background: #1E3A5F; color: white; padding: 4px 5px; text-align: left; font-size: 7pt; }}
-        td {{ padding: 3px 5px; border-bottom: 1px solid #DDD; font-size: 7pt; }}
+        th {{ background: #1E3A5F; color: white; padding: 5px 6px; text-align: left; font-size: 8pt; word-wrap: break-word; }}
+        td {{ padding: 4px 6px; border-bottom: 1px solid #DDD; font-size: 8pt; word-wrap: break-word; }}
     </style></head><body>
     <h1>NAAP-Villamor OSCA — {title}</h1>
     <p>{subtitle} | Records: {len(rows)} | Generated: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}</p>

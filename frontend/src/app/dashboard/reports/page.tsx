@@ -33,6 +33,7 @@ import type { LucideIcon } from "lucide-react";
 import { reportsApi, type ReportFormat } from "@/lib/api";
 import { useAuthStore } from "@/store/useAuthStore";
 import type { MonthlyInventoryReport } from "@/types";
+import { SPORTS_OPTIONS } from "../attendance/page";
 
 const EXPORT_FORMATS: { fmt: ReportFormat; label: string; icon: LucideIcon; cls: string }[] = [
   { fmt: "pdf", label: "PDF", icon: FileText, cls: "text-red-600 border-red-200 hover:bg-red-50" },
@@ -439,9 +440,13 @@ export default function ReportsPage() {
   });
   const [rangeFrom, setRangeFrom] = useState("");
   const [rangeTo, setRangeTo] = useState("");
+  const [sportFilterValue, setSportFilterValue] = useState("");
 
   const [year, month] = monthYear.split("-").map(Number);
-  const sportFilter = isCoach && user?.assigned_sport ? { sport_or_art: user.assigned_sport } : undefined;
+  const coachSport = isCoach && user?.assigned_sport ? user.assigned_sport : "";
+  const sportFilter = coachSport || sportFilterValue
+    ? { sport_or_art: coachSport || sportFilterValue }
+    : undefined;
 
   const exportAttendance = async (
     endpoint: "daily" | "weekly" | "monthly",
@@ -697,11 +702,45 @@ export default function ReportsPage() {
       </div>
 
       {activeTab === "attendance" && (
-        <CardGrid>
-          {attendanceCards.map((c) => (
-            <ReportCard key={c.title} {...c} />
-          ))}
-        </CardGrid>
+        <div className="space-y-5">
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex flex-wrap items-end gap-4">
+            <div className="w-64">
+              <Field label="Sport / Art">
+                <select
+                  value={coachSport || sportFilterValue}
+                  onChange={(e) => setSportFilterValue(e.target.value)}
+                  disabled={Boolean(coachSport)}
+                  className={`${inputCls} disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500`}
+                >
+                  <option value="">All Sports / Arts</option>
+                  {SPORTS_OPTIONS.flatMap((g) =>
+                    g.items.map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    )),
+                  )}
+                </select>
+              </Field>
+            </div>
+            <button
+              onClick={() => setSportFilterValue("")}
+              className="px-3 py-2 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition"
+            >
+              Clear
+            </button>
+            {coachSport && (
+              <p className="text-xs text-gray-400 self-center pb-1">
+                Filtered to your assigned sport/art: {coachSport}.
+              </p>
+            )}
+          </div>
+          <CardGrid>
+            {attendanceCards.map((c) => (
+              <ReportCard key={c.title} {...c} />
+            ))}
+          </CardGrid>
+        </div>
       )}
 
       {isAdmin && activeTab === "inventory" && (

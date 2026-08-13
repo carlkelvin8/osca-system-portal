@@ -12,7 +12,7 @@ import { format } from "date-fns";
 
 // ── Sport / Art options ──────────────────────────────────────────────────────────
 
-const SPORTS_OPTIONS: { group: string; items: string[] }[] = [
+export const SPORTS_OPTIONS: { group: string; items: string[] }[] = [
   {
     group: "Sports",
     items: [

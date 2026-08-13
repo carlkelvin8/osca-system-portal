@@ -274,8 +274,8 @@ class ReportService:
         rows_html = ""
         for i, r in enumerate(records):
             bg = "#EBF0F7" if i % 2 == 0 else "#FFFFFF"
-            time_in = r["time_in"].strftime("%Y-%m-%d %H:%M") if r["time_in"] else "-"
-            time_out = r["time_out"].strftime("%H:%M") if r["time_out"] else "-"
+            time_in = r["time_in"].strftime("%I:%M %p") if r["time_in"] else "—"
+            time_out = r["time_out"].strftime("%I:%M %p") if r["time_out"] else "—"
             duration = f"{r['duration_minutes']} min" if r["duration_minutes"] else "-"
             rows_html += f"""
             <tr style="background:{bg}">
@@ -297,9 +297,9 @@ class ReportService:
         <style>
             body {{ font-family: Arial, sans-serif; font-size: 10pt; margin: 20px; }}
             h1 {{ color: #1E3A5F; }} h2 {{ color: #666; font-size: 10pt; }}
-            table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
-            th {{ background: #1E3A5F; color: white; padding: 6px 8px; text-align: left; font-size: 9pt; }}
-            td {{ padding: 5px 8px; border-bottom: 1px solid #DDD; font-size: 9pt; }}
+            table {{ width: 100%; table-layout: fixed; border-collapse: collapse; margin-top: 10px; word-wrap: break-word; }}
+            th {{ background: #1E3A5F; color: white; padding: 6px 8px; text-align: left; font-size: 9pt; word-wrap: break-word; }}
+            td {{ padding: 5px 8px; border-bottom: 1px solid #DDD; font-size: 9pt; word-wrap: break-word; }}
             .footer {{ margin-top: 20px; font-size: 8pt; color: #999; }}
         </style></head><body>
         <h1>NAAP-Villamor OSCA — Attendance Report</h1>
@@ -334,9 +334,9 @@ class ReportService:
         <style>
             body {{ font-family: Arial, sans-serif; font-size: 10pt; margin: 20px; }}
             h1 {{ color: #1E3A5F; }}
-            table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
-            th {{ background: #1E3A5F; color: white; padding: 6px 8px; text-align: left; }}
-            td {{ padding: 5px 8px; border-bottom: 1px solid #DDD; font-size: 9pt; }}
+            table {{ width: 100%; table-layout: fixed; border-collapse: collapse; margin-top: 10px; word-wrap: break-word; }}
+            th {{ background: #1E3A5F; color: white; padding: 6px 8px; text-align: left; word-wrap: break-word; }}
+            td {{ padding: 5px 8px; border-bottom: 1px solid #DDD; font-size: 9pt; word-wrap: break-word; }}
         </style></head><body>
         <h1>NAAP-Villamor OSCA — Equipment Inventory Report</h1>
         <p>Total items: {len(equipment)} | Generated: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}</p>
@@ -363,6 +363,15 @@ class ReportService:
         for cond, count in report["condition_breakdown"].items():
             condition_rows += f"<tr><td>{cond.title()}</td><td>{count}</td></tr>"
 
+        generated_raw = report.get("generated_at") or ""
+        generated_label = generated_raw
+        try:
+            generated_label = datetime.fromisoformat(generated_raw.replace("Z", "+00:00")).astimezone(UTC).strftime(
+                "%B %d, %Y %I:%M %p UTC"
+            )
+        except (ValueError, TypeError):
+            pass
+
         return f"""
         <!DOCTYPE html><html><head><meta charset="UTF-8">
         <style>
@@ -375,7 +384,7 @@ class ReportService:
             td {{ padding: 5px 14px; border-bottom: 1px solid #DDD; }}
         </style></head><body>
         <h1>Monthly Inventory Summary — {month_name} {period["year"]}</h1>
-        <p>Generated: {report["generated_at"]}</p>
+        <p>Generated: {generated_label}</p>
         <div class="stat-grid">
             <div class="stat-box"><div class="stat-label">Active Equipment</div>
                 <div class="stat-value">{report["total_active_equipment"]}</div></div>
@@ -394,6 +403,10 @@ class ReportService:
 
     def _html_to_pdf(self, html: str) -> bytes:
         from xhtml2pdf import pisa
+        # Shared PDF generator: every report rendered through this service
+        # is produced in LANDSCAPE orientation so wide tables fit the page.
+        page_css = "<style>@page { size: A4 landscape; margin: 12mm 9mm; }</style>"
+        html = html.replace("<head>", "<head>" + page_css, 1) if "<head>" in html else page_css + html
         buffer = io.BytesIO()
         pisa.CreatePDF(io.StringIO(html), dest=buffer)
         return buffer.getvalue()

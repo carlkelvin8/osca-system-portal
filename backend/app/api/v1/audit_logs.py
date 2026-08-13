@@ -10,6 +10,7 @@ Routes:
 """
 import csv
 import io
+import re
 import uuid
 from datetime import UTC, datetime
 from typing import Annotated
@@ -349,6 +350,22 @@ async def export_audit_logs_xlsx(
 
 # ── Export PDF ─────────────────────────────────────────────────────────────────
 
+_ISO_DT_RE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?")
+
+
+def _fmt_embedded_datetimes(text: str) -> str:
+    """Replace embedded raw ISO timestamps in free text with a readable format."""
+    def _repl(m: re.Match) -> str:
+        try:
+            dt = datetime.fromisoformat(m.group(0).replace("Z", "+00:00"))
+        except ValueError:
+            return m.group(0)
+        if dt.tzinfo is not None:
+            dt = dt.astimezone(UTC)
+        return dt.strftime("%B %d, %Y %I:%M %p")
+    return _ISO_DT_RE.sub(_repl, text)
+
+
 @router.get(
     "/export/pdf",
     summary="Export audit logs to PDF",
@@ -387,22 +404,24 @@ async def export_audit_logs_pdf(
     for log in logs:
         rows_html += f"""
         <tr>
-            <td>{log.created_at.strftime('%Y-%m-%d %H:%M') if log.created_at else ''}</td>
+            <td>{log.created_at.strftime('%B %d, %Y %I:%M %p') if log.created_at else ''}</td>
             <td>{log.admin_name or ''}</td>
             <td>{log.action}</td>
             <td>{log.module or ''}</td>
             <td>{log.status}</td>
             <td>{log.ip_address or ''}</td>
-            <td>{log.description or ''}</td>
+            <td>{_fmt_embedded_datetimes(log.description or '')}</td>
         </tr>"""
 
     html = f"""
     <html><head><style>
-        body {{ font-family: Helvetica, sans-serif; font-size: 10px; }}
-        h1 {{ font-size: 18px; color: #1E3A5F; }}
-        table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
-        th {{ background: #1E3A5F; color: white; padding: 6px 4px; text-align: left; font-size: 9px; }}
-        td {{ padding: 5px 4px; border-bottom: 1px solid #ddd; font-size: 9px; }}
+        @page {{ size: A4 landscape; margin: 12mm 9mm; }}
+        body {{ font-family: Helvetica, sans-serif; font-size: 9pt; }}
+        h1 {{ font-size: 16pt; color: #1E3A5F; }}
+        p {{ color: #666; font-size: 8pt; }}
+        table {{ width: 100%; table-layout: fixed; border-collapse: collapse; margin-top: 10px; }}
+        th {{ background: #1E3A5F; color: white; padding: 5px 6px; text-align: left; font-size: 8pt; word-wrap: break-word; }}
+        td {{ padding: 4px 6px; border-bottom: 1px solid #ddd; font-size: 8pt; word-wrap: break-word; }}
         tr:nth-child(even) {{ background: #f5f7fa; }}
     </style></head><body>
         <h1>OSCA Audit Log Report</h1>
