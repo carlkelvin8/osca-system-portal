@@ -164,6 +164,8 @@ export interface AttendanceRecord {
   time_out_confidence: number | null;
   is_complete: boolean;
   status: string | null;
+  ip_address: string | null;
+  device: string | null;
 }
 
 export interface FaceScanResponse {

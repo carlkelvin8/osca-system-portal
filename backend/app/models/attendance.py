@@ -106,6 +106,10 @@ class AttendanceRecord(Base):
     time_in_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     time_in_liveness_score: Mapped[float | None] = mapped_column(Float, nullable=True)
 
+    # Client info captured at scan/time-in (nullable for legacy records / absent)
+    ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True, comment="Client IP at scan time")
+    device: Mapped[str | None] = mapped_column(String(200), nullable=True, comment="Readable browser/OS from User-Agent")
+
     # Time-out
     time_out: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     time_out_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)

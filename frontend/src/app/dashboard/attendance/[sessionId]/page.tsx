@@ -62,54 +62,56 @@ export default function SessionMonitorPage({
   const { data: studentsData, isLoading: studentsLoading } = useQuery<
     PaginatedResponse<User>
   >({
-    queryKey: ["students", sport],
+    queryKey: ["students", sport ?? "all"],
     queryFn: async () => {
       const params: Record<string, string | number> = {
         role: "student",
         page_size: 100,
       };
-      if (sport) params.sport = sport;
+      if (sport) params.sport_or_art = sport;
       const res = await usersApi.list(params);
       return res.data;
     },
-    enabled: !!sport,
   });
 
   const isLoading = sessionLoading || recordsLoading || studentsLoading;
 
-  // Build player rows: prefer students list, fall back to records for name
+  // Build player rows: prefer the student roster (so absent players show their
+  // names), then append any scanned students missing from the roster list.
   const playerRows: PlayerRow[] = [];
   const students = studentsData?.items ?? [];
   const records = recordsData?.items ?? [];
+  const seen = new Set<string>();
 
-  if (students.length > 0) {
-    students.forEach((student) => {
-      const record = records.find((r) => r.student_id === student.id) ?? null;
-      let status: AttendanceStatus = "absent";
-      if (record?.time_in) {
-        status = record.status === "late" ? "late" : "present";
-      }
-      playerRows.push({ user: student, record, status });
+  students.forEach((student) => {
+    seen.add(student.id);
+    const record = records.find((r) => r.student_id === student.id) ?? null;
+    let status: AttendanceStatus = "absent";
+    if (record?.time_in) {
+      status = record.status === "late" ? "late" : "present";
+    }
+    playerRows.push({ user: student, record, status });
+  });
+
+  records.forEach((record) => {
+    if (seen.has(record.student_id)) return;
+    seen.add(record.student_id);
+    let status: AttendanceStatus = "absent";
+    if (record.time_in) {
+      status = record.status === "late" ? "late" : "present";
+    }
+    playerRows.push({
+      user: {
+        id: record.student_id,
+        first_name: "",
+        last_name: "",
+        student_id: record.student_number,
+        sport_or_art: null,
+      },
+      record,
+      status,
     });
-  } else if (records.length > 0) {
-    records.forEach((record) => {
-      let status: AttendanceStatus = "absent";
-      if (record.time_in) {
-        status = record.status === "late" ? "late" : "present";
-      }
-      playerRows.push({
-        user: {
-          id: record.student_id,
-          first_name: "",
-          last_name: "",
-          student_id: record.student_number,
-          sport_or_art: null,
-        },
-        record,
-        status,
-      });
-    });
-  }
+  });
 
   // Summary counts
   const presentCount = playerRows.filter((r) => r.status === "present").length;
@@ -205,7 +207,8 @@ export default function SessionMonitorPage({
 
       {/* Attendance table */}
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[980px]">
           <thead className="bg-[#1E3A5F] text-white">
             <tr>
               <th className="px-4 py-3 text-left font-medium">Player Name</th>
@@ -215,19 +218,21 @@ export default function SessionMonitorPage({
               <th className="px-4 py-3 text-center font-medium">Status</th>
               <th className="px-4 py-3 text-center font-medium">Time In</th>
               <th className="px-4 py-3 text-center font-medium">Time Out</th>
+              <th className="px-4 py-3 text-left font-medium">IP Address</th>
+              <th className="px-4 py-3 text-left font-medium">Device</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {isLoading ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
+                <td colSpan={9} className="px-4 py-8 text-center text-gray-400">
                   <Loader2 size={20} className="animate-spin inline-block mr-2" />
                   Loading…
                 </td>
               </tr>
             ) : playerRows.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-10 text-center text-gray-400 text-sm">
+                <td colSpan={9} className="px-4 py-10 text-center text-gray-400 text-sm">
                   {sport
                     ? `No players found for ${sport}.`
                     : "No players found. Make sure students are assigned a sport."}
@@ -286,11 +291,18 @@ export default function SessionMonitorPage({
                       ? format(new Date(record.time_out), "h:mm a")
                       : "—"}
                   </td>
+                  <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
+                    {record?.ip_address || "—"}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">
+                    {record?.device || "—"}
+                  </td>
                 </tr>
               ))
             )}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );

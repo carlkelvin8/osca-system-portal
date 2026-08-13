@@ -80,6 +80,8 @@ class AttendanceRecordRead(OSCABaseModel):
     is_complete: bool
     status: str | None = None
     notes: str | None
+    ip_address: str | None = None
+    device: str | None = None
 
 
 # ── Manual Attendance Schemas (Admin / Staff / Coach) ──────────────────────────

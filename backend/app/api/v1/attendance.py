@@ -2,6 +2,7 @@
 Attendance endpoints: sessions, kiosk face-scan, facial enrollment, records.
 """
 import base64
+import ipaddress
 import time
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -72,6 +73,87 @@ def _performed_by(user: User | None) -> str:
         return "system"
     role = getattr(user, "role", None)
     return role.value if hasattr(role, "value") else str(role) if role else "system"
+
+
+def _is_trusted_proxy_host(host: str | None) -> bool:
+    """True when the direct peer is a loopback/private address (e.g. nginx inside Docker).
+
+    This gates X-Forwarded-For trust: a public (untrusted) peer can never inject a
+    spoofed client IP, so the header is only honored when the immediate connection
+    originates from our own reverse proxy / internal network.
+    """
+    if not host:
+        return False
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return ip.is_loopback or ip.is_private or ip.is_link_local
+
+
+def _client_ip(request: Request) -> str | None:
+    """Extract the real client IP from the request, honoring proxy headers safely.
+
+    Behind the nginx reverse proxy, request.client.host is nginx's Docker IP, so we
+    read the first entry of X-Forwarded-For — but ONLY when the direct peer is a
+    trusted (private/loopback) proxy. Otherwise fall back to the direct peer.
+    """
+    peer = request.client.host if request.client else None
+    xff = request.headers.get("x-forwarded-for")
+    if xff and _is_trusted_proxy_host(peer):
+        first = next((p.strip() for p in xff.split(",") if p.strip()), None)
+        if first:
+            return first.split("%")[0].split(":")[0] if "%" in first else first
+    return peer
+
+
+def _parse_device(user_agent: str | None) -> str | None:
+    """Return a readable 'Browser • OS' label from a User-Agent header (or None).
+
+    Only the short human-readable form is stored — never the raw User-Agent string.
+    """
+    if not user_agent:
+        return None
+    ua = user_agent
+
+    if "Edg/" in ua:
+        browser = "Edge"
+    elif "OPR/" in ua or "Opera" in ua:
+        browser = "Opera"
+    elif "SamsungBrowser" in ua:
+        browser = "Samsung Internet"
+    elif "Chrome/" in ua or "CriOS/" in ua:
+        browser = "Chrome"
+    elif "Firefox/" in ua or "FxiOS/" in ua:
+        browser = "Firefox"
+    elif "Safari/" in ua:
+        browser = "Safari"
+    elif "Trident/" in ua or "MSIE" in ua:
+        browser = "Internet Explorer"
+    else:
+        browser = None
+
+    if "Windows" in ua:
+        os_label = "Windows"
+    elif "iPhone" in ua:
+        os_label = "iPhone"
+    elif "iPad" in ua:
+        os_label = "iPad"
+    elif "iPod" in ua:
+        os_label = "iPod"
+    elif "Android" in ua:
+        os_label = "Android"
+    elif "Mac OS X" in ua or "Macintosh" in ua:
+        os_label = "macOS"
+    elif "Linux" in ua:
+        os_label = "Linux"
+    else:
+        os_label = None
+
+    parts = [p for p in (browser, os_label) if p]
+    if not parts:
+        return None
+    return " • ".join(parts)[:200]
 
 
 def _jsonable(data: dict) -> dict:
@@ -293,6 +375,20 @@ async def list_sessions(
         query = query.where(Session.sport_or_art == current_user.sport_or_art)
     if sport_or_art:
         query = query.where(Session.sport_or_art == sport_or_art)
+
+    # is_active filter was accepted as a query param but never applied — this
+    # caused ended/closed sessions to still appear (e.g. in /kiosk).
+    # An ACTIVE session must be: not ended/closed AND still inside its scannable
+    # window (scheduled_end + grace), matching the scan hard cutoff.
+    if is_active is True:
+        query = query.where(
+            Session.is_active.is_(True),
+            Session.scheduled_end
+            + func.make_interval(0, 0, 0, 0, 0, Session.grace_period_minutes)
+            >= datetime.now(UTC),
+        )
+    elif is_active is False:
+        query = query.where(Session.is_active.is_(False))
 
     total = (await db.execute(select(func.count()).select_from(query.subquery()))).scalar_one()
     query = query.offset((page - 1) * page_size).limit(page_size).order_by(Session.scheduled_start.desc())
@@ -1222,6 +1318,8 @@ async def face_scan(
             time_in_confidence=match_result.confidence,
             time_in_liveness_score=match_result.liveness_score,
             status=att_status,
+            ip_address=_client_ip(request),
+            device=_parse_device(request.headers.get("user-agent")),
         )
         db.add(record)
 
@@ -1428,6 +1526,7 @@ async def _load_manual_context(
 async def add_manual_attendance(
     body: ManualAttendanceCreate,
     current_user: AdminOrCoach,
+    request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AttendanceRecordRead:
     session, student = await _load_manual_context(db, body.session_id, body.student_id)
@@ -1463,6 +1562,8 @@ async def add_manual_attendance(
         time_out=body.time_out,
         status=body.status or ("present" if body.time_in else None),
         notes=body.notes,
+        ip_address=_client_ip(request),
+        device=_parse_device(request.headers.get("user-agent")),
     )
     if record.time_out and record.time_in:
         record.duration_minutes = int((record.time_out - record.time_in).total_seconds() / 60)
@@ -1752,6 +1853,7 @@ def _parse_student_qr(qr_code: str) -> uuid.UUID | None:
 async def qr_check_in(
     body: QrCheckInRequest,
     current_user: ScanStaff,
+    request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AttendanceRecordRead:
     # Validate the scanned QR payload
@@ -1948,6 +2050,8 @@ async def qr_check_in(
         time_in=now,
         status=att_status,
         notes=f"QR check-in by {current_user.full_name}",
+        ip_address=_client_ip(request),
+        device=_parse_device(request.headers.get("user-agent")),
     )
     db.add(record)
     await db.commit()
