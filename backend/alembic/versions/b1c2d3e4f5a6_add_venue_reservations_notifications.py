@@ -1,14 +1,3 @@
-"""add venue reservations, notifications, facility image, reserved status
-
-Revision ID: b1c2d3e4f5a6
-Revises: 9a8b7c6d5e4f
-Create Date: 2026-08-06 12:00:00.000000
-
-Note: the app's startup `Base.metadata.create_all` may already have created the
-`venue_reservation_requests` and `notifications` tables plus the
-`reservation_status_enum` type on containers with a bind mount. This migration
-is idempotent so it can run safely either way.
-"""
 from typing import Sequence, Union
 
 from alembic import op
@@ -23,7 +12,6 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # 1. Add RESERVED to facility_status_enum (guarded — PG has no ADD VALUE IF NOT EXISTS)
     op.execute("""
     DO $$
     BEGIN
@@ -37,10 +25,8 @@ def upgrade() -> None:
     END $$;
     """)
 
-    # 2. Add custom image column (idempotent)
     op.execute("ALTER TABLE facilities ADD COLUMN IF NOT EXISTS image VARCHAR(500)")
 
-    # 3. Venue reservation requests table
     status_type = PG_ENUM('PENDING', 'APPROVED', 'REJECTED', name='reservation_status_enum', create_type=False)
     op.execute("""
     CREATE TABLE IF NOT EXISTS venue_reservation_requests (
@@ -65,7 +51,6 @@ def upgrade() -> None:
     op.create_index('ix_venue_reservations_requester_id', 'venue_reservation_requests', ['requester_id'], unique=False, if_not_exists=True)
     op.create_index('ix_venue_reservations_status', 'venue_reservation_requests', ['status'], unique=False, if_not_exists=True)
 
-    # 4. Notifications table
     op.execute("""
     CREATE TABLE IF NOT EXISTS notifications (
         id UUID NOT NULL,
@@ -98,6 +83,4 @@ def downgrade() -> None:
 
     op.drop_column('facilities', 'image')
 
-    # PostgreSQL does not support removing values from enums.
-    # The RESERVED value will remain but will not be used.
     pass

@@ -1,10 +1,5 @@
 "use client";
 
-/**
- * Equipment Requests page — Coach/PE Instructor submits requests;
- * Admin/Director approves or rejects them.
- * QR code workflow: requester shows QR → approver scans to approve.
- */
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { inventoryApi } from "@/lib/api";
@@ -19,8 +14,6 @@ import { format } from "date-fns";
 import QRCode from "qrcode";
 import { equipmentCache } from "@/lib/offlineStore";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
-
-// ── Status badge helper ────────────────────────────────────────────────────────
 
 const statusConfig: Record<string, { label: string; className: string; icon: React.ElementType }> = {
   pending:   { label: "Pending",   className: "bg-yellow-100 text-yellow-800", icon: Clock },
@@ -37,7 +30,6 @@ function getRequestStatus(req: EquipmentRequest): string {
   return req.status;
 }
 
-// ── Return QR Code Display Modal ────────────────────────────────────────────
 
 const returnQrStatusConfig: Record<string, { label: string; className: string }> = {
   active:  { label: "Active",  className: "bg-green-100 text-green-800 border border-green-300" },
@@ -65,7 +57,6 @@ function ReturnQRModal({ request, onClose }: { request: EquipmentRequest; onClos
         const url = await QRCode.toDataURL(returnQrCode, { width: 400, margin: 2 });
         if (!cancelled) setQrUrl(url);
       } catch {
-        // ignore
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -106,14 +97,12 @@ function ReturnQRModal({ request, onClose }: { request: EquipmentRequest; onClos
           </button>
         </div>
 
-        {/* QR Status */}
         <div className="flex items-center justify-center gap-2">
           <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${statusInfo.className}`}>
             {statusInfo.label}
           </span>
         </div>
 
-        {/* QR Code Image */}
         <div className="flex items-center justify-center py-2">
           {loading ? (
             <Loader2 size={40} className="animate-spin text-gray-300" />
@@ -136,19 +125,16 @@ function ReturnQRModal({ request, onClose }: { request: EquipmentRequest; onClos
           )}
         </div>
 
-        {/* Return QR value for traceability */}
         {returnQrCode && !isUsed && (
           <p className="font-mono text-xs text-gray-400">{returnQrCode}</p>
         )}
 
-        {/* Expected Return */}
         <div className="text-sm text-gray-500">
           Expected Return: <span className="font-medium text-gray-700">
             {format(new Date(request.expected_return), "MMM d, yyyy · h:mm a")}
           </span>
         </div>
 
-        {/* Countdown for active QR */}
         {isActive && (
           <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
             <Clock size={12} />
@@ -158,14 +144,12 @@ function ReturnQRModal({ request, onClose }: { request: EquipmentRequest; onClos
           </div>
         )}
 
-        {/* Expired / overdue message */}
         {isExpired && (
           <p className="text-xs text-amber-600">
             The Expected Return time has passed. This QR is still valid for a late return.
           </p>
         )}
 
-        {/* Description */}
         {isActive && (
           <p className="text-xs text-gray-400">
             Present this QR Code when returning the borrowed equipment.
@@ -181,7 +165,6 @@ function ReturnQRModal({ request, onClose }: { request: EquipmentRequest; onClos
   );
 }
 
-// ── QR Scanner Modal (Approver) ──────────────────────────────────────────────
 
 interface ScannedRequest {
   id: string;
@@ -241,7 +224,6 @@ function QRScannerModal({ onClose, onApprove }: {
             stopScanning();
             setScanning(false);
 
-            // Handle request QR codes (REQ- prefix)
             if (text.startsWith("REQ-")) {
               if (!isServerReachable) {
                 setError("Cannot approve requests while offline. Request QR codes require server connection.");
@@ -256,18 +238,15 @@ function QRScannerModal({ onClose, onApprove }: {
               return;
             }
 
-            // Handle equipment QR codes — try server first, fall back to cache
             if (isServerReachable) {
               try {
                 const res = await inventoryApi.getEquipmentByQR(text);
                 setScannedEquipment({ equipment: res.data, source: "server" });
                 return;
               } catch {
-                // Server didn't find it, try cache
               }
             }
 
-            // Offline or server miss — look up in local cache
             const cached = equipmentCache.findByQR(text);
             if (cached) {
               setScannedEquipment({ equipment: cached, source: "cache" });
@@ -361,7 +340,6 @@ function QRScannerModal({ onClose, onApprove }: {
             </div>
           )}
 
-          {/* Equipment scan result */}
           {scannedEquipment && (
             <div className="space-y-4">
               {scannedEquipment.source === "cache" && (
@@ -386,7 +364,6 @@ function QRScannerModal({ onClose, onApprove }: {
                 <p className="font-mono text-xs text-gray-400">{scannedEquipment.equipment.qr_code}</p>
               </div>
 
-              {/* Related Requests */}
               <div className="p-4 bg-white border border-gray-200 rounded-xl space-y-2">
                 <p className="text-sm font-semibold text-gray-900">Related Requests</p>
                 {loadingRelated ? (
@@ -442,7 +419,6 @@ function QRScannerModal({ onClose, onApprove }: {
             </div>
           )}
 
-          {/* Request scan result */}
           {scannedRequest && (
             <div className="space-y-4">
               <div className="p-4 bg-gray-50 rounded-xl space-y-2">
@@ -524,7 +500,6 @@ function QRScannerModal({ onClose, onApprove }: {
   );
 }
 
-// ── New Request Modal ──────────────────────────────────────────────────────────
 
 interface RequestItem { equipment_id: string; quantity: number; equipment_name: string }
 
@@ -622,7 +597,6 @@ function NewRequestModal({ onClose }: NewRequestModalProps) {
           </button>
         </div>
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
-          {/* Active borrows warning banner */}
           {hasExistingBorrows && (
             <div className="space-y-3">
               <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
@@ -675,7 +649,6 @@ function NewRequestModal({ onClose }: NewRequestModalProps) {
             </div>
           )}
 
-          {/* Equipment selector */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Add Equipment <span className="text-red-500">*</span>
@@ -708,7 +681,6 @@ function NewRequestModal({ onClose }: NewRequestModalProps) {
             </div>
           </div>
 
-          {/* Selected items with qty */}
           {items.length > 0 && (
             <div className="space-y-2">
               <p className="text-sm font-medium text-gray-700">Selected Items</p>
@@ -734,7 +706,6 @@ function NewRequestModal({ onClose }: NewRequestModalProps) {
             </div>
           )}
 
-          {/* Expected return */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Expected Return <span className="text-red-500">*</span>
@@ -747,7 +718,6 @@ function NewRequestModal({ onClose }: NewRequestModalProps) {
             />
           </div>
 
-          {/* Notes */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
             <textarea
@@ -780,7 +750,6 @@ function NewRequestModal({ onClose }: NewRequestModalProps) {
   );
 }
 
-// ── Rejection Modal ────────────────────────────────────────────────────────────
 
 function RejectModal({ requestId, onClose }: { requestId: string; onClose: () => void }) {
   const queryClient = useQueryClient();
@@ -841,7 +810,6 @@ function RejectModal({ requestId, onClose }: { requestId: string; onClose: () =>
   );
 }
 
-// ── Cancel Confirmation Modal ───────────────────────────────────────────────────
 
 function CancelConfirmModal({ requestId, onClose }: { requestId: string; onClose: () => void }) {
   const queryClient = useQueryClient();
@@ -889,7 +857,6 @@ function CancelConfirmModal({ requestId, onClose }: { requestId: string; onClose
   );
 }
 
-// ── Delete Confirmation Modal ──────────────────────────────────────────────────
 
 function DeleteConfirmModal({ requestId, onClose }: { requestId: string; onClose: () => void }) {
   const queryClient = useQueryClient();
@@ -937,7 +904,6 @@ function DeleteConfirmModal({ requestId, onClose }: { requestId: string; onClose
   );
 }
 
-// ── View Details Modal ─────────────────────────────────────────────────────────
 
 function ViewDetailsModal({
   request,
@@ -991,7 +957,6 @@ function ViewDetailsModal({
             <p className="text-xs text-gray-500 capitalize">{(request.requester_role ?? "").replace("_", " ") || "—"}</p>
           </div>
 
-          {/* Active / Overdue Borrows */}
           {request.requester_active_borrows.length > 0 && (
             <div className="border-t border-gray-100 pt-3">
               <p className="text-xs text-gray-400 mb-2 flex items-center gap-1">
@@ -1123,7 +1088,6 @@ function ViewDetailsModal({
   );
 }
 
-// ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function EquipmentRequestsPage() {
   const { user } = useAuthStore();

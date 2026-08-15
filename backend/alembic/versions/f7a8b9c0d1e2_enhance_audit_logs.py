@@ -1,10 +1,3 @@
-"""enhance_audit_logs
-
-Revision ID: f7a8b9c0d1e2
-Revises: e5f6a7b8c9d0
-Create Date: 2026-07-26 23:40:00.000000
-
-"""
 from typing import Sequence, Union
 
 from alembic import op

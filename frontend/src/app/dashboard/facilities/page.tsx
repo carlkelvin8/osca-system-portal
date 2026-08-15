@@ -323,7 +323,6 @@ export default function FacilitiesPage() {
         </div>
       )}
 
-      {/* View Details Modal */}
       {viewFacility && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="bg-white rounded-xl w-full max-w-md shadow-xl overflow-hidden max-h-[85vh] flex flex-col">
@@ -400,7 +399,6 @@ export default function FacilitiesPage() {
         </div>
       )}
 
-      {/* Edit Facility Modal */}
       {editFacility && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="bg-white rounded-xl w-full max-w-md shadow-xl overflow-hidden max-h-[90vh] flex flex-col">
@@ -518,7 +516,6 @@ export default function FacilitiesPage() {
         </div>
       )}
 
-      {/* Add Venue Modal */}
       {showAdd && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="bg-white rounded-xl w-full max-w-md shadow-xl overflow-hidden max-h-[90vh] flex flex-col">
@@ -621,7 +618,6 @@ export default function FacilitiesPage() {
         </div>
       )}
 
-      {/* Request Venue Modal */}
       {showRequest && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="bg-white rounded-xl w-full max-w-md shadow-xl overflow-hidden max-h-[90vh] flex flex-col">
@@ -729,7 +725,6 @@ export default function FacilitiesPage() {
         </div>
       )}
 
-      {/* Delete Venue Confirm */}
       {deleteFacility && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm">

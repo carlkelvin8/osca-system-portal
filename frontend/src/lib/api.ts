@@ -1,21 +1,13 @@
-/**
- * Axios API client with JWT interceptors.
- * Automatically refreshes access tokens on 401.
- */
 import axios, { AxiosInstance, AxiosError } from "axios";
 import Cookies from "js-cookie";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost/api/v1";
-
-// ── Client Instance ───────────────────────────────────────────────────────────
 
 const api: AxiosInstance = axios.create({
   baseURL: API_BASE,
   headers: { "Content-Type": "application/json" },
   timeout: 30000,
 });
-
-// ── Request Interceptor — Attach Bearer Token ─────────────────────────────────
 
 api.interceptors.request.use((config) => {
   const token = Cookies.get("access_token");
@@ -27,8 +19,6 @@ api.interceptors.request.use((config) => {
   }
   return config;
 });
-
-// ── Response Interceptor — Auto Token Refresh ─────────────────────────────────
 
 let isRefreshing = false;
 let failedQueue: Array<{
@@ -81,7 +71,7 @@ api.interceptors.response.use(
         Cookies.set("access_token", data.access_token, {
           secure: process.env.NODE_ENV === "production",
           sameSite: "strict",
-          expires: 1 / 96, // 15 minutes
+          expires: 1 / 96,
         });
         Cookies.set("refresh_token", data.refresh_token, {
           secure: process.env.NODE_ENV === "production",
@@ -108,8 +98,6 @@ api.interceptors.response.use(
 );
 
 export default api;
-
-// ── API Functions ─────────────────────────────────────────────────────────────
 
 export const authApi = {
   login: (email: string, password: string) =>
@@ -177,7 +165,6 @@ export const inventoryApi = {
   return: (data: Record<string, unknown>) => api.post("/inventory/return", data),
   listTransactions: (params?: Record<string, string | number | boolean>) =>
     api.get("/inventory/transactions", { params }),
-  // Equipment Request workflow
   createRequest: (data: Record<string, unknown>) =>
     api.post("/inventory/requests", data),
   listRequests: (params?: Record<string, string | number | boolean>) =>
@@ -327,8 +314,6 @@ export const adminApi = {
 };
 
 
-// ── Facilities ────────────────────────────────────────────────────────────────
-
 export const facilitiesApi = {
   list: (params?: Record<string, string | number | boolean>) =>
     api.get("/facilities", { params }),
@@ -356,8 +341,6 @@ export const facilitiesApi = {
     api.post("/facilities/schedules", data),
 };
 
-// ── Notifications ─────────────────────────────────────────────────────────────
-
 export const notificationsApi = {
   list: () =>
     api.get("/notifications"),
@@ -366,8 +349,6 @@ export const notificationsApi = {
   markAllRead: () =>
     api.patch("/notifications/read-all"),
 };
-
-// ── Eligibility ───────────────────────────────────────────────────────────────
 
 export const eligibilityApi = {
   list: (params?: Record<string, string | number | boolean>) =>
@@ -380,8 +361,6 @@ export const eligibilityApi = {
     api.patch(`/eligibility/${id}`, data),
 };
 
-// ── Incidents ─────────────────────────────────────────────────────────────────
-
 export const incidentsApi = {
   list: (params?: Record<string, string | number | boolean>) =>
     api.get("/incidents", { params }),
@@ -390,8 +369,6 @@ export const incidentsApi = {
   update: (id: string, data: Record<string, unknown>) =>
     api.patch(`/incidents/${id}`, data),
 };
-
-// ── Sanctions ─────────────────────────────────────────────────────────────────
 
 export const sanctionsApi = {
   list: (params?: Record<string, string | number | boolean>) =>
@@ -403,8 +380,6 @@ export const sanctionsApi = {
   acknowledge: (id: string) =>
     api.post(`/sanctions/${id}/acknowledge`),
 };
-
-// ── Offline Sync ──────────────────────────────────────────────────────────────
 
 export const auditLogsApi = {
   list: (params?: Record<string, string | number | boolean>) =>
@@ -419,8 +394,6 @@ export const auditLogsApi = {
   exportPdf: (params?: Record<string, string | number | boolean>) =>
     api.get("/audit-logs/export/pdf", { params, responseType: "blob" }),
 };
-
-// ── Offline Sync ──────────────────────────────────────────────────────────────
 
 export const syncApi = {
   upload: (data: Record<string, unknown>) =>

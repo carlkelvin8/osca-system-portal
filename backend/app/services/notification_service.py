@@ -1,4 +1,3 @@
-"""Notification service — create in-app notifications (bell in dashboard topbar)."""
 from __future__ import annotations
 
 import uuid
@@ -23,7 +22,6 @@ async def notify_users(
     reference_type: str | None = None,
     reference_id: uuid.UUID | None = None,
 ) -> list[Notification]:
-    """Create notifications for the given recipient IDs."""
     rows = [
         Notification(
             recipient_id=r,
@@ -50,7 +48,6 @@ async def notify_venue_managers(
     reference_type: str | None = None,
     reference_id: uuid.UUID | None = None,
 ) -> list[Notification]:
-    """Notify all Admin, Director, and Staff users."""
     result = await db.execute(
         select(User.id).where(User.role.in_(_MANAGER_ROLES), User.is_active == True)  # noqa: E712
     )

@@ -170,7 +170,6 @@ export default function BorrowScannerPage() {
         </div>
       )}
 
-      {/* Camera scanner */}
       {scanning && (
         <div className="relative bg-black rounded-xl overflow-hidden max-w-md mx-auto">
           <video ref={videoRef} autoPlay muted playsInline className="w-full aspect-square object-cover" />
@@ -183,7 +182,6 @@ export default function BorrowScannerPage() {
         </div>
       )}
 
-      {/* Scan button */}
       {step === "idle" && !scanning && (
         <div className="text-center py-12">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-[#1E3A5F]/10 rounded-full mb-4">
@@ -202,7 +200,6 @@ export default function BorrowScannerPage() {
         </div>
       )}
 
-      {/* Identity result */}
       {step === "identity" && identity && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-5">
             <div className="flex items-center justify-between">
@@ -256,7 +253,6 @@ export default function BorrowScannerPage() {
             </div>
           </div>
 
-          {/* Active Borrows */}
           {identity.current_borrows.length > 0 && (
             <div>
               <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1">
@@ -279,7 +275,6 @@ export default function BorrowScannerPage() {
             </div>
           )}
 
-          {/* Pending Requests — clickable for release */}
           {identity.pending_requests.length > 0 && !selectedRequest && !releaseResult && (
             <div>
               <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1">
@@ -301,7 +296,6 @@ export default function BorrowScannerPage() {
             </div>
           )}
 
-          {/* Selected Request — detail & release */}
           {selectedRequest && !releaseResult && (
             <div className="border border-blue-200 rounded-xl p-4 bg-blue-50/50 space-y-3">
               <div className="flex items-center justify-between">
@@ -341,7 +335,6 @@ export default function BorrowScannerPage() {
             </div>
           )}
 
-          {/* Release Success — show TXN QR */}
           {releaseResult && (
             <div className="border border-green-200 rounded-xl p-4 bg-green-50 space-y-2">
               <div className="flex items-center gap-2 text-green-700">
@@ -366,7 +359,6 @@ export default function BorrowScannerPage() {
             </div>
           )}
 
-          {/* Sanctions */}
           {identity.active_sanctions.length > 0 && (
             <div>
               <h3 className="text-sm font-semibold text-red-700 mb-2 flex items-center gap-1">
@@ -388,7 +380,6 @@ export default function BorrowScannerPage() {
         </div>
       )}
 
-      {/* Transaction result */}
       {step === "transaction" && transaction && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-5">
           <div className="flex items-center justify-between">
@@ -456,7 +447,6 @@ export default function BorrowScannerPage() {
             </div>
           </div>
 
-          {/* Items */}
           <div>
             <h3 className="text-sm font-semibold text-gray-700 mb-2">Items</h3>
             <table className="w-full text-sm">
@@ -485,7 +475,6 @@ export default function BorrowScannerPage() {
             </table>
           </div>
 
-          {/* Actions */}
           <div className="flex justify-end gap-3 pt-2">
             {(transaction.status === "active" || transaction.status === "overdue") && (
               <>
@@ -516,7 +505,6 @@ export default function BorrowScannerPage() {
         </div>
       )}
 
-      {/* Done state */}
       {step === "done" && (
         <div className="bg-white rounded-xl shadow-sm border border-green-200 p-8 text-center space-y-4">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full">

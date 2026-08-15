@@ -1,15 +1,3 @@
-"""
-Facial Recognition Service using InsightFace (ArcFace model).
-Achieves ~99.8% accuracy on LFW benchmark.
-Supports GPU (CUDA) acceleration when FR_GPU_ENABLED=true.
-
-Architecture:
-  1. Liveness detection (MiniFASNet) — reject spoofing attempts
-  2. Face detection (RetinaFace) — accurate bounding box
-  3. Image preprocessing (OpenCV) — normalize brightness, align
-  4. Embedding generation (ArcFace) — 512-dim face vector
-  5. Cosine similarity search against pgvector stored embeddings
-"""
 import asyncio
 import io
 import uuid
@@ -27,9 +15,6 @@ from app.services.storage_service import StorageService
 
 logger = structlog.get_logger(__name__)
 
-# Minimum gap between the top-2 cosine similarities required to accept a match.
-# If two registered faces score within this margin, we refuse to guess and ask
-# for another scan (prevents misidentifying people whose embeddings are close).
 AMBIGUITY_MARGIN = 0.02
 
 
@@ -43,22 +28,13 @@ class FRMatchResult:
 
 
 class FacialRecognitionService:
-    """
-    Wraps InsightFace ArcFace model for OSCA facial recognition.
-    Initialized once at application startup and shared via app.state.
-    """
-
     def __init__(self) -> None:
-        self._app: Any | None = None          # insightface.app.FaceAnalysis
+        self._app: Any | None = None
         self._liveness_model: Any | None = None
         self._initialized = False
         self._storage = StorageService()
 
     async def initialize(self) -> None:
-        """
-        Load InsightFace models (runs in threadpool to avoid blocking event loop).
-        Models are downloaded to ~/.insightface on first run.
-        """
         if self._initialized:
             return
         await asyncio.get_event_loop().run_in_executor(None, self._load_models)
@@ -66,19 +42,17 @@ class FacialRecognitionService:
         logger.info("fr_initialized", model=settings.FR_MODEL, gpu=settings.FR_GPU_ENABLED)
 
     def _load_models(self) -> None:
-        """Blocking model load — called in executor."""
         import insightface
         from insightface.app import FaceAnalysis
 
         ctx_id = settings.FR_GPU_ID if settings.FR_GPU_ENABLED else -1
 
         self._app = FaceAnalysis(
-            name="buffalo_l",      # ArcFace r100 — highest accuracy
+            name="buffalo_l",
             allowed_modules=["detection", "recognition"],
         )
         self._app.prepare(ctx_id=ctx_id, det_size=(640, 640))
 
-        # Liveness model (MiniFASNet) loaded separately if enabled
         if settings.FR_LIVENESS_ENABLED:
             try:
                 from app.services.liveness import LivenessDetector
@@ -87,7 +61,6 @@ class FacialRecognitionService:
                 logger.warning("liveness_model_unavailable", note="Install silent-face-anti-spoofing")
 
     def _decode_image(self, image_bytes: bytes) -> np.ndarray:
-        """Decode bytes to BGR numpy array (OpenCV format)."""
         nparr = np.frombuffer(image_bytes, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         if img is None:
@@ -95,19 +68,12 @@ class FacialRecognitionService:
         return img
 
     def _preprocess(self, img: np.ndarray) -> np.ndarray:
-        """
-        OpenCV preprocessing pipeline:
-        1. Resize if too large (keep aspect ratio)
-        2. CLAHE for lighting normalization
-        3. Convert to RGB for InsightFace
-        """
         max_dim = 1280
         h, w = img.shape[:2]
         if max(h, w) > max_dim:
             scale = max_dim / max(h, w)
             img = cv2.resize(img, (int(w * scale), int(h * scale)))
 
-        # CLAHE on L-channel of LAB (fixes uneven lighting in sports venues)
         lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
         clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
         lab[:, :, 0] = clahe.apply(lab[:, :, 0])
@@ -116,18 +82,15 @@ class FacialRecognitionService:
         return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
     def _get_embedding(self, img_rgb: np.ndarray) -> np.ndarray | None:
-        """Extract 512-dim ArcFace embedding. Returns None if no face detected."""
         if self._app is None:
             raise RuntimeError("FR service not initialized")
         faces = self._app.get(img_rgb)
         if not faces:
             return None
-        # Take the largest face (closest to camera)
         face = max(faces, key=lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]))
         return face.embedding
 
     def _cosine_similarity(self, a: np.ndarray, b: np.ndarray) -> float:
-        """Compute cosine similarity between two L2-normalized vectors."""
         a_norm = a / (np.linalg.norm(a) + 1e-10)
         b_norm = b / (np.linalg.norm(b) + 1e-10)
         return float(np.dot(a_norm, b_norm))
@@ -137,10 +100,6 @@ class FacialRecognitionService:
         user_id: str,
         images_bytes: list[bytes],
     ) -> tuple[list[float], str, list[str]]:
-        """
-        Generate and return the mean ArcFace embedding from multiple enrollment images.
-        Returns: (embedding_vector, model_name, minio_keys)
-        """
         loop = asyncio.get_event_loop()
 
         def _compute():
@@ -158,14 +117,12 @@ class FacialRecognitionService:
                     "Ensure face is clearly visible in at least 3 images."
                 )
 
-            # Mean pooling of embeddings → more robust than single-image
             mean_emb = np.mean(embeddings, axis=0)
-            mean_emb = mean_emb / np.linalg.norm(mean_emb)  # L2 normalize
+            mean_emb = mean_emb / np.linalg.norm(mean_emb)
             return mean_emb.tolist()
 
         embedding = await loop.run_in_executor(None, _compute)
 
-        # Upload raw images to MinIO (kept for FACE_IMAGE_RETENTION_DAYS)
         minio_keys = []
         for i, img_bytes in enumerate(images_bytes):
             key = f"enrollments/{user_id}/img_{i}.jpg"
@@ -187,16 +144,8 @@ class FacialRecognitionService:
         liveness_threshold: float | None = None,
         liveness_enabled: bool | None = None,
     ) -> FRMatchResult:
-        """
-        Identify a face against all stored embeddings.
-        Runs liveness check first if enabled.
-
-        similarity_threshold / liveness_threshold / liveness_enabled override
-        static settings when provided (used for runtime admin configuration).
-        """
         loop = asyncio.get_event_loop()
 
-        # Resolve effective thresholds (runtime config takes precedence)
         _sim_threshold = similarity_threshold if similarity_threshold is not None else settings.FACE_SIMILARITY_THRESHOLD
         _live_threshold = liveness_threshold if liveness_threshold is not None else settings.FR_LIVENESS_THRESHOLD
         _live_enabled = liveness_enabled if liveness_enabled is not None else settings.FR_LIVENESS_ENABLED
@@ -211,7 +160,6 @@ class FacialRecognitionService:
                 )
             img_rgb = self._preprocess(img)
 
-            # Liveness check
             liveness_score = None
             if _live_enabled and self._liveness_model:
                 liveness_score = self._liveness_model.predict(img_rgb)
@@ -223,7 +171,6 @@ class FacialRecognitionService:
                                        "Please face the camera directly without using a photo.",
                     )
 
-            # Extract embedding
             query_emb = self._get_embedding(img_rgb)
             if query_emb is None:
                 return FRMatchResult(
@@ -234,7 +181,6 @@ class FacialRecognitionService:
 
             query_arr = np.array(query_emb)
 
-            # Compare against all stored embeddings
             best_score = -1.0
             best_user_id = None
             second_score = -1.0
@@ -261,7 +207,6 @@ class FacialRecognitionService:
                     ),
                 )
 
-            # Safety: if two profiles score almost equally, do not guess — ask to rescan.
             if second_score >= 0 and (best_score - second_score) < AMBIGUITY_MARGIN:
                 return FRMatchResult(
                     result=ScanResult.FAILED_RECOGNITION,

@@ -22,13 +22,9 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { BarChart3, TrendingUp, Users, Package, Gavel } from "lucide-react";
 import type { PaginatedResponse, Sanction, AttendanceRecord } from "@/types";
 
-// ── Chart colors ──────────────────────────────────────────────────────────────
-
 const PIE_COLORS = ["#2563eb", "#22c55e", "#f59e0b", "#ef4444", "#8b5cf6"];
 
 const DAYS_OF_WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-// ── Helper: group attendance by day of week ───────────────────────────────────
 
 function groupByDayOfWeek(records: AttendanceRecord[]) {
   const counts: Record<string, number> = {};
@@ -44,8 +40,6 @@ function groupByDayOfWeek(records: AttendanceRecord[]) {
 
   return DAYS_OF_WEEK.map((day) => ({ day, count: counts[day] }));
 }
-
-// ── Helper: group attendance by week number ───────────────────────────────────
 
 function groupByWeek(records: AttendanceRecord[]) {
   const weekMap: Record<string, number> = {};
@@ -72,8 +66,6 @@ function groupByWeek(records: AttendanceRecord[]) {
     .map(([week, count]) => ({ week, count }));
 }
 
-// ── Helper: group attendance by month ─────────────────────────────────────────
-
 function groupByMonth(records: AttendanceRecord[]) {
   const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const monthMap: Record<string, number> = {};
@@ -91,8 +83,6 @@ function groupByMonth(records: AttendanceRecord[]) {
     .map(([month, count]) => ({ month, count }));
 }
 
-// ── Helper: top 10 active athletes ────────────────────────────────────────────
-
 function getTopAthletes(records: AttendanceRecord[]) {
   const countMap: Record<string, number> = {};
 
@@ -107,8 +97,6 @@ function getTopAthletes(records: AttendanceRecord[]) {
     .slice(0, 10)
     .map(([name, count]) => ({ name, count }));
 }
-
-// ── Helper: sanctions by violation type ───────────────────────────────────────
 
 function groupSanctionsByType(sanctions: Sanction[]) {
   const typeMap: Record<string, number> = {};
@@ -126,13 +114,10 @@ function groupSanctionsByType(sanctions: Sanction[]) {
     }));
 }
 
-// ── Page Component ────────────────────────────────────────────────────────────
-
 export default function AnalyticsPage() {
   const { user } = useAuthStore();
   const [trendView, setTrendView] = useState<"week" | "month">("week");
 
-  // Fetch attendance records
   const { data: attendanceData, isLoading: loadingAttendance } = useQuery({
     queryKey: ["analytics-attendance"],
     queryFn: async () => {
@@ -142,7 +127,6 @@ export default function AnalyticsPage() {
     enabled: !!user,
   });
 
-  // Fetch sanctions
   const { data: sanctionsData, isLoading: loadingSanctions } = useQuery({
     queryKey: ["analytics-sanctions"],
     queryFn: async () => {
@@ -152,7 +136,6 @@ export default function AnalyticsPage() {
     enabled: !!user,
   });
 
-  // Fetch dashboard summary for equipment stats
   const { data: summaryData, isLoading: loadingSummary } = useQuery({
     queryKey: ["analytics-dashboard-summary"],
     queryFn: async () => {
@@ -167,7 +150,6 @@ export default function AnalyticsPage() {
 
   const isLoading = loadingAttendance || loadingSanctions || loadingSummary;
 
-  // Derived chart data
   const attendanceRecords = attendanceData?.items || [];
   const sanctions = sanctionsData?.items || [];
 
@@ -190,8 +172,6 @@ export default function AnalyticsPage() {
       ]
     : [];
 
-  // ── Loading state ─────────────────────────────────────────────────────────
-
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -202,7 +182,6 @@ export default function AnalyticsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center gap-3">
         <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 text-white">
           <BarChart3 className="h-6 w-6" />
@@ -212,9 +191,7 @@ export default function AnalyticsPage() {
         </h1>
       </div>
 
-      {/* 2x2 Chart Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* 1. Attendance Trends */}
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
@@ -274,7 +251,6 @@ export default function AnalyticsPage() {
           )}
         </div>
 
-        {/* 2. Most Active Athletes (Top 10) */}
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
           <div className="flex items-center gap-2 mb-4">
             <Users className="h-5 w-5 text-green-600" />
@@ -305,7 +281,6 @@ export default function AnalyticsPage() {
           )}
         </div>
 
-        {/* 3. Equipment Utilization (Pie) */}
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
           <div className="flex items-center gap-2 mb-4">
             <Package className="h-5 w-5 text-purple-600" />
@@ -344,7 +319,6 @@ export default function AnalyticsPage() {
           )}
         </div>
 
-        {/* 4. Sanctions by Violation Type */}
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
           <div className="flex items-center gap-2 mb-4">
             <Gavel className="h-5 w-5 text-red-600" />

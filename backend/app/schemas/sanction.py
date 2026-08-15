@@ -1,4 +1,3 @@
-"""Sanction monitoring schemas."""
 import uuid
 from datetime import date, datetime
 from pydantic import BaseModel

@@ -1,4 +1,3 @@
-"""Sanction monitoring endpoints. Coach flags violations, students view their sanctions."""
 import uuid
 from datetime import datetime, UTC
 from typing import Annotated
@@ -18,7 +17,6 @@ router = APIRouter()
 
 
 def _jsonable(d: dict) -> dict:
-    """Convert UUID / date / time / datetime values to strings for JSONB audit columns."""
     from datetime import date as _date, datetime as _datetime, time as _time
 
     def conv(v):
@@ -40,7 +38,6 @@ async def list_sanctions(
 ):
     query = select(Sanction)
 
-    # Students only see their own sanctions
     if current_user.role == UserRole.STUDENT:
         query = query.where(Sanction.student_id == current_user.id)
     elif student_id:

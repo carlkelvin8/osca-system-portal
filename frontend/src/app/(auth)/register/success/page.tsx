@@ -6,7 +6,6 @@ import { CheckCircle2 } from "lucide-react";
 export default function RegistrationSuccessPage() {
   return (
     <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-[#081428]">
-      {/* Animated background */}
       <div className="absolute inset-0">
         <div
           className="absolute -top-[40%] -left-[20%] w-[70vw] h-[70vw] rounded-full opacity-20 animate-pulse"

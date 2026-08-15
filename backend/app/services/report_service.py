@@ -1,8 +1,3 @@
-"""
-Report generation service.
-PDF: WeasyPrint (HTML → PDF, professional layout)
-XLSX: openpyxl (formatted spreadsheet with column widths, headers)
-"""
 import io
 from calendar import monthrange
 from datetime import UTC, datetime
@@ -23,7 +18,7 @@ from app.models.inventory import (
 from app.models.user import User
 
 
-HEADER_FILL = PatternFill("solid", fgColor="1E3A5F")   # OSCA navy blue
+HEADER_FILL = PatternFill("solid", fgColor="1E3A5F")
 HEADER_FONT = Font(color="FFFFFF", bold=True)
 ALT_FILL = PatternFill("solid", fgColor="EBF0F7")
 
@@ -31,8 +26,6 @@ ALT_FILL = PatternFill("solid", fgColor="EBF0F7")
 class ReportService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
-
-    # ── Attendance PDF ─────────────────────────────────────────────────────────
 
     async def generate_attendance_pdf(
         self,
@@ -53,8 +46,6 @@ class ReportService:
         records = await self._fetch_attendance_records(sport_or_art, date_from, date_to)
         return self._build_attendance_xlsx(records)
 
-    # ── Inventory PDF ──────────────────────────────────────────────────────────
-
     async def generate_inventory_pdf(self) -> bytes:
         equipment = await self._fetch_all_equipment()
         html = self._render_inventory_html(equipment)
@@ -64,25 +55,16 @@ class ReportService:
         equipment = await self._fetch_all_equipment()
         return self._build_inventory_xlsx(equipment)
 
-    # ── Inventory Monthly Summary ──────────────────────────────────────────────
-
     async def generate_inventory_monthly_report(self, year: int, month: int) -> dict:
-        """
-        Build a monthly inventory summary dict.
-        Covers borrows started OR returned in the given month.
-        """
         from datetime import timezone
-        # Month boundaries (UTC)
         _, last_day = monthrange(year, month)
         period_start = datetime(year, month, 1, tzinfo=timezone.utc)
         period_end = datetime(year, month, last_day, 23, 59, 59, tzinfo=timezone.utc)
 
-        # Total active equipment
         total_active = (await self.db.execute(
             select(func.count(Equipment.id)).where(Equipment.is_active == True)
         )).scalar_one()
 
-        # Borrowed this month (transactions whose borrowed_at falls in period)
         borrowed_this_month = (await self.db.execute(
             select(func.count(BorrowTransaction.id)).where(
                 BorrowTransaction.borrowed_at >= period_start,
@@ -90,7 +72,6 @@ class ReportService:
             )
         )).scalar_one()
 
-        # Returned this month
         returned_this_month = (await self.db.execute(
             select(func.count(BorrowTransaction.id)).where(
                 BorrowTransaction.returned_at >= period_start,
@@ -98,14 +79,12 @@ class ReportService:
             )
         )).scalar_one()
 
-        # Still overdue at end of month
         overdue_at_end = (await self.db.execute(
             select(func.count(BorrowTransaction.id)).where(
                 BorrowTransaction.status == TransactionStatus.OVERDUE,
             )
         )).scalar_one()
 
-        # Top 5 most-borrowed equipment in period
         top_eq_result = await self.db.execute(
             select(Equipment.name, func.count(BorrowTransactionItem.id).label("borrow_count"))
             .join(BorrowTransactionItem, BorrowTransactionItem.equipment_id == Equipment.id)
@@ -123,7 +102,6 @@ class ReportService:
             for row in top_eq_result.all()
         ]
 
-        # Condition breakdown
         condition_result = await self.db.execute(
             select(Equipment.condition, func.count(Equipment.id).label("count"))
             .where(Equipment.is_active == True)
@@ -151,22 +129,17 @@ class ReportService:
     async def render_monthly_report_xlsx(self, report: dict) -> bytes:
         return self._build_monthly_xlsx(report)
 
-    # ── Dashboard Summary ──────────────────────────────────────────────────────
-
     async def get_dashboard_summary(self) -> dict:
-        # Total students
         total_students = (await self.db.execute(
             select(func.count(User.id)).where(User.role == "student", User.is_active == True)
         )).scalar_one()
 
-        # Enrolled with face
         face_enrolled = (await self.db.execute(
             select(func.count(User.id)).where(
                 User.role == "student", User.is_active == True, User.is_face_enrolled == True
             )
         )).scalar_one()
 
-        # Today's attendance
         today = datetime.now(UTC).date()
         today_attendance = (await self.db.execute(
             select(func.count(AttendanceRecord.id)).where(
@@ -174,7 +147,6 @@ class ReportService:
             )
         )).scalar_one()
 
-        # Equipment stats
         total_equipment = (await self.db.execute(
             select(func.sum(Equipment.total_quantity)).where(Equipment.is_active == True)
         )).scalar_one() or 0
@@ -185,7 +157,6 @@ class ReportService:
             )
         )).scalar_one() or 0
 
-        # Overdue transactions
         overdue_count = (await self.db.execute(
             select(func.count(BorrowTransaction.id)).where(
                 BorrowTransaction.status == TransactionStatus.OVERDUE
@@ -211,8 +182,6 @@ class ReportService:
             },
             "generated_at": datetime.now(UTC).isoformat(),
         }
-
-    # ── Private Helpers ────────────────────────────────────────────────────────
 
     async def _fetch_attendance_records(
         self,
@@ -403,8 +372,6 @@ class ReportService:
 
     def _html_to_pdf(self, html: str) -> bytes:
         from xhtml2pdf import pisa
-        # Shared PDF generator: every report rendered through this service
-        # is produced in LANDSCAPE orientation so wide tables fit the page.
         page_css = "<style>@page { size: A4 landscape; margin: 12mm 9mm; }</style>"
         html = html.replace("<head>", "<head>" + page_css, 1) if "<head>" in html else page_css + html
         buffer = io.BytesIO()
@@ -467,7 +434,6 @@ class ReportService:
     def _build_monthly_xlsx(self, report: dict) -> bytes:
         wb = openpyxl.Workbook()
 
-        # Summary sheet
         ws = wb.active
         ws.title = "Summary"
         period = report["period"]
@@ -485,14 +451,12 @@ class ReportService:
             ws.cell(row=row_idx, column=1, value=label)
             ws.cell(row=row_idx, column=2, value=value)
 
-        # Top 5 sheet
         ws2 = wb.create_sheet("Top 5 Borrowed")
         self._write_header_row(ws2, ["Equipment Name", "Borrow Count"])
         for i, e in enumerate(report["top_5_borrowed"], start=2):
             ws2.cell(row=i, column=1, value=e["name"])
             ws2.cell(row=i, column=2, value=e["borrow_count"])
 
-        # Condition sheet
         ws3 = wb.create_sheet("Condition Breakdown")
         self._write_header_row(ws3, ["Condition", "Count"])
         for i, (cond, count) in enumerate(report["condition_breakdown"].items(), start=2):

@@ -1,6 +1,3 @@
-"""
-Audit Log schemas for API request/response serialization.
-"""
 import uuid
 from datetime import datetime
 from typing import Any

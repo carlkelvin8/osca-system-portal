@@ -1,7 +1,3 @@
-"""
-Incident Reporting models.
-Records incidents involving athletes, facilities, or equipment.
-"""
 import enum
 import uuid
 from datetime import datetime
@@ -56,21 +52,17 @@ class Incident(Base):
     incident_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     location: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
-    # Involved parties
     reported_by_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
     involved_student_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     involved_facility_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("facilities.id"), nullable=True)
 
-    # Resolution
     resolution: Mapped[str | None] = mapped_column(Text, nullable=True)
     resolved_by_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    # Audit
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    # Relationships
     reported_by: Mapped["User"] = relationship(foreign_keys=[reported_by_id])
     involved_student: Mapped["User | None"] = relationship(foreign_keys=[involved_student_id])
     resolved_by: Mapped["User | None"] = relationship(foreign_keys=[resolved_by_id])

@@ -1,4 +1,3 @@
-"""Attendance and facial recognition schemas."""
 import uuid
 from datetime import datetime
 
@@ -7,8 +6,6 @@ from pydantic import Base64Bytes, Field, field_validator
 from app.models.attendance import ActivityType, AttendanceScanType, ScanResult
 from app.schemas.common import OSCABaseModel
 
-
-# ── Session Schemas ────────────────────────────────────────────────────────────
 
 class SessionCreate(OSCABaseModel):
     name: str = Field(min_length=1, max_length=200)
@@ -62,8 +59,6 @@ class SessionStatsRead(OSCABaseModel):
     total: int = 0
 
 
-# ── Attendance Record Schemas ──────────────────────────────────────────────────
-
 class AttendanceRecordRead(OSCABaseModel):
     id: uuid.UUID
     student_id: uuid.UUID
@@ -83,8 +78,6 @@ class AttendanceRecordRead(OSCABaseModel):
     ip_address: str | None = None
     device: str | None = None
 
-
-# ── Manual Attendance Schemas (Admin / Staff / Coach) ──────────────────────────
 
 class ManualAttendanceCreate(OSCABaseModel):
     session_id: uuid.UUID
@@ -115,25 +108,12 @@ class ManualAttendanceUpdate(OSCABaseModel):
     notes: str | None = None
 
 
-# ── QR Check-in Schema ─────────────────────────────────────────────────────────
-
 class QrCheckInRequest(OSCABaseModel):
-    """
-    Student scans a QR that encodes their student identity and checks into a session.
-    qr_code format: STU-{student_uuid_hex} (12-hex short form) or full UUID.
-    """
     qr_code: str = Field(min_length=4, max_length=64)
     session_id: uuid.UUID
 
 
-# ── Facial Recognition Schemas ────────────────────────────────────────────────
-
 class FaceScanRequest(OSCABaseModel):
-    """
-    Kiosk sends a Base64-encoded JPEG/PNG frame for recognition.
-    scan_type: time_in | time_out
-    session_id: active session to log attendance against
-    """
     image_base64: str = Field(
         description="Base64-encoded webcam frame (JPEG/PNG, max 5MB)"
     )
@@ -154,12 +134,7 @@ class FaceScanResponse(OSCABaseModel):
     message: str
 
 
-# ── Face Enrollment Schemas ────────────────────────────────────────────────────
-
 class EnrollmentRequest(OSCABaseModel):
-    """
-    Admin submits multiple Base64 images (5+) to enroll a student's face.
-    """
     user_id: uuid.UUID
     images_base64: list[str] = Field(
         min_length=5,
@@ -176,14 +151,7 @@ class EnrollmentResponse(OSCABaseModel):
     message: str
 
 
-# ── Dashboard / Report Input Schemas ──────────────────────────────────────────
-
 class LatestAttendanceRead(OSCABaseModel):
-    """
-    Last successful attendance for a session (kiosk display).
-    Students carry attendance status/time-in/time-out; non-students carry only
-    the identity-verification event (no attendance record).
-    """
     has_record: bool = False
     person_name: str | None = None
     person_role: str | None = None

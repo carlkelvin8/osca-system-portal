@@ -9,17 +9,11 @@ body {
   @apply bg-gray-50 text-gray-900 antialiased;
 }
 
-/* ── Soft Dark Mode (low-contrast) ────────────────────────────────────────────
-   Applied globally via .dark on <html> (see ThemeSync + layout.tsx script).
-   Palette: page #0F172A · surface #1E293B · elevated #172033 · border #334155
-            text primary #E2E8F0 · secondary #94A3B8 · muted #64748B            */
-
 .dark body {
   background-color: #0F172A;
   color: #E2E8F0;
 }
 
-/* ── Surfaces ── */
 .dark .bg-white {
   background-color: #1E293B !important;
 }
@@ -66,7 +60,6 @@ body {
   background-color: #334155 !important;
 }
 
-/* ── Tinted chips / status fills (low-saturation versions) ── */
 .dark .bg-red-50,
 .dark .bg-red-50\/30,
 .dark .bg-red-50\/50 {
@@ -143,7 +136,6 @@ body {
   background-color: #172033 !important;
 }
 
-/* ── Borders ── */
 .dark .border-gray-100,
 .dark .border-gray-200,
 .dark .border-gray-50,
@@ -200,7 +192,6 @@ body {
   border-color: rgba(168, 85, 247, 0.25) !important;
 }
 
-/* ── Text: neutral grays (soft hierarchy) ── */
 .dark .text-gray-900,
 .dark .text-gray-800,
 .dark .text-\[\#111827\],
@@ -258,7 +249,6 @@ body {
   color: #94A3B8 !important;
 }
 
-/* ── Text: brand navy/blue accents → softer blue in dark ── */
 .dark .text-\[\#1E3A5F\],
 .dark .text-\[\#123D78\],
 .dark .text-\[\#1557C0\],
@@ -268,7 +258,6 @@ body {
   color: #93C5FD !important;
 }
 
-/* ── Text: status colors (low-contrast versions) ── */
 .dark .text-red-500,
 .dark .text-red-600 {
   color: #FCA5A5 !important;
@@ -368,12 +357,10 @@ body {
   color: #BBF7D0 !important;
 }
 
-/* ── Shadows (soften) ── */
 .dark .shadow-sm {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35) !important;
 }
 
-/* ── Inputs / selects ── */
 .dark input,
 .dark select,
 .dark textarea {
@@ -397,7 +384,6 @@ body {
   border-color: #334155;
 }
 
-/* ── Recharts dark theming (inline SVG attrs are not reachable via CSS) ── */
 .dark .recharts-cartesian-grid line {
   stroke: #334155;
 }
@@ -430,7 +416,6 @@ body {
   fill: #60A5FA !important;
 }
 
-/* ── Print styles ───────────────────────────────────────────────────────────── */
 @media print {
   body * {
     visibility: hidden;

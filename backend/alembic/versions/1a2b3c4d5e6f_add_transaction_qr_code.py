@@ -1,9 +1,3 @@
-"""Add transaction_qr_code and transaction_qr_invalidated to borrow_transactions.
-
-Revision ID: 1a2b3c4d5e6f
-Revises: f7a8b9c0d1e2
-Create Date: 2026-07-26 23:50:00.000000
-"""
 from typing import Sequence, Union
 
 from alembic import op

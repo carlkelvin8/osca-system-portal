@@ -1,4 +1,3 @@
-"""In-app notification model — bell in the dashboard topbar."""
 import uuid
 from datetime import datetime
 

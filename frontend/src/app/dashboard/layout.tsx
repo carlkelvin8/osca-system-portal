@@ -1,8 +1,5 @@
 "use client";
 
-/**
- * Dashboard shell — Clean Professional with Dark Mode support
- */
 
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
@@ -41,7 +38,6 @@ import { useNotificationStore } from "@/store/useNotificationStore";
 import { OfflineBanner } from "@/components/ui/OfflineBanner";
 import type { UserRole } from "@/types";
 
-// ── Nav definition ────────────────────────────────────────────────────────────
 
 interface NavChild {
   href: string;
@@ -175,7 +171,6 @@ const navItems: NavItem[] = [
     },
   ];
 
-// ── Role badge label ───────────────────────────────────────────────────────────
 
 const roleLabel: Record<UserRole, string> = {
   admin: "Admin",
@@ -186,7 +181,6 @@ const roleLabel: Record<UserRole, string> = {
   staff: "Staff",
 };
 
-// ── Page title helper ─────────────────────────────────────────────────────────
 
 function pageTitleFor(pathname: string): string {
   const flat = navItems.flatMap((item) => [
@@ -200,8 +194,6 @@ function pageTitleFor(pathname: string): string {
   return match?.label ?? "Dashboard";
 }
 
-// ── Breadcrumb (lives INSIDE the sticky top navigation) ───────────────────────
-// Dashboard > Current Page. Rendered on every authenticated dashboard page.
 
 function TopbarBreadcrumb({ pageTitle }: { pageTitle: string }) {
   const { isDark } = useThemeStore();
@@ -226,7 +218,6 @@ function TopbarBreadcrumb({ pageTitle }: { pageTitle: string }) {
   );
 }
 
-// ── Layout ────────────────────────────────────────────────────────────────────
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, isLoading, logout, fetchCurrentUser } = useAuthStore();
@@ -243,7 +234,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { collapsed, toggle: toggleCollapsed } = useSidebarStore();
   const [navTip, setNavTip] = useState<{ label: string; left: number; top: number } | null>(null);
 
-  // Show a floating label tooltip in icon-only (collapsed) mode
   const showNavTip = (e: React.MouseEvent<HTMLElement>, label: string) => {
     if (!collapsed) return;
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -255,12 +245,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     setNavTip(null);
   }, [collapsed]);
 
-  // Close the mobile drawer whenever the route changes
   useEffect(() => {
     setMobileMenuOpen(false);
   }, [pathname]);
 
-  // Lock body scroll while the mobile drawer is open
   useEffect(() => {
     if (mobileMenuOpen) {
       const prev = document.body.style.overflow;
@@ -275,7 +263,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     fetchCurrentUser();
   }, [fetchCurrentUser]);
 
-  // Poll notifications from the backend once authenticated
   useEffect(() => {
     if (isAuthenticated && user) {
       fetchNotifications();
@@ -284,14 +271,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [isAuthenticated, user, fetchNotifications]);
 
-  // Only redirect after auth check is complete — avoids race with Zustand hydration
   useEffect(() => {
     if (!isLoading && !isAuthenticated && user === null) {
       router.push("/login");
     }
   }, [isLoading, isAuthenticated, user, router]);
 
-  // Show spinner while auth is resolving (isLoading) or user not yet loaded
   if (isLoading || (!isAuthenticated && user === null)) {
     return (
       <div className={`min-h-screen flex items-center justify-center ${isDark ? "bg-[#0F172A]" : "bg-[#f2f5f9]"}`}>
@@ -300,15 +285,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     );
   }
 
-  // TypeScript narrowing: after the early return above, user must be non-null here
   if (!user) return null;
 
   const visibleNav = navItems.filter((item) => item.roles.includes(user.role));
 
-  // Search: filter the user's visible nav entries (top-level + children).
-  // Computed inline (not useMemo) because this runs AFTER the auth guard —
-  // a hook here would change the hook count between the loading and authed
-  // renders and crash React ("rendered more hooks than during the previous render").
   const q = searchQuery.trim().toLowerCase();
   const searchResults: { label: string; href: string }[] = [];
   if (q) {
@@ -338,22 +318,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     router.push("/login");
   };
 
-  // Initials for avatar
   const initials =
     (user.first_name?.[0] ?? "") + (user.last_name?.[0] ?? "");
 
   return (
     <div className={`flex h-screen ${isDark ? "dark bg-[#0F172A]" : "bg-[#f2f5f9]"}`}>
-      {/* ── Mobile Menu Overlay ── */}
       {mobileMenuOpen && (
         <div className="fixed inset-0 z-50 lg:hidden" onClick={() => setMobileMenuOpen(false)}>
           <div className="absolute inset-0 bg-black/50" />
         </div>
       )}
 
-      {/* ── Sidebar ───────────────────────────────────────────────────────── */}
       <aside className={`${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0 fixed lg:static relative inset-y-0 left-0 z-50 w-52 bg-[#0f172a] text-white flex flex-col shrink-0 transition-[width,transform] duration-500 ease-[cubic-bezier(.16,1,.3,1)] ${collapsed ? "lg:w-[72px]" : "lg:w-52"}`}>
-        {/* Collapse toggle (desktop) */}
         <button
           onClick={toggleCollapsed}
           title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
@@ -366,7 +342,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           />
         </button>
 
-        {/* Brand */}
         <div className="flex items-center justify-between px-4 py-4 border-b border-white/8">
           <Link href="/dashboard" className={`flex items-center gap-2.5 min-w-0 ${collapsed ? "lg:justify-center lg:gap-0" : ""}`}>
             <div className="w-9 h-9 rounded-full bg-white overflow-hidden flex items-center justify-center shrink-0">
@@ -387,7 +362,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </button>
         </div>
 
-        {/* Nav */}
         <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
           {visibleNav.map((item, index) => {
             const Icon = item.icon;
@@ -465,7 +439,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           })}
         </nav>
 
-        {/* User section */}
         <div className="px-2 py-3 border-t border-white/8 space-y-0.5">
           <Link
             href="/dashboard/profile"
@@ -497,7 +470,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       </aside>
 
-      {/* Collapsed-mode tooltip */}
       {navTip && (
         <div
           className="fixed z-[150] pointer-events-none bg-[#0b1220] text-white text-xs font-medium px-2.5 py-1.5 rounded-md shadow-lg border border-white/10 whitespace-nowrap"
@@ -507,7 +479,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       )}
 
-      {/* Logout Confirmation Modal */}
       {showLogoutConfirm && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowLogoutConfirm(false)}>
           <div className={`${isDark ? "bg-[#1E293B] border border-[#334155]" : "bg-white"} rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4`} onClick={(e) => e.stopPropagation()}>
@@ -528,11 +499,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       )}
 
-      {/* ── Main area ─────────────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Topbar */}
         <header className={`h-16 ${isDark ? "bg-[#1E293B] border-[#334155]" : "bg-white border-[#e5e7eb]"} border-b flex items-center gap-4 px-4 lg:px-6 shrink-0`}>
-          {/* Left: breadcrumb (Dashboard > Current Page) */}
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <button onClick={() => setMobileMenuOpen(true)} className="lg:hidden p-2 -ml-1 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 text-gray-600 dark:text-gray-300 shrink-0">
               <Menu size={20} />
@@ -540,7 +508,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <TopbarBreadcrumb pageTitle={pageTitle} />
           </div>
 
-          {/* Center: search */}
           <div className="flex-1 flex justify-center">
             <div className="relative w-full max-w-md">
               <Search size={15} className={`absolute left-3.5 top-1/2 -translate-y-1/2 ${isDark ? "text-gray-500" : "text-gray-400"}`} />
@@ -566,7 +533,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 }`}
               />
 
-              {/* Search results dropdown */}
               {searchOpen && searchResults.length > 0 && (
                 <div className={`absolute left-0 right-0 top-full mt-2 rounded-xl shadow-xl border z-50 overflow-hidden ${isDark ? "bg-[#1E293B] border-[#334155]" : "bg-white border-gray-200"}`}>
                   {searchResults.map((r) => (
@@ -587,9 +553,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
           </div>
 
-          {/* Right side */}
           <div className="flex items-center gap-1.5 flex-1 justify-end">
-            {/* Dark mode toggle */}
             <button
               onClick={toggleTheme}
               className={`w-9 h-9 flex items-center justify-center rounded-full transition-colors ${isDark ? "text-yellow-400 hover:bg-white/5" : "text-gray-500 hover:bg-gray-100"}`}
@@ -598,7 +562,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               {isDark ? <Sun size={17} /> : <Moon size={17} />}
             </button>
 
-            {/* Notifications */}
             <div className="relative">
               <button
                 onClick={() => setNotifOpen(!notifOpen)}
@@ -613,7 +576,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 )}
               </button>
 
-              {/* Notification dropdown */}
               {notifOpen && (
                 <div className={`absolute right-0 top-12 w-80 rounded-xl shadow-xl border z-50 ${isDark ? "bg-[#1E293B] border-[#334155]" : "bg-white border-gray-200"}`}>
                   <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
@@ -642,7 +604,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               )}
             </div>
 
-            {/* Avatar → Profile */}
             <Link
               href="/dashboard/profile"
               title={user.full_name}
@@ -653,10 +614,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </header>
 
-        {/* Offline banner */}
         <OfflineBanner />
 
-        {/* Page content */}
         <main className={`flex-1 overflow-auto ${isDark ? "bg-[#0F172A]" : "bg-[#f2f5f9]"}`}>
           <div className="p-5 lg:p-7">{children}</div>
         </main>

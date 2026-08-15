@@ -1,4 +1,3 @@
-"""SQLAlchemy models — import all here so Alembic can discover them."""
 from app.models.user import User, UserRole
 from app.models.attendance import (
     Session,

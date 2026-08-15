@@ -1,4 +1,3 @@
-"""Venue reservation request model — Coach/PE Instructor request a venue, managers approve/reject."""
 import enum
 import uuid
 from datetime import date, datetime, time
@@ -40,7 +39,6 @@ class VenueReservationRequest(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-    # Relationships
     facility: Mapped["Facility"] = relationship(back_populates="venue_reservations")  # noqa: F821
     requester: Mapped["User"] = relationship()  # noqa: F821
 

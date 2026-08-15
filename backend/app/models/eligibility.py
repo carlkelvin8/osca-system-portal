@@ -1,7 +1,3 @@
-"""
-Athlete Eligibility Status models.
-Tracks injuries, medical clearance, disciplinary status.
-"""
 import enum
 import uuid
 from datetime import date, datetime
@@ -54,7 +50,6 @@ class AthleteEligibility(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    # Relationships
     student: Mapped["User"] = relationship(foreign_keys=[student_id])
     cleared_by: Mapped["User | None"] = relationship(foreign_keys=[cleared_by_id])
     created_by: Mapped["User | None"] = relationship(foreign_keys=[created_by_id])

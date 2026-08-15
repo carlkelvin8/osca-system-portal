@@ -1,8 +1,3 @@
-"""
-Initialize Storage
-Creates required MinIO buckets on startup.
-Run with: docker compose exec api python -m app.scripts.init_storage
-"""
 import asyncio
 
 from app.config import settings

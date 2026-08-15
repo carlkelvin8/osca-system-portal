@@ -1,10 +1,3 @@
-"""add ondelete SET NULL for scan_attempts
-
-Revision ID: d61caf6ffd94
-Revises: f2b253e4d908
-Create Date: 2026-07-29 11:05:41.763095
-
-"""
 from typing import Sequence, Union
 
 from alembic import op

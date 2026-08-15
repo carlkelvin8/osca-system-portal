@@ -1,10 +1,3 @@
-/**
- * Shared TypeScript types for the OSCA frontend.
- * Mirror Pydantic schemas from the FastAPI backend.
- */
-
-// ── Auth ──────────────────────────────────────────────────────────────────────
-
 export interface TokenResponse {
   access_token: string;
   refresh_token: string;
@@ -16,8 +9,6 @@ export interface LoginRequest {
   email: string;
   password: string;
 }
-
-// ── Users ─────────────────────────────────────────────────────────────────────
 
 export type UserRole = "admin" | "coach" | "pe_instructor" | "student" | "director" | "staff";
 
@@ -115,8 +106,6 @@ export interface UserUpdate {
   assigned_sport?: string;
 }
 
-// ── Attendance ────────────────────────────────────────────────────────────────
-
 export type ActivityType = "practice" | "competition" | "training" | "event" | "other";
 export type ScanResult =
   | "success"
@@ -192,8 +181,6 @@ export interface LatestAttendance {
   session_sport_or_art: string | null;
   confidence_score: number | null;
 }
-
-// ── Inventory ─────────────────────────────────────────────────────────────────
 
 export type EquipmentCategory =
   | "balls" | "rackets" | "nets" | "protective_gear" | "uniforms"
@@ -282,8 +269,6 @@ export interface RequesterActiveBorrow {
   items: BorrowTransactionItem[];
 }
 
-// ── Staff Borrow / Scanner Types ──────────────────────────────────────────────
-
 export interface ScannedUserEligibility {
   status: string | null;
   reason_detail: string | null;
@@ -333,8 +318,6 @@ export interface TransactionQRRead {
   qr_status: string;
 }
 
-// ── Announcements ─────────────────────────────────────────────────────────────
-
 export interface Announcement {
   id: string;
   title: string;
@@ -363,8 +346,6 @@ export interface AnnouncementComment {
   created_at: string;
 }
 
-// ── Facial Recognition Config ─────────────────────────────────────────────────
-
 export interface FRConfig {
   similarity_threshold: number;
   liveness_threshold: number;
@@ -385,8 +366,6 @@ export interface EnrollmentResponse {
   message: string;
 }
 
-// ── Pagination ────────────────────────────────────────────────────────────────
-
 export interface PaginatedResponse<T> {
   items: T[];
   total: number;
@@ -394,8 +373,6 @@ export interface PaginatedResponse<T> {
   page_size: number;
   pages: number;
 }
-
-// ── Dashboard ─────────────────────────────────────────────────────────────────
 
 export interface DashboardSummary {
   students: {
@@ -417,8 +394,6 @@ export interface DashboardSummary {
   generated_at: string;
 }
 
-// ── Monthly Inventory Report ──────────────────────────────────────────────────
-
 export interface MonthlyInventoryReport {
   period: { year: number; month: number };
   total_active_equipment: number;
@@ -430,8 +405,6 @@ export interface MonthlyInventoryReport {
   generated_at: string;
 }
 
-
-// ── Facilities ────────────────────────────────────────────────────────────────
 
 export type FacilityStatus = "available" | "in_use" | "maintenance" | "closed" | "reserved";
 export type FacilityConditionType = "excellent" | "good" | "fair" | "poor" | "needs_repair";
@@ -505,8 +478,6 @@ export interface ReservationReject {
   rejection_reason?: string;
 }
 
-// ── Notifications ─────────────────────────────────────────────────────────────
-
 export interface NotificationItem {
   id: string;
   title: string;
@@ -534,8 +505,6 @@ export interface FacilitySchedule {
   created_at: string;
 }
 
-// ── Eligibility ───────────────────────────────────────────────────────────────
-
 export type EligibilityStatus = "eligible" | "restricted" | "ineligible" | "pending_clearance";
 export type EligibilityReasonType = "injury" | "medical" | "disciplinary" | "academic" | "other";
 
@@ -558,8 +527,6 @@ export interface AthleteEligibility {
   student_registered_id: string | null;
   student_full_name: string | null;
 }
-
-// ── Incidents ─────────────────────────────────────────────────────────────────
 
 export type IncidentCategory = "injury" | "equipment_damage" | "facility_damage" | "behavioral" | "safety" | "other";
 export type IncidentSeverity = "low" | "medium" | "high" | "critical";
@@ -584,8 +551,6 @@ export interface Incident {
   updated_at: string;
 }
 
-// ── Sanctions ─────────────────────────────────────────────────────────────────
-
 export type ViolationType = "tardiness" | "absence" | "misconduct" | "dress_code" | "equipment_misuse" | "unsportsmanlike" | "substance" | "academic" | "other";
 export type SanctionSeverity = "warning" | "minor" | "major" | "severe";
 export type SanctionStatus = "active" | "served" | "appealed" | "lifted";
@@ -609,8 +574,6 @@ export interface Sanction {
   created_at: string;
   updated_at: string;
 }
-
-// ── Audit Logs ────────────────────────────────────────────────────────────────
 
 export type AuditLogStatus = "success" | "failure" | "partial";
 
@@ -652,8 +615,6 @@ export interface AuditLogListParams {
   date_to?: string;
   sort_order?: "asc" | "desc";
 }
-
-// ── Offline Sync ──────────────────────────────────────────────────────────────
 
 export type SyncStatus = "pending" | "synced" | "conflict" | "failed";
 export type SyncRecordType = "attendance" | "inventory_transaction";

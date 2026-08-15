@@ -1,10 +1,3 @@
-"""add session_id to scan_attempts
-
-Revision ID: 1f2e3d4c5b6a
-Revises: d7e8f9a0b1c2
-Create Date: 2026-08-11 00:00:00.000000
-
-"""
 from typing import Sequence, Union
 
 from alembic import op

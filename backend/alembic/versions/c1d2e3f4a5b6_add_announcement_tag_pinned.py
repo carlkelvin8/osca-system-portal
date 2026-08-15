@@ -1,9 +1,3 @@
-"""Add tag and pinned columns to announcements table
-
-Revision ID: c1d2e3f4a5b6
-Revises: b8c9d0e1f2a3
-Create Date: 2026-07-28
-"""
 from alembic import op
 import sqlalchemy as sa
 

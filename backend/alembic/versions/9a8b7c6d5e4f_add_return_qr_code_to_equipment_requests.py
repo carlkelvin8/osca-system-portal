@@ -1,10 +1,3 @@
-"""add return_qr_code to equipment_requests
-
-Revision ID: 9a8b7c6d5e4f
-Revises: f3g4h5i6j7k8
-Create Date: 2026-07-31 09:00:00.000000
-
-"""
 from typing import Sequence, Union
 
 from alembic import op

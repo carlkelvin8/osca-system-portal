@@ -12,7 +12,6 @@ export function OfflineBanner() {
 
   return (
     <div className="space-y-0">
-      {/* Offline indicator */}
       {!isServerReachable && (
         <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border-b border-amber-200 text-amber-800 text-sm">
           <WifiOff size={14} className="shrink-0" />
@@ -27,7 +26,6 @@ export function OfflineBanner() {
         </div>
       )}
 
-      {/* Pending transactions */}
       {pendingCount > 0 && (
         <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 border-b border-blue-200 text-blue-800 text-sm">
           <CloudOff size={14} className="shrink-0" />

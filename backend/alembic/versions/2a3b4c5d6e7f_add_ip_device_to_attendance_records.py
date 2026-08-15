@@ -1,10 +1,3 @@
-"""add ip_address and device to attendance_records
-
-Revision ID: 2a3b4c5d6e7f
-Revises: 1f2e3d4c5b6a
-Create Date: 2026-08-13 00:00:00.000000
-
-"""
 from typing import Sequence, Union
 
 from alembic import op

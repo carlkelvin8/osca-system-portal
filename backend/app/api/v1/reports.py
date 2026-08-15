@@ -1,7 +1,3 @@
-"""
-Report generation endpoints: attendance PDF/XLSX, inventory PDF/XLSX,
-and daily/weekly/monthly attendance logs with export.
-"""
 import csv
 import io
 from datetime import UTC, date, datetime, time, timedelta
@@ -45,7 +41,6 @@ async def _log_report_export(
     fmt: str,
     target: str,
 ) -> None:
-    """Audit-log a report generation / export action."""
     if fmt == "json":
         return
     await audit_log(
@@ -241,8 +236,6 @@ async def inventory_monthly(
         )
     return result
 
-
-# ── Daily / Weekly / Monthly Attendance Logs ─────────────────────────────────
 
 async def _fetch_attendance_logs(
     db: AsyncSession,
@@ -515,10 +508,7 @@ async def monthly_attendance(
     return rows
 
 
-# ── Shared row renderers (CSV / XLSX / PDF) ────────────────────────────────────
-
 def _fmt_val(v):
-    """Stringify a value for CSV/PDF output (human-readable datetimes)."""
     if v is None:
         return ""
     if isinstance(v, datetime):
@@ -537,7 +527,6 @@ def _fmt_val(v):
 
 
 def _fmt_iso_time(value: str) -> str:
-    """Format an ISO datetime string (e.g. time_in) as 03:17 PM; '—' when unavailable."""
     if not value:
         return "—"
     try:
@@ -548,7 +537,6 @@ def _fmt_iso_time(value: str) -> str:
 
 
 def _fmt_iso_date(value: str) -> str:
-    """Format an ISO date string (e.g. attendance_date) as August 13, 2026; '—' when unavailable."""
     if not value:
         return "—"
     try:
@@ -559,7 +547,6 @@ def _fmt_iso_date(value: str) -> str:
 
 
 def _xlsx_val(v):
-    """Convert a value to an openpyxl-safe cell value (no tz-aware datetimes)."""
     if v is None:
         return ""
     if isinstance(v, datetime):
@@ -646,7 +633,6 @@ async def _export_rows(
     date_from=None,
     date_to=None,
 ) -> StreamingResponse | list:
-    """Audit + stream a row-based report in the requested format."""
     if fmt == "json":
         return rows
     await _log_report_export(db, user, report_name, period, fmt, f"{date_from or 'all'} – {date_to or 'all'}")
@@ -710,8 +696,6 @@ def _build_monthly_csv(report: dict) -> str:
     output.seek(0)
     return output.getvalue()
 
-
-# ── Inventory Reports ──────────────────────────────────────────────────────────
 
 async def _fetch_inventory_items_map(db: AsyncSession, transaction_ids: list) -> dict:
     if not transaction_ids:
@@ -895,8 +879,6 @@ async def lost_damaged_equipment_report(
                               "lost-damaged", "lost-damaged", date_from, date_to)
 
 
-# ── Facilities Reports ─────────────────────────────────────────────────────────
-
 async def _fetch_venue_reservations(db: AsyncSession, date_from, date_to) -> list[dict]:
     query = (
         select(VenueReservationRequest, Facility, User)
@@ -1027,8 +1009,6 @@ async def facility_status_report(
                               "All time", format, "facility-status", "facility-status")
 
 
-# ── Eligibility Reports ────────────────────────────────────────────────────────
-
 async def _fetch_eligibility(db: AsyncSession, statuses: list, date_from, date_to) -> list[dict]:
     query = (
         select(AthleteEligibility, User)
@@ -1113,8 +1093,6 @@ async def ineligible_students_report(
                                      "Ineligible Students Report", "ineligible-students",
                                      date_from, date_to, format)
 
-
-# ── Incidents Reports ──────────────────────────────────────────────────────────
 
 async def _fetch_incident_reports(db: AsyncSession, date_from, date_to) -> list[dict]:
     reporter = aliased(User)
@@ -1256,8 +1234,6 @@ async def incident_summary_log(
                               _range_label(date_from, date_to), format,
                               "incident-summary", "incident-summary", date_from, date_to)
 
-
-# ── Sanctions Reports ──────────────────────────────────────────────────────────
 
 async def _fetch_sanctions(db: AsyncSession, statuses: list | None, date_from, date_to) -> list[dict]:
     student = aliased(User)

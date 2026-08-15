@@ -1,11 +1,4 @@
 "use client";
-
-/**
- * Attendance Scan — authenticated facial-recognition time-in/time-out.
- *
- * Previously a public kiosk; now requires Admin, Coach, or PE Instructor login.
- * Students and unauthenticated users are redirected away.
- */
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -46,12 +39,8 @@ import Link from "next/link";
 
 const ALLOWED_ROLES = ["admin", "coach", "pe_instructor"] as const;
 
-/* ── Shared card token — matches the Dashboard design system (Student reference) ── */
-
 const CARD =
   "rounded-2xl border border-gray-100 bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04),0_12px_32px_-16px_rgba(16,24,40,0.10)]";
-
-/* ── Subtle decorative background (soft blue blobs behind the cards) ── */
 
 function DecoBg() {
   return (
@@ -63,16 +52,11 @@ function DecoBg() {
   );
 }
 
-/* ── OSCA NAAP banner — same approved design as the Dashboard, sticky ── */
-// Sticky so it stays visible at the top while the Kiosk content scrolls.
-// Bottom edge fades into the page background (theme-aware: #f7faff light, #0F172A dark).
-
 function KioskBanner() {
   const { isDark } = useThemeStore();
 
   return (
     <header className="sticky top-0 z-30 overflow-hidden rounded-b-[20px]">
-      {/* NAAP campus photo */}
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
         style={{
@@ -81,10 +65,8 @@ function KioskBanner() {
           backgroundPosition: "center",
         }}
       />
-      {/* Soft deep-navy overlay — photo stays visible underneath */}
       <div className="absolute inset-0 bg-gradient-to-r from-[#061a38]/95 via-[#123b68]/75 to-[#123b68]/45" />
 
-      {/* Smooth theme-aware fade into the page background — no hard wave/border */}
       <div
         aria-hidden
         className={`pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-gradient-to-b from-transparent md:h-16 ${
@@ -93,7 +75,6 @@ function KioskBanner() {
       />
 
       <div className="relative z-10 flex h-[150px] flex-col justify-center gap-4 px-6 py-6 md:h-[165px] md:flex-row md:items-center md:justify-between md:gap-5 md:px-10">
-        {/* Left: OSCA branding (logo sits directly on the photo, no white box) */}
         <div className="flex items-center gap-3 md:gap-4">
           <Image
             src="/osca-logo.png"
@@ -116,8 +97,6 @@ function KioskBanner() {
     </header>
   );
 }
-
-/* ── Small presentational helpers ── */
 
 function MetaRow({
   icon: Icon,
@@ -190,8 +169,6 @@ export default function KioskPage() {
   } | null>(null);
   const [consecutiveFailures, setConsecutiveFailures] = useState(0);
 
-  // ── Auth check ────────────────────────────────────────────────────────────
-
   useEffect(() => {
     fetchCurrentUser();
   }, [fetchCurrentUser]);
@@ -203,12 +180,9 @@ export default function KioskPage() {
       return;
     }
     if (!ALLOWED_ROLES.includes(user.role as typeof ALLOWED_ROLES[number])) {
-      // Students go back to the dashboard
       router.replace("/dashboard");
     }
   }, [authLoading, isAuthenticated, user, router]);
-
-  // ── Fetch active sessions ─────────────────────────────────────────────────
 
   const { data: sessionsData, isLoading: sessionsLoading } = useQuery<PaginatedResponse<Session>>({
     queryKey: ["kiosk-active-sessions"],
@@ -222,8 +196,6 @@ export default function KioskPage() {
 
   const activeSessions = sessionsData?.items ?? [];
 
-  // ── Today's overview stats ────────────────────────────────────────────────
-
   const { data: sessionStats } = useQuery<SessionStats | null>({
     queryKey: ["kiosk-session-stats", selectedSessionId],
     queryFn: async () => {
@@ -235,8 +207,6 @@ export default function KioskPage() {
     retry: false,
     staleTime: 30_000,
   });
-
-  // ── Last successful attendance (fetched from the backend, not local state) ──
 
   const queryClient = useQueryClient();
   const { data: latestAttendance } = useQuery<LatestAttendance | null>({
@@ -252,14 +222,11 @@ export default function KioskPage() {
     placeholderData: (prev) => prev,
   });
 
-  // ── Facial recognition hook ───────────────────────────────────────────────
-
   const { webcamRef, isScanning, captureAndScan } = useFacialRecognition({
     sessionId: selectedSessionId ?? "",
     scanType,
     onSuccess: (result: FaceScanResponse) => {
       setConsecutiveFailures(0);
-      // A non-student match is identity verification only — no attendance recorded.
       const isStaff = !!result.matched_user_role && result.matched_user_role !== "student";
       setFeedback({
         type: "success",
@@ -294,8 +261,6 @@ export default function KioskPage() {
     },
   });
 
-  // ── Loading / auth guard ──────────────────────────────────────────────────
-
   if (authLoading || !user) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#1E3A5F]">
@@ -306,8 +271,6 @@ export default function KioskPage() {
 
   const roleLabel = user.role.replace("_", " ").toUpperCase();
 
-  // ── Session selector ──────────────────────────────────────────────────────
-
   if (!selectedSessionId) {
     return (
       <div className="relative flex flex-col bg-[#f7faff]">
@@ -315,7 +278,6 @@ export default function KioskPage() {
         <KioskBanner />
 
         <main className="relative z-10 mx-auto flex w-full max-w-2xl flex-col space-y-4 px-6 pb-8 pt-4">
-          {/* Back to dashboard */}
           <div className="-ml-6">
             <Link
               href="/dashboard"
@@ -329,7 +291,6 @@ export default function KioskPage() {
             </Link>
           </div>
 
-          {/* Centered heading */}
           <div className="text-center">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#1557C0] to-[#071A3A] shadow-lg">
               <ScanFace className="text-white" size={30} />
@@ -343,7 +304,6 @@ export default function KioskPage() {
             <div className="mx-auto mt-3 h-0.5 w-16 rounded-full bg-[#1557C0]" />
           </div>
 
-          {/* Session list card */}
           <div className={`${CARD} p-6`}>
             <h2 className="text-xs font-bold uppercase tracking-wider text-[#1E3A5F]">
               Active Sessions
@@ -389,8 +349,6 @@ export default function KioskPage() {
     );
   }
 
-  // ── Resolved session name ─────────────────────────────────────────────────
-
   const activeSession = activeSessions.find((s) => s.id === selectedSessionId);
 
   const feedbackOverlay = feedback
@@ -400,8 +358,6 @@ export default function KioskPage() {
       ? { cls: "bg-red-600/95 text-white", Icon: XCircle }
       : { cls: "bg-amber-500/95 text-white", Icon: AlertCircle }
     : null;
-
-  // ── Last successful attendance (derived from the backend query) ───────────
 
   const latestIsStaff =
     !!latestAttendance?.person_role && latestAttendance.person_role !== "student";
@@ -427,15 +383,12 @@ export default function KioskPage() {
     .filter(Boolean)
     .join(" · ");
 
-  // ── Main scan interface ───────────────────────────────────────────────────
-
   return (
     <div className="relative flex min-h-screen flex-col bg-[#f7faff]">
       <DecoBg />
       <KioskBanner />
 
       <main className="relative z-10 mx-auto w-full max-w-6xl flex-1 space-y-7 px-6 py-10">
-        {/* Back to dashboard */}
         <div>
           <Link
             href="/dashboard"
@@ -449,7 +402,6 @@ export default function KioskPage() {
           </Link>
         </div>
 
-        {/* Centered page title */}
         <div className="text-center">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#1557C0] to-[#071A3A] shadow-lg">
             <ScanFace className="text-white" size={30} />
@@ -463,11 +415,8 @@ export default function KioskPage() {
           <div className="mx-auto mt-3 h-0.5 w-16 rounded-full bg-[#1557C0]" />
         </div>
 
-        {/* Two-column layout */}
         <div className="grid gap-6 lg:grid-cols-3">
-          {/* Left column (wider) */}
           <div className="space-y-7 lg:col-span-2">
-            {/* Active attendance session card */}
             <div className={`${CARD} border-l-4 border-l-[#1557C0] p-6`}>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <h2 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#1E3A5F]">
@@ -540,13 +489,11 @@ export default function KioskPage() {
               </div>
             </div>
 
-            {/* Facial recognition scan card */}
             <div className={`${CARD} p-6`}>
               <h2 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#1E3A5F]">
                 <ScanFace size={15} /> Facial recognition scan
               </h2>
 
-              {/* Scan type toggle */}
               <div className="mt-5 flex gap-2">
                 {(["time_in", "time_out"] as const).map((type) => (
                   <button
@@ -563,7 +510,6 @@ export default function KioskPage() {
                 ))}
               </div>
 
-              {/* Camera frame */}
               <div className="relative mt-5 overflow-hidden rounded-2xl border border-gray-200 bg-black">
                 <Webcam
                   ref={webcamRef as React.RefObject<Webcam>}
@@ -580,20 +526,17 @@ export default function KioskPage() {
                   className="mx-auto block"
                 />
 
-                {/* Corner brackets */}
                 <div className="pointer-events-none absolute left-3 top-3 h-8 w-8 rounded-tl-lg border-l-4 border-t-4 border-[#1557C0]/70" />
                 <div className="pointer-events-none absolute right-3 top-3 h-8 w-8 rounded-tr-lg border-r-4 border-t-4 border-[#1557C0]/70" />
                 <div className="pointer-events-none absolute bottom-3 left-3 h-8 w-8 rounded-bl-lg border-b-4 border-l-4 border-[#1557C0]/70" />
                 <div className="pointer-events-none absolute bottom-3 right-3 h-8 w-8 rounded-br-lg border-b-4 border-r-4 border-[#1557C0]/70" />
 
-                {/* Face guide oval */}
                 {!isScanning && !feedback && (
                   <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                     <div className="h-60 w-48 rounded-[50%] border-2 border-white/60 shadow-[0_0_40px_10px_rgba(21,87,192,0.25)]" />
                   </div>
                 )}
 
-                {/* Scanning spinner overlay */}
                 {isScanning && (
                   <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/50">
                     <Loader2 className="animate-spin text-white" size={60} />
@@ -601,7 +544,6 @@ export default function KioskPage() {
                   </div>
                 )}
 
-                {/* Success / error / warning overlay */}
                 {feedback && feedbackOverlay && (
                   <div
                     className={`absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 px-6 text-center ${feedbackOverlay.cls}`}
@@ -613,7 +555,6 @@ export default function KioskPage() {
                 )}
               </div>
 
-              {/* Scan button */}
               <button
                 onClick={captureAndScan}
                 disabled={isScanning || !selectedSessionId}
@@ -636,9 +577,7 @@ export default function KioskPage() {
             </div>
           </div>
 
-          {/* Right column (narrower) */}
           <div className="space-y-7">
-            {/* Today's attendance overview */}
             <div className={`${CARD} p-6`}>
               <h2 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#1E3A5F]">
                 <Calendar size={15} /> Today&apos;s attendance overview
@@ -678,7 +617,6 @@ export default function KioskPage() {
                   </p>
             </div>
 
-            {/* Last successful attendance */}
             <div className={`${CARD} p-6`}>
               <h2 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#1E3A5F]">
                 <Award size={15} /> Last successful attendance
@@ -719,7 +657,6 @@ export default function KioskPage() {
           </div>
         </div>
 
-        {/* Reminders strip */}
         <div className="grid gap-4 rounded-2xl border border-[#1557C0]/10 bg-[#1557C0]/5 p-5 sm:grid-cols-2">
           <div className="flex items-start gap-3">
             <Info className="mt-0.5 shrink-0 text-[#1557C0]" size={18} />
@@ -737,7 +674,6 @@ export default function KioskPage() {
         </div>
       </main>
 
-      {/* Bottom status bar */}
       <footer className="relative z-10 mt-7 border-t border-white/10 bg-[#0c1c33] px-6 py-4">
         <div className="mx-auto grid w-full max-w-6xl grid-cols-1 items-center gap-3 text-center sm:grid-cols-3">
           <p className="flex items-center justify-center gap-2 text-xs font-medium text-blue-200 sm:justify-start">

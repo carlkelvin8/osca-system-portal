@@ -1,8 +1,3 @@
-"""
-Offline-First Sync Mode models.
-Stores locally-cached records that were created while offline
-and tracks their sync status.
-"""
 import enum
 import uuid
 from datetime import datetime
@@ -47,7 +42,6 @@ class OfflineSyncRecord(Base):
     synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    # Relationships
     user: Mapped["User"] = relationship(foreign_keys=[user_id])
 
     __table_args__ = (

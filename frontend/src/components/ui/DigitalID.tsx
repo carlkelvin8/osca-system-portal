@@ -33,7 +33,6 @@ const DigitalID = forwardRef<HTMLDivElement, DigitalIDProps>(
 
     return (
       <>
-        {/* QR Zoom Modal */}
         {qrZoom && qrDataUrl && (
           <div
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
@@ -70,10 +69,8 @@ const DigitalID = forwardRef<HTMLDivElement, DigitalIDProps>(
         className="w-full max-w-[540px] rounded-2xl overflow-hidden shadow-xl bg-[#0d1f3c] text-white"
         style={{ fontFamily: "Inter, system-ui, sans-serif" }}
       >
-        {/* Gold accent line */}
         <div className="h-[3px] bg-[#C9A84C]" />
 
-        {/* Header */}
         <div className="flex items-center gap-3 px-5 pt-4 pb-2">
           <img
             src="/osca-logo.png"
@@ -93,12 +90,9 @@ const DigitalID = forwardRef<HTMLDivElement, DigitalIDProps>(
           </div>
         </div>
 
-        {/* Thin divider */}
         <div className="mx-5 border-t border-white/10" />
 
-        {/* Main body: left info + right QR */}
         <div className="flex items-stretch gap-4 px-5 py-3 min-h-[130px]">
-          {/* Left: photo + details */}
           <div className="flex items-center gap-3 flex-1 min-w-0">
             <div className="w-[52px] h-[52px] rounded-full border-2 border-[#C9A84C] overflow-hidden shrink-0 bg-white/10 flex items-center justify-center">
               {user.profile_picture_url ? (
@@ -142,7 +136,6 @@ const DigitalID = forwardRef<HTMLDivElement, DigitalIDProps>(
             </div>
           </div>
 
-          {/* Right: QR Code */}
           {qrDataUrl && (
             <div
               className="flex flex-col items-center justify-center shrink-0 cursor-pointer"
@@ -162,10 +155,8 @@ const DigitalID = forwardRef<HTMLDivElement, DigitalIDProps>(
           )}
         </div>
 
-        {/* Bottom divider */}
         <div className="mx-5 border-t border-white/10" />
 
-        {/* Bottom row: ID + Valid Thru */}
         <div className="flex items-center px-5 py-2.5 gap-4">
           <div className="flex-1">
             <p className="text-[8px] text-white/40 uppercase tracking-wider">

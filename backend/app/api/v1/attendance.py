@@ -1,6 +1,3 @@
-"""
-Attendance endpoints: sessions, kiosk face-scan, facial enrollment, records.
-"""
 import base64
 import ipaddress
 import time
@@ -47,9 +44,7 @@ from app.services.audit_service import audit_log
 from app.services.facial_recognition import FacialRecognitionService
 from app.services.fr_config_service import FRConfigService
 
-# Number of consecutive scan failures from one kiosk IP that triggers an admin alert
 _CONSEC_FAIL_LIMIT = 3
-# TTL for the consecutive-failure counter key (seconds)
 _CONSEC_FAIL_WINDOW = 300
 
 router = APIRouter()
@@ -57,7 +52,6 @@ logger = structlog.get_logger(__name__)
 
 
 def _get_fr_service(request: Request) -> FacialRecognitionService:
-    """Retrieve pre-warmed FR service from app state."""
     svc = getattr(request.app.state, "fr_service", None)
     if svc is None:
         raise HTTPException(
@@ -68,7 +62,6 @@ def _get_fr_service(request: Request) -> FacialRecognitionService:
 
 
 def _performed_by(user: User | None) -> str:
-    """Human label for 'performed by': role of the operator, or 'system'."""
     if user is None:
         return "system"
     role = getattr(user, "role", None)
@@ -76,12 +69,6 @@ def _performed_by(user: User | None) -> str:
 
 
 def _is_trusted_proxy_host(host: str | None) -> bool:
-    """True when the direct peer is a loopback/private address (e.g. nginx inside Docker).
-
-    This gates X-Forwarded-For trust: a public (untrusted) peer can never inject a
-    spoofed client IP, so the header is only honored when the immediate connection
-    originates from our own reverse proxy / internal network.
-    """
     if not host:
         return False
     try:
@@ -92,12 +79,6 @@ def _is_trusted_proxy_host(host: str | None) -> bool:
 
 
 def _client_ip(request: Request) -> str | None:
-    """Extract the real client IP from the request, honoring proxy headers safely.
-
-    Behind the nginx reverse proxy, request.client.host is nginx's Docker IP, so we
-    read the first entry of X-Forwarded-For — but ONLY when the direct peer is a
-    trusted (private/loopback) proxy. Otherwise fall back to the direct peer.
-    """
     peer = request.client.host if request.client else None
     xff = request.headers.get("x-forwarded-for")
     if xff and _is_trusted_proxy_host(peer):
@@ -108,10 +89,6 @@ def _client_ip(request: Request) -> str | None:
 
 
 def _parse_device(user_agent: str | None) -> str | None:
-    """Return a readable 'Browser • OS' label from a User-Agent header (or None).
-
-    Only the short human-readable form is stored — never the raw User-Agent string.
-    """
     if not user_agent:
         return None
     ua = user_agent
@@ -157,7 +134,6 @@ def _parse_device(user_agent: str | None) -> str | None:
 
 
 def _jsonable(data: dict) -> dict:
-    """Stringify UUID / date / datetime / time values so dicts are JSONB-safe for audit logs."""
     import datetime as _dt
 
     out = {}
@@ -174,7 +150,6 @@ def _jsonable(data: dict) -> dict:
 
 
 def _validate_coach_session_sport(current_user: User, sport_or_art: str | None) -> None:
-    """Coaches may only create/manage sessions for their assigned sport or art."""
     if current_user.role != UserRole.COACH:
         return
     if not current_user.assigned_sport or sport_or_art != current_user.assigned_sport:
@@ -193,12 +168,6 @@ async def _enforce_coach_session_scope(
     method: str | None = None,
     scan_type: AttendanceScanType | None = None,
 ) -> None:
-    """
-    Coaches may only manage/scan sessions for their assigned sport or art.
-
-    Non-coaches pass through. A coach with a mismatched (or missing) assigned
-    sport gets an audit-logged block + 403.
-    """
     if current_user.role != UserRole.COACH:
         return
     if not current_user.assigned_sport or session.sport_or_art != current_user.assigned_sport:
@@ -248,14 +217,6 @@ async def _attendance_audit(
     request: Request | None = None,
     ip_address: str | None = None,
 ) -> None:
-    """
-    Audit log helper for the Attendance module.
-
-    Every entry is enriched with the fields required for attendance monitoring:
-    student full name / ID, sport-or-art, session name, date & time, attendance
-    status, method (facial_recognition / qr_code / manual), action, performer,
-    result, and failure reason.
-    """
     details: dict = {
         "student_name": student.full_name if student else None,
         "student_id": getattr(student, "student_id", None),
@@ -299,11 +260,8 @@ async def _attendance_audit(
 
 
 def _check_active_sanction(sanctions) -> Sanction | None:
-    """Return the most recent ACTIVE sanction for a student (if any)."""
     return sanctions[0] if sanctions else None
 
-
-# ── Sessions ──────────────────────────────────────────────────────────────────
 
 @router.post(
     "/sessions",
@@ -362,24 +320,17 @@ async def list_sessions(
     sport_or_art: str | None = Query(None),
     is_active: bool | None = Query(None),
 ) -> PaginatedResponse[SessionRead]:
-    # PE Instructors have no attendance access
     if current_user.role == UserRole.PE_INSTRUCTOR:
         return PaginatedResponse(items=[], total=0, page=page, page_size=page_size, pages=0)
 
     query = select(Session)
-    # Coaches only see their assigned sport's sessions
     if current_user.role == UserRole.COACH and current_user.assigned_sport:
         query = query.where(Session.sport_or_art == current_user.assigned_sport)
-    # Students only see sessions matching their sport_or_art
     if current_user.role == UserRole.STUDENT and current_user.sport_or_art:
         query = query.where(Session.sport_or_art == current_user.sport_or_art)
     if sport_or_art:
         query = query.where(Session.sport_or_art == sport_or_art)
 
-    # is_active filter was accepted as a query param but never applied — this
-    # caused ended/closed sessions to still appear (e.g. in /kiosk).
-    # An ACTIVE session must be: not ended/closed AND still inside its scannable
-    # window (scheduled_end + grace), matching the scan hard cutoff.
     if is_active is True:
         query = query.where(
             Session.is_active.is_(True),
@@ -520,7 +471,6 @@ async def get_latest_attendance(
             confidence_score=confidence,
         )
 
-    # 1) Prefer the latest successful face scan performed against this session.
     scan_row = (
         await db.execute(
             select(ScanAttempt, User)
@@ -536,7 +486,6 @@ async def get_latest_attendance(
     if scan_row:
         scan, scanned_user = scan_row
 
-        # Enrich with the attendance record when the matched user is a student.
         record = None
         if scanned_user.role == UserRole.STUDENT:
             rec = await db.execute(
@@ -564,7 +513,6 @@ async def get_latest_attendance(
             confidence=scan.confidence_score,
         )
 
-    # 2) Fallback: latest attendance record (covers pre-session_id scan history).
     rec_row = (
         await db.execute(
             select(AttendanceRecord, User)
@@ -616,7 +564,6 @@ async def update_session(
     if "sport_or_art" in update_data:
         _validate_coach_session_sport(current_user, update_data["sport_or_art"])
 
-    # Validate scheduled_end > scheduled_start if both are being set
     new_start = update_data.get("scheduled_start", session.scheduled_start)
     new_end = update_data.get("scheduled_end", session.scheduled_end)
     if new_end <= new_start:
@@ -799,8 +746,6 @@ async def delete_session(
     return MessageResponse(message=f"Session '{session.name}' deleted")
 
 
-# ── Face Enrollment ───────────────────────────────────────────────────────────
-
 @router.post(
     "/enroll",
     response_model=EnrollmentResponse,
@@ -812,13 +757,6 @@ async def enroll_face(
     db: Annotated[AsyncSession, Depends(get_db)],
     fr_service: Annotated[FacialRecognitionService, Depends(_get_fr_service)],
 ) -> EnrollmentResponse:
-    # Face enrollment rules:
-    #   - Any user may enroll their OWN face (includes Admin/Director/Staff/Coach/
-    #     PE Instructor, so OSCA personnel can register biometrics for kiosk
-    #     identity verification — no student attendance is ever recorded for them).
-    #   - Students may only enroll their own face.
-    #   - Coaches may enroll students from their assigned sport/art.
-    #   - Admin may enroll anyone.
     is_self = current_user.id == body.user_id
     if not is_self and current_user.role == UserRole.STUDENT:
         raise HTTPException(
@@ -826,13 +764,11 @@ async def enroll_face(
             detail="Students can only enroll their own face.",
         )
 
-    # Verify user exists and has given consent
     result = await db.execute(select(User).where(User.id == body.user_id))
     user = result.scalar_one_or_none()
     if not user:
         raise NotFoundError("User", str(body.user_id))
 
-    # Coaches may only enroll students from their assigned sport/art
     if not is_self and current_user.role == UserRole.COACH:
         if user.role != UserRole.STUDENT or user.sport_or_art != current_user.assigned_sport:
             raise HTTPException(
@@ -845,7 +781,6 @@ async def enroll_face(
             detail="User has not provided biometric consent (R.A. 10173)",
         )
 
-    # Decode images
     images_bytes = []
     for img_b64 in body.images_base64:
         try:
@@ -853,7 +788,6 @@ async def enroll_face(
         except Exception:
             raise HTTPException(status_code=400, detail="Invalid base64 image data")
 
-    # Generate embedding
     try:
         embedding, model_used, minio_keys = await fr_service.enroll_face(
             user_id=str(body.user_id),
@@ -865,7 +799,6 @@ async def enroll_face(
         logger.error("face_enroll_failed", error=str(e))
         raise HTTPException(status_code=500, detail="Face enrollment failed due to an internal error.")
 
-    # Upsert embedding
     existing = await db.execute(select(FaceEmbedding).where(FaceEmbedding.user_id == body.user_id))
     face_emb = existing.scalar_one_or_none()
     if face_emb:
@@ -908,8 +841,6 @@ async def enroll_face(
     )
 
 
-# ── Kiosk Face Scan ────────────────────────────────────────────────────────────
-
 @router.post(
     "/scan",
     response_model=FaceScanResponse,
@@ -925,13 +856,11 @@ async def face_scan(
 ) -> FaceScanResponse:
     start_time = time.monotonic()
 
-    # Decode image
     try:
         image_bytes = base64.b64decode(body.image_base64)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid base64 image")
 
-    # Verify session exists (log before blocking when inactive/missing)
     session_result = await db.execute(select(Session).where(Session.id == body.session_id))
     session = session_result.scalar_one_or_none()
     if not session:
@@ -967,7 +896,6 @@ async def face_scan(
         await db.commit()
         raise HTTPException(status_code=400, detail="Session is not active")
 
-    # PE Instructors cannot use attendance scan
     if current_staff.role == UserRole.PE_INSTRUCTOR:
         await _attendance_audit(
             db=db,
@@ -987,7 +915,6 @@ async def face_scan(
             detail="PE Instructors are not allowed to scan attendance",
         )
 
-    # Coaches may only scan sessions for their assigned sport/art
     await _enforce_coach_session_scope(
         db, current_staff, session,
         action="ATTENDANCE_ATTEMPT_BLOCKED",
@@ -995,7 +922,6 @@ async def face_scan(
         scan_type=body.scan_type,
     )
 
-    # Students can only scan sessions matching their assigned sport_or_art
     if current_staff.role == UserRole.STUDENT and current_staff.sport_or_art and session.sport_or_art:
         if current_staff.sport_or_art != session.sport_or_art:
             await _attendance_audit(
@@ -1020,7 +946,6 @@ async def face_scan(
                 detail="This session does not match your assigned sport or art",
             )
 
-    # Fetch all embeddings for comparison
     emb_result = await db.execute(
         select(FaceEmbedding).join(User).where(User.is_active == True, User.is_face_enrolled == True)
     )
@@ -1046,13 +971,11 @@ async def face_scan(
             message="No enrolled students in system",
         )
 
-    # Resolve runtime FR thresholds from Redis (US-007: admin-configurable)
     fr_config = FRConfigService(redis)
     sim_threshold = await fr_config.get_similarity_threshold()
     live_threshold = await fr_config.get_liveness_threshold()
     live_enabled = await fr_config.get_liveness_enabled()
 
-    # Run facial recognition with runtime thresholds
     match_result = await fr_service.identify_face(
         image_bytes=image_bytes,
         stored_embeddings=[(emb.user_id, emb.embedding) for emb in all_embeddings],
@@ -1064,7 +987,6 @@ async def face_scan(
     processing_ms = int((time.monotonic() - start_time) * 1000)
     kiosk_ip = request.client.host if request.client else "unknown"
 
-    # Log scan attempt
     scan_attempt = ScanAttempt(
         scan_type=body.scan_type,
         result=match_result.result,
@@ -1095,7 +1017,6 @@ async def face_scan(
             performer=current_staff,
         )
 
-        # ── Consecutive-failure tracking (US-005 AC: alert on 3 failures) ───
         consec_key = f"fr_consec_fails:{kiosk_ip}"
         failure_count = await redis.incr(consec_key)
         await redis.expire(consec_key, _CONSEC_FAIL_WINDOW)
@@ -1116,7 +1037,7 @@ async def face_scan(
                 },
                 ip_address=kiosk_ip,
             )
-            await redis.delete(consec_key)  # reset so next N failures trigger a fresh alert
+            await redis.delete(consec_key)
             logger.warning(
                 "fr_consecutive_failures_alert",
                 kiosk_ip=kiosk_ip,
@@ -1132,13 +1053,11 @@ async def face_scan(
             message=match_result.failure_reason or "Recognition failed",
         )
 
-    # Reset consecutive-failure counter on success
     await redis.delete(f"fr_consec_fails:{kiosk_ip}")
 
     user_id = match_result.user_id
     matched_user = await db.get(User, user_id)
 
-    # Blocked: student account inactive
     if not matched_user or not matched_user.is_active:
         await _attendance_audit(
             db=db,
@@ -1159,8 +1078,6 @@ async def face_scan(
             message="Student account is inactive",
         )
 
-    # Non-students (Admin / Director / Staff / Coach / PE Instructor) are matched
-    # for identity verification ONLY — never recorded as student attendance.
     if matched_user.role != UserRole.STUDENT:
         await _attendance_audit(
             db=db,
@@ -1203,7 +1120,6 @@ async def face_scan(
             message="Face Recognized",
         )
 
-    # Blocked: active sanction
     active_sanction_result = await db.execute(
         select(Sanction)
         .where(
@@ -1242,7 +1158,6 @@ async def face_scan(
             message="Attendance blocked: student has an active sanction",
         )
 
-    # Fetch existing attendance record for this student+session
     att_result = await db.execute(
         select(AttendanceRecord).where(
             AttendanceRecord.student_id == user_id,
@@ -1253,7 +1168,6 @@ async def face_scan(
 
     if body.scan_type == AttendanceScanType.TIME_IN:
         if record:
-            # Already timed in — idempotent response but still logged
             await _attendance_audit(
                 db=db,
                 action="ATTENDANCE_DUPLICATE_ATTEMPT",
@@ -1325,8 +1239,6 @@ async def face_scan(
 
     elif body.scan_type == AttendanceScanType.TIME_OUT:
         if not record or not record.time_in:
-            # Primary face match didn't find a user with time-in.
-            # Fallback: re-match against only users who have active time-in for this session.
             active_in_result = await db.execute(
                 select(AttendanceRecord.student_id).where(
                     AttendanceRecord.session_id == body.session_id,
@@ -1436,8 +1348,6 @@ async def face_scan(
     )
 
 
-# ── Attendance Records ─────────────────────────────────────────────────────────
-
 @router.get(
     "/records",
     response_model=PaginatedResponse[AttendanceRecordRead],
@@ -1458,13 +1368,11 @@ async def get_attendance_records(
         .join(Session, AttendanceRecord.session_id == Session.id)
     )
 
-    # Students only see their own records
     if current_user.role == UserRole.STUDENT:
         query = query.where(AttendanceRecord.student_id == current_user.id)
     elif student_id:
         query = query.where(AttendanceRecord.student_id == student_id)
 
-    # Coaches only see records for their assigned sport's sessions
     if current_user.role == UserRole.COACH and current_user.assigned_sport:
         query = query.where(Session.sport_or_art == current_user.assigned_sport)
 
@@ -1496,14 +1404,11 @@ async def get_attendance_records(
                              pages=(total + page_size - 1) // page_size)
 
 
-# ── Manual Attendance (Admin / Director / Staff / Coach) ───────────────────────
-
 async def _load_manual_context(
     db: AsyncSession,
     session_id: uuid.UUID,
     student_id: uuid.UUID,
 ) -> tuple[Session, User]:
-    """Load session + student for manual/QR attendance endpoints."""
     sres = await db.execute(select(Session).where(Session.id == session_id))
     session = sres.scalar_one_or_none()
     if not session:
@@ -1535,7 +1440,6 @@ async def add_manual_attendance(
         db, current_user, session, action="MANUAL_ATTENDANCE_BLOCKED", method="manual"
     )
 
-    # Prevent duplicates (unique index: student_id + session_id)
     dup = await db.execute(
         select(AttendanceRecord).where(
             AttendanceRecord.student_id == body.student_id,
@@ -1683,7 +1587,6 @@ async def edit_manual_attendance(
     if "notes" in update_data:
         record.notes = update_data["notes"]
 
-    # Recompute duration / completeness
     if record.time_in and record.time_out:
         record.duration_minutes = int((record.time_out - record.time_in).total_seconds() / 60)
         record.is_complete = True
@@ -1820,7 +1723,6 @@ async def delete_manual_attendance(
 
 
 def _record_to_read(record: AttendanceRecord, session: Session | None, student: User | None) -> AttendanceRecordRead:
-    """Build an AttendanceRecordRead with session/student display fields."""
     ar = AttendanceRecordRead.model_validate(record)
     if student:
         ar.student_name = student.full_name
@@ -1831,10 +1733,7 @@ def _record_to_read(record: AttendanceRecord, session: Session | None, student: 
     return ar
 
 
-# ── QR Code Attendance Check-in ────────────────────────────────────────────────
-
 def _parse_student_qr(qr_code: str) -> uuid.UUID | None:
-    """Parse a student QR payload (STU-<uuid> / full uuid / 12-char hex) into a UUID."""
     raw = qr_code.strip()
     if raw.upper().startswith("STU-"):
         raw = raw[4:].strip()
@@ -1856,7 +1755,6 @@ async def qr_check_in(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AttendanceRecordRead:
-    # Validate the scanned QR payload
     student_id = _parse_student_qr(body.qr_code)
     if student_id is None:
         await _attendance_audit(
@@ -1877,7 +1775,6 @@ async def qr_check_in(
             detail="Invalid student QR code",
         )
 
-    # Locate student
     ures = await db.execute(select(User).where(User.id == student_id))
     student = ures.scalar_one_or_none()
     if not student:
@@ -1896,7 +1793,6 @@ async def qr_check_in(
         await db.commit()
         raise HTTPException(status_code=404, detail="Student not found")
 
-    # Locate session
     sres = await db.execute(select(Session).where(Session.id == body.session_id))
     session = sres.scalar_one_or_none()
     if not session:
@@ -1931,12 +1827,10 @@ async def qr_check_in(
         await db.commit()
         raise HTTPException(status_code=400, detail="Session is not active")
 
-    # Coaches may only scan sessions for their assigned sport/art
     await _enforce_coach_session_scope(
         db, current_user, session, action="ATTENDANCE_ATTEMPT_BLOCKED", method="qr_code"
     )
 
-    # Inactive account
     if not student.is_active:
         await _attendance_audit(
             db=db,
@@ -1953,7 +1847,6 @@ async def qr_check_in(
         await db.commit()
         raise HTTPException(status_code=403, detail="Student account is inactive")
 
-    # Sport/art eligibility
     if student.sport_or_art and session.sport_or_art and student.sport_or_art != session.sport_or_art:
         await _attendance_audit(
             db=db,
@@ -1970,7 +1863,6 @@ async def qr_check_in(
         await db.commit()
         raise HTTPException(status_code=403, detail="This session does not match your assigned sport or art")
 
-    # Active sanction
     active_sanction_result = await db.execute(
         select(Sanction)
         .where(
@@ -1997,7 +1889,6 @@ async def qr_check_in(
         await db.commit()
         raise HTTPException(status_code=403, detail="Attendance blocked: student has an active sanction")
 
-    # Duplicate check
     dup = await db.execute(
         select(AttendanceRecord).where(
             AttendanceRecord.student_id == student.id,
@@ -2022,7 +1913,6 @@ async def qr_check_in(
         await db.commit()
         return _record_to_read(existing, session, student)
 
-    # Outside allowed time
     now = datetime.now(UTC)
     hard_cutoff = session.scheduled_end + timedelta(minutes=session.grace_period_minutes)
     if now > hard_cutoff:
@@ -2041,7 +1931,6 @@ async def qr_check_in(
         await db.commit()
         raise HTTPException(status_code=400, detail="Attendance attempt outside allowed time")
 
-    # Success — record check-in
     grace_deadline = session.scheduled_start + timedelta(minutes=session.grace_period_minutes)
     att_status = "present" if now <= grace_deadline else "late"
     record = AttendanceRecord(

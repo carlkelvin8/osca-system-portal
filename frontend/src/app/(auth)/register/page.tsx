@@ -1,16 +1,5 @@
 "use client";
 
-/**
- * US-002: User Self-Registration (Updated)
- * 4-step wizard: Account → Profile → Emergency & Consent → Profile Picture.
- * Supports all roles except admin. Student-specific fields are conditionally shown.
- *
- * Flow: register account → pending approval (admin must activate before login).
- *
- * Design: Direction 1 – Clean Professional (dark navy #0f172a auth shell,
- * white card, blue #1d4ed8 primary, aligned to OSCA PRD v2 frontend spec).
- */
-
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useForm, useController, type Control } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -35,14 +24,10 @@ import {
 } from "lucide-react";
 import type { UserRole } from "@/types";
 
-// ── Role options (no admin) ────────────────────────────────────────────────────
-
 const REGISTRATION_ROLES: { value: string; label: string }[] = [
   { value: "student_athlete", label: "Student Athlete" },
   { value: "student_artist", label: "Student Artist" },
 ];
-
-// ── Sports / Cultural Affairs options (for searchable Sport / Art field) ───────
 
 const SPORTS_OPTIONS: { group: string; items: string[] }[] = [
   {
@@ -68,8 +53,6 @@ const SPORTS_OPTIONS: { group: string; items: string[] }[] = [
   },
 ];
 
-// ── Course options (for searchable Course field) ────────────────────────────────
-
 const COURSES: string[] = [
   "BSAT",
   "BSAeE",
@@ -84,8 +67,6 @@ const COURSES: string[] = [
   "BSIT-AIT",
   "BSIS-AIS",
 ];
-
-// ── Zod schema ─────────────────────────────────────────────────────────────────
 
 const registerSchema = z
   .object({
@@ -158,8 +139,6 @@ const registerSchema = z
 
 type RegisterForm = z.infer<typeof registerSchema>;
 
-// ── Step labels ────────────────────────────────────────────────────────────────
-
 const STEPS = ["Account", "Profile", "Emergency & Consent", "Face Capture", "Profile Picture"];
 
 function getCroppedImg(imageSrc: string, pixelCrop: { x: number; y: number; width: number; height: number }): Promise<File> {
@@ -179,8 +158,6 @@ function getCroppedImg(imageSrc: string, pixelCrop: { x: number; y: number; widt
     image.src = imageSrc;
   });
 }
-
-// ── Field helper ───────────────────────────────────────────────────────────────
 
 function Field({
   label,
@@ -209,8 +186,6 @@ const inputCls =
   "w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white " +
   "focus:outline-none focus:ring-2 focus:ring-[#C9A84C]/50 focus:border-[#C9A84C]/50 " +
   "placeholder:text-white/25 transition-all";
-
-// ── Searchable Sport / Cultural Affairs combobox ────────────────────────────────
 
 function SportCombobox({
   control,
@@ -368,15 +343,12 @@ function CourseCombobox({
   );
 }
 
-// ── Component ──────────────────────────────────────────────────────────────────
-
 export default function RegisterPage() {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [apiError, setApiError] = useState<string | null>(null);
 
-  // Face enrollment state
-  const [faceImages, setFaceImages] = useState<string[]>([]); // base64 strings
+  const [faceImages, setFaceImages] = useState<string[]>([]);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -385,17 +357,14 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // Face enrollment result state
   const [createdUserId, setCreatedUserId] = useState<string | null>(null);
   const [faceEnrolled, setFaceEnrolled] = useState(false);
   const [faceEnrollLoading, setFaceEnrollLoading] = useState(false);
 
-  // Profile picture state
   const profilePicInputRef = useRef<HTMLInputElement>(null);
   const [profilePicFile, setProfilePicFile] = useState<File | null>(null);
   const [profilePicPreview, setProfilePicPreview] = useState<string | null>(null);
 
-  // Crop state
   const [cropSrc, setCropSrc] = useState<string | null>(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
@@ -417,15 +386,14 @@ export default function RegisterPage() {
   const selectedRole = watch("role");
   const isStudent = selectedRole === "student_athlete" || selectedRole === "student_artist";
 
-  // Fields per step — used for per-step validation before advancing
   const stepFields: (keyof RegisterForm)[][] = [
     ["email", "password", "confirmPassword", "role"],
     isStudent
       ? ["first_name", "last_name", "student_id", "course", "year_level", "sport_or_art"]
       : ["first_name", "last_name", "sport_or_art"],
     ["emergency_contact_name", "emergency_contact_number", "biometric_consent"],
-    [], // Step 3 — face capture, no form fields
-    [], // Step 4 — profile picture, optional
+    [],
+    [],
   ];
 
   const advance = async () => {
@@ -434,7 +402,6 @@ export default function RegisterPage() {
     if (valid) setStep((s) => s + 1);
   };
 
-  // Submit face enrollment: create user + enroll face, only advance if enrollment succeeds
   const submitFaceEnrollment = async () => {
     if (faceImages.length < 5) {
       setApiError("Please capture 5 face images before submitting.");
@@ -443,7 +410,6 @@ export default function RegisterPage() {
     setApiError(null);
     setFaceEnrollLoading(true);
 
-    // Validate all form fields up to this point
     const valid = await trigger();
     if (!valid) {
       setFaceEnrollLoading(false);
@@ -510,7 +476,6 @@ export default function RegisterPage() {
     }
   };
 
-  // Submit: upload profile picture if provided, then redirect
   const onSubmit = async (data: RegisterForm) => {
     setApiError(null);
 
@@ -519,19 +484,16 @@ export default function RegisterPage() {
       return;
     }
 
-    // Upload profile picture if provided
     if (profilePicFile) {
       try {
         await usersApi.uploadProfilePicture(createdUserId, profilePicFile);
       } catch {
-        // Profile picture upload failure is non-fatal
       }
     }
 
     router.push("/register/success");
   };
 
-  // Camera cleanup on unmount
   useEffect(() => {
     return () => {
       if (streamRef.current) {
@@ -540,7 +502,6 @@ export default function RegisterPage() {
     };
   }, []);
 
-  // Attach stream to video element once it mounts
   useEffect(() => {
     if (cameraActive && streamRef.current && videoRef.current) {
       videoRef.current.srcObject = streamRef.current;
@@ -549,8 +510,6 @@ export default function RegisterPage() {
   }, [cameraActive]);
 
 
-
-  // ── Camera helpers ─────────────────────────────────────────────────────────
 
   const startCamera = async () => {
     try {
@@ -578,7 +537,6 @@ export default function RegisterPage() {
     const video = videoRef.current;
     const canvas = canvasRef.current;
 
-    // Reject if camera feed is not ready
     if (!video.videoWidth || !video.videoHeight) {
       setApiError("Camera is not ready. Please wait a moment and try again.");
       return;
@@ -589,7 +547,6 @@ export default function RegisterPage() {
     const ctx = canvas.getContext("2d")!;
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    // ── Face detection: sample center region (where face should be) ───────
     const sampleW = Math.min(canvas.width, 320);
     const sampleH = Math.min(canvas.height, 240);
     const sx = Math.floor((canvas.width - sampleW) / 2);
@@ -614,8 +571,6 @@ export default function RegisterPage() {
       if (brightness > maxB) maxB = brightness;
       sampledPixels++;
 
-      // Skin-tone heuristic (works across light-to-medium skin tones)
-      // Conditions: R > 95, G > 40, B > 20, R-G > 15, R-B > 15, max(R,G,B) - min(R,G,B) > 15
       if (
         r > 95 && g > 40 && b > 20 &&
         r - g > 15 && r - b > 15 &&
@@ -629,7 +584,6 @@ export default function RegisterPage() {
     const contrastRange = maxB - minB;
     const skinRatio = skinPixels / sampledPixels;
 
-    // Reject if too dark, too flat, or no skin-tone pixels detected
     if (avgBrightness < 30) {
       setApiError("The image is too dark. Please ensure good lighting and try again.");
       return;
@@ -659,7 +613,6 @@ export default function RegisterPage() {
   };
 
   const handleCapture = useCallback(() => {
-    // 3-second countdown then capture
     setCaptureCountdown(3);
     let count = 3;
     const timer = setInterval(() => {
@@ -674,16 +627,12 @@ export default function RegisterPage() {
     }, 800);
   }, [captureImage]);
 
-  // ── Success screen ───────────────────────────────────────────────────────────
-
   return (
     <div className="min-h-screen flex bg-[#081428] relative overflow-hidden">
-      {/* Left brand panel — big logo */}
       <div className="hidden md:flex w-[42%] shrink-0 relative items-center justify-center bg-[#0d1f3c] border-r-4 border-[#C9A84C] overflow-hidden">
         <div className="absolute -top-[15%] -left-[15%] w-[60%] h-[60%] rounded-full opacity-20 animate-pulse" style={{ background: "radial-gradient(circle, #C9A84C, transparent 70%)", filter: "blur(90px)" }} />
         <div className="absolute -bottom-[15%] -right-[10%] w-[55%] h-[55%] rounded-full opacity-15 animate-pulse" style={{ background: "radial-gradient(circle, #1d4ed8, transparent 70%)", filter: "blur(90px)" }} />
         
-         {/* Back to Main Website */}
         <Link
           href="/"
           className="group absolute top-6 left-6 z-20 inline-flex items-center gap-2 text-xs font-semibold text-white/80 hover:text-white transition-all duration-300 ease-out"
@@ -714,9 +663,7 @@ export default function RegisterPage() {
         </div>
       </div>
 
-      {/* Right side — registration form */}
       <div className="flex-1 flex items-center justify-center relative overflow-hidden py-10">
-        {/* Animated background */}
         <div className="absolute inset-0">
           <div className="absolute -top-[40%] -left-[20%] w-[70vw] h-[70vw] rounded-full opacity-20 animate-pulse" style={{ background: "radial-gradient(circle, #1d4ed8, transparent 70%)", filter: "blur(80px)" }} />
           <div className="absolute top-[30%] -right-[15%] w-[50vw] h-[50vw] rounded-full opacity-15 animate-pulse" style={{ background: "radial-gradient(circle, #C9A84C, transparent 70%)", filter: "blur(80px)" }} />
@@ -724,7 +671,6 @@ export default function RegisterPage() {
         </div>
 
         <div className="relative z-10 bg-white/[0.03] backdrop-blur-xl border border-white/[0.08] rounded-3xl shadow-[0_8px_60px_rgba(0,0,0,0.4)] w-full max-w-lg mx-4">
-        {/* Header */}
         <div className="px-8 pt-8 pb-6 border-b border-white/[0.06]">
           <div className="flex items-center gap-3 mb-1">
             <div className="w-9 h-9 rounded-full bg-[#132a4d] border-2 border-[#C9A84C] overflow-hidden flex items-center justify-center shrink-0">
@@ -741,7 +687,6 @@ export default function RegisterPage() {
             </div>
           </div>
 
-          {/* Step indicator */}
           <div className="flex items-center gap-1 mt-5">
             {STEPS.map((label, i) => (
               <div key={i} className="flex items-center gap-1 flex-1">
@@ -772,7 +717,6 @@ export default function RegisterPage() {
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="px-8 py-6 space-y-4">
-          {/* ── STEP 0: Account ────────────────────────────────────────────── */}
           {step === 0 && (
             <>
               <p className="text-sm font-semibold text-white">Account Credentials</p>
@@ -835,7 +779,6 @@ export default function RegisterPage() {
             </>
           )}
 
-          {/* ── STEP 1: Profile ────────────────────────────────────────────── */}
           {step === 1 && (
             <>
               <p className="text-sm font-semibold text-white">
@@ -853,7 +796,6 @@ export default function RegisterPage() {
                 <input {...register("middle_name")} className={inputCls} placeholder="Optional" />
               </Field>
 
-              {/* Student-specific fields */}
               {isStudent && (
                 <>
                   <Field label="Student ID" error={errors.student_id?.message} required>
@@ -885,7 +827,6 @@ export default function RegisterPage() {
                 </>
               )}
 
-              {/* Coach/PE Instructor: assigned sport */}
               {(selectedRole === "coach" || selectedRole === "pe_instructor") && (
                 <Field label="Assigned Sport" error={errors.assigned_sport?.message}>
                   <input
@@ -924,7 +865,6 @@ export default function RegisterPage() {
             </>
           )}
 
-          {/* ── STEP 2: Emergency & Consent ────────────────────────────────── */}
           {step === 2 && (
             <>
               <p className="text-sm font-semibold text-white">Emergency Contact</p>
@@ -952,7 +892,6 @@ export default function RegisterPage() {
                 />
               </Field>
 
-              {/* Biometric Consent — R.A. 10173 */}
               <div className="mt-2 p-4 bg-[#fdf6e8] border border-[#e9d9a8] rounded-xl">
                 <div className="flex items-start gap-2 mb-2">
                   <ShieldCheck size={18} className="text-[#1d4ed8] mt-0.5 shrink-0" />
@@ -989,13 +928,10 @@ export default function RegisterPage() {
             </>
           )}
 
-          {/* ── STEP 3: Face Capture (Modal Style) ──────────────────────── */}
           {step === 3 && (
             <>
               <div className="flex flex-col items-center gap-4">
-                {/* ── Modal card ───────────────────────────────────────── */}
                 <div className="w-full bg-white/[0.06] backdrop-blur-xl border border-white/[0.1] rounded-2xl overflow-hidden shadow-[0_8px_40px_rgba(0,0,0,0.3)]">
-                  {/* Header */}
                   <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
                     <div>
                       <h3 className="text-base font-bold text-white">Face Capture</h3>
@@ -1016,9 +952,7 @@ export default function RegisterPage() {
                     )}
                   </div>
 
-                  {/* Body */}
                   <div className="px-5 py-4 space-y-4">
-                    {/* Instructions */}
                     <div className="flex items-start gap-2.5 bg-[#fdf6e8] border border-[#e9d9a8] rounded-xl px-4 py-3">
                       <Camera size={15} className="text-[#1d4ed8] mt-0.5 shrink-0" />
                       <p className="text-xs text-[#6b5424] leading-relaxed">
@@ -1027,7 +961,6 @@ export default function RegisterPage() {
                       </p>
                     </div>
 
-                    {/* Camera preview with face guide overlay */}
                     <div className="relative w-full max-w-xs mx-auto aspect-[3/4] rounded-2xl overflow-hidden bg-black border border-white/10">
                       {cameraActive ? (
                         <>
@@ -1038,18 +971,15 @@ export default function RegisterPage() {
                             muted
                             className="w-full h-full object-cover"
                           />
-                          {/* Oval face guide overlay */}
                           <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
                             <div
                               className="w-[55%] h-[65%] rounded-[50%] border-2 border-white/50"
                               style={{ boxShadow: "0 0 0 9999px rgba(0,0,0,0.35)" }}
                             />
                           </div>
-                          {/* Capture counter badge */}
                           <div className="absolute top-3 right-3 bg-black/50 backdrop-blur-sm text-white text-xs font-bold px-2.5 py-1 rounded-full">
                             {faceImages.length}/5
                           </div>
-                          {/* Countdown overlay */}
                           {captureCountdown !== null && (
                             <div className="absolute inset-0 flex items-center justify-center bg-black/30">
                               <span className="text-6xl font-bold text-white animate-pulse drop-shadow-lg">
@@ -1072,10 +1002,8 @@ export default function RegisterPage() {
                       )}
                     </div>
 
-                    {/* Hidden canvas */}
                     <canvas ref={canvasRef} className="hidden" />
 
-                    {/* Progress dots */}
                     <div className="flex items-center justify-center gap-2">
                       {[0, 1, 2, 3, 4].map((i) => (
                         <div
@@ -1089,7 +1017,6 @@ export default function RegisterPage() {
                       ))}
                     </div>
 
-                    {/* Capture button */}
                     {!cameraActive ? (
                       faceImages.length >= 5 ? null : (
                         <button
@@ -1111,7 +1038,6 @@ export default function RegisterPage() {
                       </button>
                     )}
 
-                    {/* Submit Face Enrollment button — shown after 5 captures, only if user not yet created */}
                     {faceImages.length >= 5 && !faceEnrolled && !createdUserId && (
                       <button
                         type="button"
@@ -1132,7 +1058,6 @@ export default function RegisterPage() {
                       </button>
                     )}
 
-                    {/* Captured thumbnails strip */}
                     {faceImages.length > 0 && (
                       <div className="flex items-center justify-center gap-2">
                         {faceImages.map((img, i) => (
@@ -1154,7 +1079,6 @@ export default function RegisterPage() {
                       </div>
                     )}
 
-                    {/* Success message */}
                     {faceImages.length >= 5 && !faceEnrolled && !faceEnrollLoading && (
                       <div className="flex items-center justify-center gap-2 text-[#C9A84C] text-xs font-medium">
                         <CheckCircle2 size={14} /> 5 face images captured — click Submit Face Enrollment below
@@ -1171,7 +1095,6 @@ export default function RegisterPage() {
             </>
           )}
 
-          {/* ── STEP 4: Profile Picture (Optional) ──────────────────────── */}
           {step === 4 && (
             <>
               <p className="text-sm font-semibold text-white">Profile Picture <span className="text-white/40 font-normal">(Optional)</span></p>
@@ -1183,7 +1106,6 @@ export default function RegisterPage() {
                 </p>
               </div>
 
-              {/* Upload area */}
               <div className="flex flex-col items-center gap-4">
                 {profilePicPreview ? (
                   <div className="relative">
@@ -1253,14 +1175,12 @@ export default function RegisterPage() {
             </>
           )}
 
-          {/* Show API errors for all steps */}
           {apiError && (
             <div className="bg-red-500/10 border border-red-500/20 text-red-300 text-sm px-4 py-3 rounded-xl">
               {apiError}
             </div>
           )}
 
-          {/* Show form validation errors when on last step */}
           {step === STEPS.length - 1 && Object.keys(errors).length > 0 && (
             <div className="bg-red-500/10 border border-red-500/20 text-red-300 text-sm px-4 py-3 rounded-xl">
               <p className="font-semibold mb-1">Please fix the following:</p>
@@ -1272,7 +1192,6 @@ export default function RegisterPage() {
             </div>
           )}
 
-          {/* ── Navigation buttons ──────────────────────────────────────────── */}
           <div className="flex gap-3 pt-2">
             {step > 0 && step !== 3 && (
               <button
@@ -1314,7 +1233,6 @@ export default function RegisterPage() {
             )}
           </div>
 
-          {/* Footer link */}
           <p className="text-center text-xs text-white/40 pt-1">
             Already have an account?{" "}
             <Link href="/login" className="text-[#C9A84C] font-medium hover:text-[#e6cf8c] transition">
@@ -1323,7 +1241,6 @@ export default function RegisterPage() {
           </p>
         </form>
 
-        {/* ── Crop Modal ─────────────────────────────────────────────── */}
         {cropSrc && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
             <div className="bg-[#0d1f3c] border border-white/10 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">

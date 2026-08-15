@@ -1,4 +1,3 @@
-"""Facility monitoring schemas."""
 import uuid
 from datetime import date, datetime, time
 from pydantic import BaseModel, Field
@@ -66,7 +65,6 @@ class ReservationRead(BaseModel):
     rejection_reason: str | None
     created_at: datetime
     updated_at: datetime
-    # Enriched fields
     requester_name: str | None = None
     requester_role: str | None = None
     facility_name: str | None = None

@@ -1,4 +1,3 @@
-"""Inventory and borrowing schemas."""
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -14,8 +13,6 @@ from app.schemas.common import OSCABaseModel
 
 REQUEST_QR_EXPIRY_MINUTES = 60
 
-
-# ── Equipment Schemas ──────────────────────────────────────────────────────────
 
 class EquipmentCreate(OSCABaseModel):
     name: str = Field(min_length=1, max_length=200)
@@ -62,8 +59,6 @@ class EquipmentRead(OSCABaseModel):
     created_at: datetime
 
 
-# ── BorrowingID Schemas ────────────────────────────────────────────────────────
-
 class BorrowingIDRead(OSCABaseModel):
     id: uuid.UUID
     instructor_id: uuid.UUID
@@ -74,21 +69,12 @@ class BorrowingIDRead(OSCABaseModel):
     issued_at: datetime
 
 
-# ── Borrow Transaction Schemas ─────────────────────────────────────────────────
-
 class BorrowItemRequest(OSCABaseModel):
-    """One equipment QR code scanned during borrowing."""
     equipment_qr: str
     quantity: int = Field(ge=1, default=1)
 
 
 class BorrowTransactionCreate(OSCABaseModel):
-    """
-    Admin-only direct borrow (bypasses request flow).
-    Step 1: PE Instructor scans Borrowing ID QR.
-    Step 2: Scan each equipment QR code.
-    Step 3: Confirm.
-    """
     borrowing_id_qr: str = Field(description="QR code value from the Borrowing ID card")
     items: list[BorrowItemRequest] = Field(min_length=1)
     expected_return: datetime
@@ -122,7 +108,6 @@ def _compute_return_qr_status(
     qr_invalidated: bool,
     status: TransactionStatus,
 ) -> str:
-    """Return 'active', 'expired', or 'used'."""
     if qr_invalidated or status in (TransactionStatus.RETURNED, TransactionStatus.PARTIAL_RETURN):
         return "used"
     now = datetime.now(timezone.utc)
@@ -151,22 +136,17 @@ class BorrowTransactionRead(OSCABaseModel):
 
 
 class ReturnRequest(OSCABaseModel):
-    """PE Instructor scans their Borrowing ID and each item being returned."""
     borrowing_id_qr: str
     items: list[BorrowItemRequest]
     notes: str | None = None
 
 
-# ── Equipment Request Schemas ──────────────────────────────────────────────────
-
 class EquipmentRequestItemCreate(OSCABaseModel):
-    """One equipment item in a new request."""
     equipment_id: uuid.UUID
     quantity: int = Field(ge=1, default=1)
 
 
 class EquipmentRequestCreate(OSCABaseModel):
-    """Coach / PE Instructor submits a borrowing request."""
     items: list[EquipmentRequestItemCreate] = Field(min_length=1)
     expected_return: datetime
     notes: str | None = None
@@ -220,7 +200,6 @@ class EquipmentRequestRead(OSCABaseModel):
 
 
 class RequesterActiveBorrow(OSCABaseModel):
-    """Simplified borrow info shown on EquipmentRequestRead for awareness."""
     id: uuid.UUID
     status: str
     borrowed_at: datetime
@@ -236,8 +215,6 @@ class ApproveRequestBody(OSCABaseModel):
 class RejectRequestBody(OSCABaseModel):
     rejection_reason: str = Field(min_length=1, max_length=500)
 
-
-# ── Staff Borrow Workflow Schemas ─────────────────────────────────────────────
 
 class ScannedUserEligibility(OSCABaseModel):
     status: str | None = None

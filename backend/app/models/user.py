@@ -1,6 +1,3 @@
-"""
-User model — stores all OSCA system users across all roles.
-"""
 import enum
 import uuid
 from datetime import date, datetime
@@ -22,12 +19,12 @@ from app.database import Base
 
 
 class UserRole(str, enum.Enum):
-    ADMIN = "admin"                  # OSCA office staff — full access
-    COACH = "coach"                  # Sport-team coaches — attendance for assigned sport
-    PE_INSTRUCTOR = "pe_instructor"  # PE professors — borrow/return transactions
-    STUDENT = "student"              # Student athletes/artists — self time-in/out
-    DIRECTOR = "director"            # OSCA Director — read-only dashboards
-    STAFF = "staff"                  # OSCA Staff — inventory + pending account approval
+    ADMIN = "admin"
+    COACH = "coach"
+    PE_INSTRUCTOR = "pe_instructor"
+    STUDENT = "student"
+    DIRECTOR = "director"
+    STAFF = "staff"
 
 
 class User(Base):
@@ -36,12 +33,10 @@ class User(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    # Identity
     student_id: Mapped[str | None] = mapped_column(String(20), unique=True, nullable=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
 
-    # Profile
     first_name: Mapped[str] = mapped_column(String(100), nullable=False)
     last_name: Mapped[str] = mapped_column(String(100), nullable=False)
     middle_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
@@ -56,13 +51,11 @@ class User(Base):
     employee_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
     department: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
-    # Student-specific fields
     sport_or_art: Mapped[str | None] = mapped_column(String(100), nullable=True)
     medical_info: Mapped[str | None] = mapped_column(Text, nullable=True)
     emergency_contact_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     emergency_contact_number: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
-    # RBAC
     role: Mapped[UserRole] = mapped_column(
         Enum(UserRole, name="user_role_enum"), nullable=False, default=UserRole.STUDENT
     )
@@ -71,19 +64,16 @@ class User(Base):
         comment="Coach: limits attendance management to this sport"
     )
 
-    # Account status
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_face_enrolled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     failed_login_attempts: Mapped[int] = mapped_column(default=0, nullable=False)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    # Consent (R.A. 10173 compliance)
     biometric_consent: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     biometric_consent_date: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 
-    # Audit timestamps
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -93,7 +83,6 @@ class User(Base):
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_logout_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    # ── Relationships ──────────────────────────────────────────────────────────
     face_embedding: Mapped["FaceEmbedding | None"] = relationship(  # noqa: F821
         "FaceEmbedding", back_populates="user", uselist=False, cascade="all, delete-orphan"
     )

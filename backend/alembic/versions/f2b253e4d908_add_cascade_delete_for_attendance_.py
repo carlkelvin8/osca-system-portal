@@ -1,10 +1,3 @@
-"""add cascade delete for attendance_records
-
-Revision ID: f2b253e4d908
-Revises: 1a2b3c4d5e6f
-Create Date: 2026-07-29 11:02:45.526600
-
-"""
 from typing import Sequence, Union
 
 from alembic import op

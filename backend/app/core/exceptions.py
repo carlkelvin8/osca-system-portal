@@ -1,7 +1,3 @@
-"""
-Centralized exception handlers.
-Converts exceptions to consistent JSON error responses.
-"""
 import structlog
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
@@ -12,7 +8,6 @@ logger = structlog.get_logger(__name__)
 
 
 class OSCAException(Exception):
-    """Base application exception with status code and detail."""
     def __init__(self, status_code: int, detail: str, code: str | None = None):
         self.status_code = status_code
         self.detail = detail

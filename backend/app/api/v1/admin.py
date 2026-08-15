@@ -1,13 +1,3 @@
-"""
-Admin configuration endpoints.
-
-Provides runtime control over facial recognition thresholds without restarting
-the server. All changes are persisted to Redis and logged to the audit trail.
-
-Routes:
-    GET  /admin/fr-config  — Read current FR configuration (Admin only)
-    PUT  /admin/fr-config  — Update FR configuration (Admin only)
-"""
 from typing import Annotated
 
 import redis.asyncio as aioredis
@@ -24,9 +14,6 @@ router = APIRouter()
 logger = structlog.get_logger(__name__)
 
 
-# ── GET /admin/fr-config ──────────────────────────────────────────────────────
-
-
 @router.get(
     "/fr-config",
     response_model=FRConfigRead,
@@ -36,12 +23,8 @@ async def get_fr_config(
     _admin: AdminOnly,
     redis: Annotated[aioredis.Redis, Depends(get_redis)],
 ) -> FRConfigRead:
-    """Return the active facial recognition thresholds (Redis or static fallback)."""
     config = FRConfigService(redis)
     return FRConfigRead(**(await config.get_all()))
-
-
-# ── PUT /admin/fr-config ──────────────────────────────────────────────────────
 
 
 @router.put(
@@ -55,13 +38,6 @@ async def update_fr_config(
     redis: Annotated[aioredis.Redis, Depends(get_redis)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> FRConfigRead:
-    """
-    Persist new FR thresholds to Redis.  Changes take effect on the very next
-    scan request — no server restart required.
-
-    Security warning: If similarity_threshold falls below 0.70 the endpoint
-    still succeeds but logs a warning-level audit entry alerting other admins.
-    """
     config = FRConfigService(redis)
     previous = await config.get_all()
 
@@ -72,7 +48,6 @@ async def update_fr_config(
     )
     updated = await config.get_all()
 
-    # Determine whether this update crosses the security floor
     sim = updated["similarity_threshold"]
     security_warning = (
         f"similarity_threshold={sim:.2f} is below the recommended minimum "

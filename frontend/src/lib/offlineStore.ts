@@ -1,14 +1,8 @@
-/**
- * Offline equipment cache & transaction queue using localStorage.
- * Enables QR scanning and generation without server connectivity.
- */
 import type { Equipment } from "@/types";
 
 const EQUIPMENT_CACHE_KEY = "osca_equipment_cache";
 const EQUIPMENT_CACHE_TS_KEY = "osca_equipment_cache_ts";
 const PENDING_TX_KEY = "osca_pending_transactions";
-
-// ── Equipment Cache ──────────────────────────────────────────────────────────
 
 export interface CachedEquipmentData {
   items: Equipment[];
@@ -55,8 +49,6 @@ export const equipmentCache = {
     localStorage.removeItem(EQUIPMENT_CACHE_TS_KEY);
   },
 };
-
-// ── Offline Transaction Queue ────────────────────────────────────────────────
 
 export type OfflineTxType = "borrow" | "return" | "create_equipment";
 

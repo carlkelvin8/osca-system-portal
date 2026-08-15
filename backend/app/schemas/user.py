@@ -1,4 +1,3 @@
-"""User schemas."""
 import uuid
 from datetime import date, datetime
 
@@ -31,7 +30,7 @@ class UserCreate(OSCABaseModel):
     emergency_contact_number: str | None = Field(default=None, max_length=20)
     assigned_sport: str | None = Field(default=None, max_length=100)
     biometric_consent: bool = False
-    is_active: bool = True  # Auto-activate on registration (admin can deactivate later)
+    is_active: bool = True
     face_images_base64: list[str] | None = Field(
         default=None,
         max_length=10,
@@ -61,7 +60,6 @@ class UserUpdate(OSCABaseModel):
 
 
 class UserSummary(OSCABaseModel):
-    """Lightweight user info for dropdowns and lists."""
     id: uuid.UUID
     full_name: str
     email: str

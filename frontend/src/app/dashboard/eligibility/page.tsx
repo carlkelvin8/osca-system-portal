@@ -175,7 +175,6 @@ export default function EligibilityPage() {
     return s.full_name.toLowerCase().includes(q) || (s.student_id ?? "").toLowerCase().includes(q) || s.email.toLowerCase().includes(q);
   });
 
-  // Filter items
   const items = (data?.items ?? []).filter((r) => {
     if (statusFilter && r.status !== statusFilter) return false;
     if (search) {
@@ -218,7 +217,6 @@ export default function EligibilityPage() {
         </div>
       </div>
 
-      {/* Search & Filter */}
       <div className="flex gap-3 mb-4 flex-wrap">
         <div className="relative flex-1 min-w-[200px]">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -233,7 +231,6 @@ export default function EligibilityPage() {
         </select>
       </div>
 
-      {/* Bulk actions */}
       {selected.size > 0 && isStaff && (
         <div className="flex items-center gap-3 mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
           <CheckSquare size={16} className="text-blue-600" />
@@ -289,7 +286,6 @@ export default function EligibilityPage() {
         </div>
       )}
 
-      {/* Add Modal */}
       {showAdd && (
         <div
           onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}
@@ -310,7 +306,6 @@ export default function EligibilityPage() {
               <div className="border-t border-gray-100 my-4" />
 
               <form onSubmit={(e) => { e.preventDefault(); createMutation.mutate(form); }} className="space-y-4">
-                {/* Row 1: Student */}
                 <div ref={dropdownRef} className="relative">
                   <label className="block text-xs font-medium text-gray-600 mb-1.5">Student <span className="text-red-500">*</span></label>
                   <button
@@ -365,7 +360,6 @@ export default function EligibilityPage() {
                   )}
                 </div>
 
-                {/* Row 2: Status + Reason */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1.5">Status</label>
@@ -388,7 +382,6 @@ export default function EligibilityPage() {
                   </div>
                 </div>
 
-                {/* Row 3: Details */}
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="text-xs font-medium text-gray-600">Details</label>
@@ -397,7 +390,6 @@ export default function EligibilityPage() {
                   <textarea rows={4} value={form.reason_detail} onChange={(e) => setForm({ ...form, reason_detail: e.target.value })} placeholder="e.g. Torn ACL from basketball practice" className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg resize-none hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]/20 transition-colors" />
                 </div>
 
-                {/* Row 4: Start + End Date */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1.5">Start Date <span className="text-red-500">*</span></label>
@@ -409,7 +401,6 @@ export default function EligibilityPage() {
                   </div>
                 </div>
 
-                {/* Row 5: Notes */}
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="text-xs font-medium text-gray-600">Notes</label>

@@ -1,6 +1,3 @@
-"""
-Attendance models: Sessions, AttendanceRecords, FaceEmbeddings, ScanAttempts.
-"""
 import enum
 import uuid
 from datetime import datetime
@@ -47,10 +44,6 @@ class ScanResult(str, enum.Enum):
 
 
 class Session(Base):
-    """
-    An OSCA training/event session.
-    Attendance records are grouped under sessions.
-    """
     __tablename__ = "sessions"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -71,10 +64,8 @@ class Session(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
-    # Grace period for late arrivals (in minutes)
     grace_period_minutes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
-    # Relationships
     attendance_records: Mapped[list["AttendanceRecord"]] = relationship(
         "AttendanceRecord", back_populates="session", cascade="all, delete-orphan"
     )
@@ -87,10 +78,6 @@ class Session(Base):
 
 
 class AttendanceRecord(Base):
-    """
-    A single student's attendance entry for one session.
-    Stores time-in, time-out, and facial recognition metadata.
-    """
     __tablename__ = "attendance_records"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -101,24 +88,19 @@ class AttendanceRecord(Base):
         UUID(as_uuid=True), ForeignKey("sessions.id"), nullable=False
     )
 
-    # Time-in
     time_in: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     time_in_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     time_in_liveness_score: Mapped[float | None] = mapped_column(Float, nullable=True)
 
-    # Client info captured at scan/time-in (nullable for legacy records / absent)
     ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True, comment="Client IP at scan time")
     device: Mapped[str | None] = mapped_column(String(200), nullable=True, comment="Readable browser/OS from User-Agent")
 
-    # Time-out
     time_out: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     time_out_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     time_out_liveness_score: Mapped[float | None] = mapped_column(Float, nullable=True)
 
-    # Duration in minutes (computed on time_out)
     duration_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
-    # Status
     status: Mapped[str | None] = mapped_column(String(20), nullable=True, comment="present, late, absent")
     is_complete: Mapped[bool] = mapped_column(default=False, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -130,7 +112,6 @@ class AttendanceRecord(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
-    # Relationships
     student: Mapped["User"] = relationship(  # noqa: F821
         "User", back_populates="attendance_records", foreign_keys=[student_id]
     )
@@ -144,11 +125,6 @@ class AttendanceRecord(Base):
 
 
 class FaceEmbedding(Base):
-    """
-    Stores the 512-dim ArcFace embedding for each enrolled student.
-    Uses pgvector for cosine similarity search.
-    Raw images are stored in MinIO (not here — R.A. 10173 compliance).
-    """
     __tablename__ = "face_embeddings"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -157,12 +133,10 @@ class FaceEmbedding(Base):
         nullable=False, unique=True
     )
 
-    # 512-dim vector (ArcFace / InsightFace)
     embedding: Mapped[list[float]] = mapped_column(
         Vector(settings.FACE_EMBEDDING_DIM), nullable=False
     )
 
-    # Metadata
     model_used: Mapped[str] = mapped_column(String(50), nullable=False)
     images_used: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
     minio_image_keys: Mapped[str | None] = mapped_column(
@@ -176,18 +150,10 @@ class FaceEmbedding(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
-    # Relationships
     user: Mapped["User"] = relationship("User", back_populates="face_embedding")  # noqa: F821
-
-    # IVFFlat index for cosine similarity search (created via Alembic migration)
-    # CREATE INDEX ON face_embeddings USING ivfflat (embedding vector_cosine_ops) WITH (lists = 10);
 
 
 class ScanAttempt(Base):
-    """
-    Audit log for every facial recognition scan attempt.
-    Stored regardless of success/failure (security audit trail).
-    """
     __tablename__ = "scan_attempts"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -198,18 +164,15 @@ class ScanAttempt(Base):
         Enum(ScanResult, name="scan_result_enum"), nullable=False
     )
 
-    # Matched user (null if recognition failed)
     matched_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    # Session the scan was performed against (null for scans outside a session)
     session_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("sessions.id", ondelete="CASCADE"), nullable=True
     )
     confidence_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     liveness_score: Mapped[float | None] = mapped_column(Float, nullable=True)
 
-    # Kiosk info
     kiosk_ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
     processing_time_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     failure_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)

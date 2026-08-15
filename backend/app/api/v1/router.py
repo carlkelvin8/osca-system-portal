@@ -1,4 +1,3 @@
-"""Central API v1 router — assembles all sub-routers."""
 from fastapi import APIRouter
 
 from app.api.v1 import (

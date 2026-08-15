@@ -1,7 +1,3 @@
-"""
-Security utilities: JWT creation/verification, password hashing.
-Uses Argon2id via passlib (OWASP recommended 2026).
-"""
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -10,8 +6,6 @@ from passlib.context import CryptContext
 
 from app.config import settings
 
-# ── Password Hashing ──────────────────────────────────────────────────────────
-# Argon2id: winner of Password Hashing Competition; memory-hard; OWASP recommended
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 
@@ -22,8 +16,6 @@ def hash_password(plain_password: str) -> str:
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
-
-# ── JWT ───────────────────────────────────────────────────────────────────────
 
 def _create_token(data: dict[str, Any], expires_delta: timedelta) -> str:
     payload = data.copy()
@@ -47,10 +39,6 @@ def create_refresh_token(user_id: str) -> str:
 
 
 def decode_token(token: str) -> dict[str, Any]:
-    """
-    Decode and verify a JWT. Raises JWTError on invalid/expired tokens.
-    Callers should catch JWTError and raise HTTPException 401.
-    """
     return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
 
 

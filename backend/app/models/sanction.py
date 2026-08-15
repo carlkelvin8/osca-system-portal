@@ -1,8 +1,3 @@
-"""
-Sanction Monitoring models.
-Tracks disciplinary sanctions on student-athletes.
-Coach can flag violations; student can view their sanctions.
-"""
 import enum
 import uuid
 from datetime import date, datetime
@@ -66,18 +61,15 @@ class Sanction(Base):
     end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     penalty: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    # Compliance
     is_compliant: Mapped[bool] = mapped_column(Boolean, default=False)
     compliance_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    # Acknowledgement by student
     acknowledged_by_student: Mapped[bool] = mapped_column(Boolean, default=False)
     acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    # Relationships
     student: Mapped["User"] = relationship(foreign_keys=[student_id])
     issued_by: Mapped["User"] = relationship(foreign_keys=[issued_by_id])
 

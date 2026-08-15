@@ -10,7 +10,6 @@ import { useInventoryList, useInvalidateInventory, useEquipmentByBarcode } from 
 import type { Equipment, EquipmentCategory, EquipmentCondition } from "@/types";
 import QRCode from "qrcode";
 
-// ── Autocomplete suggestions ─────────────────────────────────────────────────
 
 const EQUIPMENT_SUGGESTIONS = [
   "Agility Ladder", "Ball Cart", "Basketball", "Cones", "Disc Cones",
@@ -24,7 +23,6 @@ const SPORT_SUGGESTIONS = [
   "Table Tennis", "Theater Arts", "Track and Field", "Volleyball",
 ];
 
-// ── AutocompleteInput ────────────────────────────────────────────────────────
 
 function AutocompleteInput({
   value,
@@ -74,7 +72,6 @@ function AutocompleteInput({
   );
 }
 
-// ── QR Code View Modal ───────────────────────────────────────────────────────
 
 function QRViewModal({ equipment, onClose }: { equipment: Equipment; onClose: () => void }) {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
@@ -133,7 +130,6 @@ function QRViewModal({ equipment, onClose }: { equipment: Equipment; onClose: ()
   );
 }
 
-// ── Add Equipment Modal ──────────────────────────────────────────────────────
 
 const CATEGORIES: { value: EquipmentCategory; label: string }[] = [
   { value: "balls", label: "Balls" },
@@ -224,7 +220,6 @@ function AddEquipmentModal({ onClose, onSuccess }: { onClose: () => void; onSucc
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Name */}
           <div>
             <label className={labelCls}>Equipment Name <span className="text-red-500">*</span></label>
             <AutocompleteInput
@@ -236,7 +231,6 @@ function AddEquipmentModal({ onClose, onSuccess }: { onClose: () => void; onSucc
             />
           </div>
 
-          {/* Category + Condition */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>Category <span className="text-red-500">*</span></label>
@@ -264,7 +258,6 @@ function AddEquipmentModal({ onClose, onSuccess }: { onClose: () => void; onSucc
             </div>
           </div>
 
-          {/* Quantity */}
           <div>
             <label className={labelCls}>Total Quantity <span className="text-red-500">*</span></label>
             <input
@@ -277,7 +270,6 @@ function AddEquipmentModal({ onClose, onSuccess }: { onClose: () => void; onSucc
             />
           </div>
 
-          {/* Storage Location */}
           <div>
             <label className={labelCls}>Storage Location</label>
             <input
@@ -289,7 +281,6 @@ function AddEquipmentModal({ onClose, onSuccess }: { onClose: () => void; onSucc
             />
           </div>
 
-          {/* Sport / Art */}
           <div>
             <label className={labelCls}>Sport / Art</label>
             <AutocompleteInput
@@ -301,7 +292,6 @@ function AddEquipmentModal({ onClose, onSuccess }: { onClose: () => void; onSucc
             />
           </div>
 
-          {/* Description */}
           <div>
             <label className={labelCls}>Description</label>
             <textarea
@@ -339,7 +329,6 @@ function AddEquipmentModal({ onClose, onSuccess }: { onClose: () => void; onSucc
   );
 }
 
-// ── Edit Equipment Modal ─────────────────────────────────────────────────────
 
 interface EditEquipmentForm {
   name: string;
@@ -425,7 +414,6 @@ function EditEquipmentModal({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Name */}
           <div>
             <label className={labelCls}>Equipment Name <span className="text-red-500">*</span></label>
             <AutocompleteInput
@@ -437,7 +425,6 @@ function EditEquipmentModal({
             />
           </div>
 
-          {/* Category + Condition */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>Category <span className="text-red-500">*</span></label>
@@ -465,7 +452,6 @@ function EditEquipmentModal({
             </div>
           </div>
 
-          {/* Total + Available Quantity */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>Total Quantity <span className="text-red-500">*</span></label>
@@ -491,7 +477,6 @@ function EditEquipmentModal({
             </div>
           </div>
 
-          {/* Storage Location */}
           <div>
             <label className={labelCls}>Storage Location</label>
             <input
@@ -503,7 +488,6 @@ function EditEquipmentModal({
             />
           </div>
 
-          {/* Sport / Art */}
           <div>
             <label className={labelCls}>Sport / Art</label>
             <AutocompleteInput
@@ -515,7 +499,6 @@ function EditEquipmentModal({
             />
           </div>
 
-          {/* Description */}
           <div>
             <label className={labelCls}>Description</label>
             <textarea
@@ -527,7 +510,6 @@ function EditEquipmentModal({
             />
           </div>
 
-          {/* Active toggle */}
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -573,7 +555,6 @@ function EditEquipmentModal({
   );
 }
 
-// ── Main Inventory Page ──────────────────────────────────────────────────────
 
 export default function InventoryPage() {
   const role = useAuthStore((s) => s.user?.role);
@@ -588,11 +569,6 @@ export default function InventoryPage() {
 
   const { data, isLoading } = useInventoryList(page, search);
 
-  // ── Handheld barcode/QR scanner support ──────────────────────────────────
-  // Scanners are keyboard-wedge devices: they type the code into whichever
-  // field has focus, then send Enter. The search box already does a live
-  // fuzzy match against name/qr_code; Enter additionally triggers an exact
-  // lookup so a scan jumps straight to the matched item.
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [scannedCode, setScannedCode] = useState<string | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
@@ -673,7 +649,6 @@ export default function InventoryPage() {
       )}
 
       <div className="space-y-6">
-        {/* Offline notice */}
         {!isServerReachable && (
           <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
             <WifiOff size={14} />
@@ -714,7 +689,6 @@ export default function InventoryPage() {
           )}
         </div>
 
-        {/* Search */}
         <div className="relative">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
@@ -743,7 +717,6 @@ export default function InventoryPage() {
           </p>
         )}
 
-        {/* Table */}
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-[#1E3A5F] text-white">
@@ -833,7 +806,6 @@ export default function InventoryPage() {
             </tbody>
           </table>
 
-          {/* Pagination */}
           {data && data.pages > 1 && (
             <div className="px-4 py-3 border-t flex items-center justify-between text-sm text-gray-600">
               <span>

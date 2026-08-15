@@ -1,9 +1,5 @@
 "use client";
 
-/**
- * Admin Audit Log Management — search, filter, sort, paginate, detail modal, export.
- */
-
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useThemeStore } from "@/store/useThemeStore";
@@ -35,7 +31,6 @@ import {
   ChevronDown,
 } from "lucide-react";
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
 
 function formatTimestamp(iso: string) {
   return new Date(iso).toLocaleString("en-PH", {
@@ -99,7 +94,6 @@ function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-// ── JSON Diff Viewer ──────────────────────────────────────────────────────────
 
 function JsonDiff({
   before,
@@ -164,7 +158,6 @@ function JsonDiff({
   );
 }
 
-// ── Detail Modal ──────────────────────────────────────────────────────────────
 
 function DetailModal({
   log,
@@ -184,7 +177,6 @@ function DetailModal({
         className={`w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl shadow-2xl ${isDark ? "bg-[#1E293B] border border-[#334155]" : "bg-white border border-gray-200"}`}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
         <div className={`flex items-center justify-between px-6 py-4 border-b ${isDark ? "border-[#334155]" : "border-gray-100"}`}>
           <div>
             <h2 className={`text-lg font-bold ${isDark ? "text-white" : "text-gray-900"}`}>
@@ -200,7 +192,6 @@ function DetailModal({
         </div>
 
         <div className="px-6 py-4 space-y-5">
-          {/* Admin info */}
           <div className="flex items-center gap-3">
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isDark ? "bg-blue-500/10" : "bg-blue-50"}`}>
               <User size={18} className="text-blue-500" />
@@ -215,7 +206,6 @@ function DetailModal({
             </div>
           </div>
 
-          {/* Meta grid */}
           <div className="grid grid-cols-2 gap-3">
             {[
               { icon: FileText, label: "Action", value: log.action },
@@ -243,7 +233,6 @@ function DetailModal({
             ))}
           </div>
 
-          {/* Description */}
           {log.description && (
             <div>
               <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${isDark ? "text-gray-500" : "text-gray-400"}`}>
@@ -255,7 +244,6 @@ function DetailModal({
             </div>
           )}
 
-          {/* Failure reason */}
           {log.failure_reason && (
             <div className={`p-3 rounded-xl ${isDark ? "bg-red-500/5" : "bg-red-50"}`}>
               <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1 text-red-500`}>
@@ -267,7 +255,6 @@ function DetailModal({
             </div>
           )}
 
-          {/* Value changes */}
           <div>
             <p className={`text-[10px] font-semibold uppercase tracking-wider mb-2 ${isDark ? "text-gray-500" : "text-gray-400"}`}>
               Value Changes
@@ -280,7 +267,6 @@ function DetailModal({
   );
 }
 
-// ── Filter Dropdown ───────────────────────────────────────────────────────────
 
 function FilterDropdown({
   label,
@@ -327,7 +313,6 @@ function FilterDropdown({
   );
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function AuditLogsPage() {
   const { user } = useAuthStore();
@@ -337,7 +322,6 @@ export default function AuditLogsPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
 
-  // Filters
   const [search, setSearch] = useState("");
   const [moduleFilter, setModuleFilter] = useState("");
   const [actionFilter, setActionFilter] = useState("");
@@ -348,11 +332,9 @@ export default function AuditLogsPage() {
   const [page, setPage] = useState(1);
   const pageSize = 25;
 
-  // Dropdown options
   const [moduleOptions, setModuleOptions] = useState<string[]>([]);
   const [actionOptions, setActionOptions] = useState<string[]>([]);
 
-  // Access guard — Admin only
   if (user && user.role !== "admin") {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-4">
@@ -393,13 +375,11 @@ export default function AuditLogsPage() {
     fetchLogs();
   }, [fetchLogs]);
 
-  // Load filter options once
   useEffect(() => {
     auditLogsApi.getModules().then((r) => setModuleOptions(r.data)).catch(() => {});
     auditLogsApi.getActions().then((r) => setActionOptions(r.data)).catch(() => {});
   }, []);
 
-  // Reset page on filter change
   useEffect(() => {
     setPage(1);
   }, [search, moduleFilter, actionFilter, statusFilter, sortOrder, dateFrom, dateTo]);
@@ -442,7 +422,6 @@ export default function AuditLogsPage() {
 
   return (
     <div className="space-y-5">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className={`text-xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>
@@ -452,7 +431,6 @@ export default function AuditLogsPage() {
             Track all administrative actions and system events
           </p>
         </div>
-        {/* Export buttons */}
         <div className="flex items-center gap-2">
           {(["csv", "xlsx", "pdf"] as const).map((fmt) => (
             <button
@@ -467,7 +445,6 @@ export default function AuditLogsPage() {
         </div>
       </div>
 
-      {/* Search + Filters */}
       <div className={`flex flex-wrap items-center gap-3 p-4 rounded-2xl ${isDark ? "bg-[#1E293B] border border-[#334155]" : "bg-white border border-gray-200 shadow-sm"}`}>
         <div className={`flex items-center gap-2 flex-1 min-w-[200px] px-3 py-2 rounded-xl border ${isDark ? "border-[#334155] bg-[#0F172A]" : "border-gray-200 bg-gray-50"}`}>
           <Search size={15} className={isDark ? "text-gray-500" : "text-gray-400"} />
@@ -539,7 +516,6 @@ export default function AuditLogsPage() {
         </button>
       </div>
 
-      {/* Table */}
       <div className={`rounded-2xl border overflow-hidden ${isDark ? "bg-[#1E293B] border-[#334155]" : "bg-white border-gray-200 shadow-sm"}`}>
         {loading ? (
           <div className="flex items-center justify-center py-20">
@@ -583,7 +559,6 @@ export default function AuditLogsPage() {
                       onClick={() => viewDetail(log)}
                       className={`border-b cursor-pointer transition-colors ${isDark ? "border-[#334155]/50 hover:bg-white/[0.02]" : "border-gray-50 hover:bg-gray-50/50"}`}
                     >
-                      {/* Admin */}
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2.5">
                           <Avatar
@@ -601,13 +576,11 @@ export default function AuditLogsPage() {
                           </div>
                         </div>
                       </td>
-                      {/* Action */}
                       <td className="px-4 py-3">
                         <span className={`text-xs font-medium ${isDark ? "text-gray-300" : "text-gray-700"}`}>
                           {log.action}
                         </span>
                       </td>
-                      {/* Module */}
                       <td className="px-4 py-3">
                         {log.module && (
                           <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${moduleColor(log.module, isDark)}`}>
@@ -615,7 +588,6 @@ export default function AuditLogsPage() {
                           </span>
                         )}
                       </td>
-                      {/* Status */}
                       <td className="px-4 py-3">
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${statusColor(log.status, isDark)}`}>
                           {log.status === "success" && <CheckCircle2 size={10} />}
@@ -623,13 +595,11 @@ export default function AuditLogsPage() {
                           {log.status}
                         </span>
                       </td>
-                      {/* IP */}
                       <td className="px-4 py-3">
                         <span className={`text-xs ${isDark ? "text-gray-400" : "text-gray-500"}`}>
                           {log.ip_address || "—"}
                         </span>
                       </td>
-                      {/* Device */}
                       <td className="px-4 py-3">
                         <div className="flex flex-col">
                           <span className={`text-xs ${isDark ? "text-gray-400" : "text-gray-500"}`}>
@@ -640,7 +610,6 @@ export default function AuditLogsPage() {
                           </span>
                         </div>
                       </td>
-                      {/* Time */}
                       <td className="px-4 py-3">
                         <div className="flex flex-col">
                           <span className={`text-xs ${isDark ? "text-gray-400" : "text-gray-500"}`}>
@@ -651,7 +620,6 @@ export default function AuditLogsPage() {
                           </span>
                         </div>
                       </td>
-                      {/* View button */}
                       <td className="px-4 py-3">
                         <Eye size={15} className={isDark ? "text-gray-500" : "text-gray-400"} />
                       </td>
@@ -661,7 +629,6 @@ export default function AuditLogsPage() {
               </table>
             </div>
 
-            {/* Pagination */}
             <div className={`flex items-center justify-between px-4 py-3 border-t ${isDark ? "border-[#334155]" : "border-gray-100"}`}>
               <p className={`text-xs ${isDark ? "text-gray-500" : "text-gray-400"}`}>
                 {data.total.toLocaleString()} records · Page {data.page} of {data.pages}
@@ -689,7 +656,6 @@ export default function AuditLogsPage() {
         )}
       </div>
 
-      {/* Detail Modal */}
       {selectedLog && (
         <DetailModal log={selectedLog} onClose={() => setSelectedLog(null)} isDark={isDark} />
       )}

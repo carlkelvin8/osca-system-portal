@@ -1,10 +1,5 @@
 "use client";
 
-/**
- * Reusable avatar component.
- * Shows profile picture if available, otherwise falls back to initials.
- */
-
 interface AvatarProps {
   src: string | null | undefined;
   name: string;

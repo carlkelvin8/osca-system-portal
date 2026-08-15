@@ -1,7 +1,3 @@
-"""
-Facility Monitoring models.
-Tracks sports facilities, their schedules, and condition.
-"""
 import enum
 import uuid
 from datetime import date, datetime, time
@@ -55,7 +51,6 @@ class Facility(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    # Relationships
     schedules: Mapped[list["FacilitySchedule"]] = relationship(back_populates="facility", cascade="all, delete-orphan")
     venue_reservations: Mapped[list["VenueReservationRequest"]] = relationship(back_populates="facility")  # noqa: F821
 
@@ -76,7 +71,6 @@ class FacilitySchedule(Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    # Relationships
     facility: Mapped["Facility"] = relationship(back_populates="schedules")
 
     __table_args__ = (Index("ix_facility_schedules_date", "facility_id", "scheduled_date"),)

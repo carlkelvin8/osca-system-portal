@@ -1,4 +1,3 @@
-"""Announcement model — Admin/Director posts notices and upcoming events."""
 import uuid
 from datetime import datetime
 
@@ -10,10 +9,6 @@ from app.database import Base
 
 
 class Announcement(Base):
-    """
-    Announcement or upcoming event visible to all authenticated users.
-    Only Admin and Director roles may create/edit/delete entries.
-    """
     __tablename__ = "announcements"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -42,7 +37,6 @@ class Announcement(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
-    # Relationships
     created_by: Mapped["User"] = relationship("User", foreign_keys=[created_by_id])  # noqa: F821
     acknowledgements: Mapped[list["AnnouncementAcknowledgement"]] = relationship(  # noqa: F821
         back_populates="announcement",
@@ -62,10 +56,6 @@ class Announcement(Base):
 
 
 class AnnouncementAcknowledgement(Base):
-    """
-    A single user's acknowledgement of an announcement.
-    One row per (announcement, user) — idempotent by unique constraint.
-    """
     __tablename__ = "announcement_acknowledgements"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -91,7 +81,6 @@ class AnnouncementAcknowledgement(Base):
 
 
 class AnnouncementComment(Base):
-    """A single user comment on an announcement."""
     __tablename__ = "announcement_comments"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

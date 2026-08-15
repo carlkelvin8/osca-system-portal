@@ -1,6 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap');
 
-/* ── TOP BAR ── */
 .topbar {
   background: #0f1b35;
   padding: 0 40px;
@@ -59,7 +58,6 @@
 }
 .btnRegister:hover { background: #3b82f6; border-color: #3b82f6; }
 
-/* ── NAV ── */
 .nav {
   background: #ffffff;
   border-bottom: 1px solid #e2e8f0;
@@ -87,7 +85,6 @@
   border-bottom-color: #2563eb;
 }
 
-/* ── HERO ── */
 .hero {
   background: linear-gradient(135deg, #0f1b35 0%, #1e2e55 55%, #1a3a72 100%);
   padding: 72px 40px 80px;
@@ -214,7 +211,6 @@
   animation: fadeUp .5s .26s ease both;
 }
 
-/* ── HERO CTA BUTTONS ── */
 .heroCta {
   display: flex;
   gap: 12px;
@@ -258,7 +254,6 @@
 }
 .btnHeroSecondary:hover { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.6); }
 
-/* ── CARDS SECTION ── */
 .cardsSection {
   padding: 56px 40px;
   max-width: 1200px;
@@ -343,7 +338,6 @@
 .card:nth-child(2) { animation: fadeUp .45s .45s ease both; }
 .card:nth-child(3) { animation: fadeUp .45s .55s ease both; }
 
-/* ── FOOTER ── */
 .footer {
   background: #0f1b35;
   padding: 18px 40px;
@@ -390,7 +384,6 @@
 
 .footerDivider { color: rgba(255,255,255,.2); }
 
-/* ── ANIMATIONS ── */
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(22px); }
   to   { opacity: 1; transform: translateY(0); }

@@ -1,15 +1,5 @@
 "use client";
 
-/**
- * Users page — Admin user management
- * Covers:
- *   US-001 → Admin Account Creation (Create User modal, role assignment, deactivate/activate)
- *   US-002 → Pending Approval tab (students awaiting activation)
- *   US-004 partial → Admin-side Face Enrollment modal (react-webcam)
- *
- * Design: Direction 1 – Clean Professional, OSCA PRD v2 frontend stack
- * (Next.js 15, Tailwind CSS, React Hook Form + Zod, TanStack Query, react-webcam)
- */
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useForm } from "react-hook-form";
@@ -42,7 +32,6 @@ import {
 } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 
-// ── Shared style tokens ───────────────────────────────────────────────────────
 
 const inputCls =
   "w-full border border-[#d1d5db] rounded-lg px-3 py-2.5 text-sm text-[#111827] " +
@@ -57,7 +46,6 @@ const btnSecondary =
   "flex items-center gap-1.5 border border-[#d1d5db] text-[#374151] text-sm " +
   "font-medium px-4 py-2 rounded-lg hover:bg-[#f9fafb] transition";
 
-// ── Role helpers ──────────────────────────────────────────────────────────────
 
 const roleColors: Record<UserRole, string> = {
   admin: "bg-red-100 text-red-700",
@@ -79,7 +67,6 @@ const roleLabel: Record<UserRole, string> = {
 
 const ALL_ROLES: UserRole[] = ["admin", "coach", "pe_instructor", "student", "director", "staff"];
 
-// ── Create User schema ────────────────────────────────────────────────────────
 
 const createUserSchema = z
   .object({
@@ -205,7 +192,6 @@ const STUDENT_ROLES: { value: string; label: string }[] = [
 
 type CreateUserForm = z.infer<typeof createUserSchema>;
 
-// ── Field helper ──────────────────────────────────────────────────────────────
 
 function Field({
   label,
@@ -230,7 +216,6 @@ function Field({
   );
 }
 
-// ── Modal wrapper ─────────────────────────────────────────────────────────────
 
 function Modal({
   title,
@@ -249,7 +234,6 @@ function Modal({
         className={`bg-white rounded-2xl shadow-2xl w-full flex flex-col max-h-[90vh] ${wide ? "max-w-2xl" : "max-w-lg"
           }`}
       >
-        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#f3f4f6]">
           <h2 className="text-base font-semibold text-[#111827]">{title}</h2>
           <button
@@ -265,7 +249,6 @@ function Modal({
   );
 }
 
-// ── Roles each creator role may assign ────────────────────────────────────────
 
 const CREATOR_ROLE_LIMITS: Record<UserRole, UserRole[]> = {
   admin: ["admin", "director", "coach", "pe_instructor", "student", "staff"],
@@ -276,7 +259,6 @@ const CREATOR_ROLE_LIMITS: Record<UserRole, UserRole[]> = {
   student: [],
 };
 
-// ── Searchable Select ──────────────────────────────────────────────────────────
 
 function SearchableSelect({
   value,
@@ -385,7 +367,6 @@ function SearchableSelect({
   );
 }
 
-// ── Create User Modal ─────────────────────────────────────────────────────────
 
 function CreateUserModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
@@ -480,7 +461,6 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
   return (
     <Modal title="Create User Account" onClose={onClose} wide>
       <form onSubmit={handleSubmit(onSubmit)} className="px-6 py-5 space-y-4">
-        {/* Personal Information */}
         {isCoach || isPE ? (
           <>
             <div className="grid grid-cols-2 gap-3">
@@ -553,7 +533,6 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
           </Field>
         </div>
 
-        {/* Role */}
         <Field label="Role" error={errors.role?.message} required>
           <select {...register("role")} className={inputCls}>
             {allowedRoles.map((r) => (
@@ -564,7 +543,6 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
           </select>
         </Field>
 
-        {/* Student-specific fields */}
         {isStudent && (
           <div className="bg-[#f8fafc] border border-[#e5e7eb] rounded-xl p-4 space-y-3">
             <p className="text-xs font-semibold text-[#6b7280] uppercase tracking-wide">
@@ -641,7 +619,6 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
           </div>
         )}
 
-        {/* Emergency Contact */}
         {isStudent && (
           <div className="bg-[#f8fafc] border border-[#e5e7eb] rounded-xl p-4 space-y-3">
             <p className="text-xs font-semibold text-[#6b7280] uppercase tracking-wide">
@@ -658,14 +635,12 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
           </div>
         )}
 
-        {/* Coach / PE Instructor — Profile Section */}
         {(isCoach || isPE) && (
           <div className="bg-[#f8fafc] border border-[#e5e7eb] rounded-xl p-4 space-y-3">
             <p className="text-xs font-semibold text-[#6b7280] uppercase tracking-wide">
               {isCoach ? "Coach Profile" : "PE Instructor Profile"}
             </p>
 
-            {/* Row 1: Contact Number | Gender */}
             <div className="grid grid-cols-2 gap-3">
               <Field label="Contact Number" error={errors.contact_number?.message}>
                 <input {...register("contact_number")} type="tel" className={inputCls} placeholder="+63 9XX XXX XXXX" />
@@ -681,7 +656,6 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
               </Field>
             </div>
 
-            {/* Row 2: Date of Birth | Employee / Coach ID */}
             <div className="grid grid-cols-2 gap-3">
               <Field label="Date of Birth" error={errors.date_of_birth?.message}>
                 <input {...register("date_of_birth")} type="date" className={inputCls} />
@@ -691,7 +665,6 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
               </Field>
             </div>
 
-            {/* Row 3: Sport/Art (Coach) or Department/College (PE) */}
             {isCoach ? (
               <Field label="Sport / Art (Assigned)" error={errors.assigned_sport?.message} required>
                 <SearchableSelect
@@ -707,12 +680,10 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
               </Field>
             )}
 
-            {/* Row 4: Address */}
             <Field label="Address" error={errors.address?.message}>
               <textarea {...register("address")} className={inputCls + " min-h-[60px]"} placeholder="Street, City, Province" rows={2} />
             </Field>
 
-            {/* Row 5: Account Status */}
             <Field label="Account Status" error={errors.is_active?.message}>
               <select
                 value={watch("is_active") === false ? "false" : "true"}
@@ -724,7 +695,6 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
               </select>
             </Field>
 
-            {/* Row 6: Biometric Consent */}
             <Field label="Biometric Consent (R.A. 10173)">
               <label className="flex items-start gap-2.5 cursor-pointer">
                 <input
@@ -740,7 +710,6 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
               </label>
             </Field>
 
-            {/* Row 7: Face Enrollment — only after biometric consent */}
             {biometricConsent && (
               <div className="border border-[#bfdbfe] rounded-xl p-3 space-y-3 bg-white">
                 <p className="text-xs font-semibold text-[#2563eb] uppercase tracking-wide">Face Enrollment</p>
@@ -763,7 +732,6 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
                   </div>
                 </div>
 
-                {/* Thumbnails */}
                 {faceCaptures.length > 0 && (
                   <div className="flex gap-2 flex-wrap">
                     {faceCaptures.map((src, i) => (
@@ -835,7 +803,6 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-// ── Face Enrollment Modal ─────────────────────────────────────────────────────
 
 const CAPTURE_COUNT = 5;
 
@@ -870,7 +837,6 @@ function FaceEnrollModal({
     setEnrolling(true);
     setError(null);
     try {
-      // Strip data URL prefix → raw base64
       const images = captures.map((c) => c.split(",")[1]);
       await attendanceApi.enroll({ user_id: user.id, images_base64: images });
       qc.invalidateQueries({ queryKey: ["users"] });
@@ -905,7 +871,6 @@ function FaceEnrollModal({
   return (
     <Modal title={`Enroll Face — ${user.full_name}`} onClose={onClose} wide>
       <div className="px-6 py-5 space-y-4">
-        {/* Instructions */}
         <div className="flex items-start gap-2 bg-[#f0f4ff] border border-[#bfdbfe] rounded-xl p-3">
           <ShieldCheck size={16} className="text-[#2563eb] mt-0.5 shrink-0" />
           <p className="text-xs text-[#374151] leading-relaxed">
@@ -915,7 +880,6 @@ function FaceEnrollModal({
           </p>
         </div>
 
-        {/* Webcam */}
         <div className="relative rounded-xl overflow-hidden bg-[#0f172a] aspect-video">
           <Webcam
             ref={webcamRef}
@@ -923,17 +887,14 @@ function FaceEnrollModal({
             videoConstraints={{ facingMode: "user", width: 640, height: 360 }}
             className="w-full h-full object-cover"
           />
-          {/* Overlay face guide */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="w-40 h-52 border-2 border-white/40 rounded-full" />
           </div>
-          {/* Capture count badge */}
           <div className="absolute top-3 right-3 bg-[#0f172a]/70 text-white text-xs font-semibold px-2.5 py-1 rounded-full">
             {captures.length} / {CAPTURE_COUNT}
           </div>
         </div>
 
-        {/* Thumbnails */}
         {captures.length > 0 && (
           <div className="flex gap-2 flex-wrap">
             {captures.map((src, i) => (
@@ -957,7 +918,6 @@ function FaceEnrollModal({
           </div>
         )}
 
-        {/* Action buttons */}
         <div className="flex gap-3">
           {captures.length > 0 && (
             <button
@@ -1002,7 +962,6 @@ function FaceEnrollModal({
   );
 }
 
-// ── Delete User Confirmation Modal ─────────────────────────────────────────────
 
 function DeleteUserModal({
   user,
@@ -1066,7 +1025,6 @@ function DeleteUserModal({
   );
 }
 
-// ── User Details Modal ───────────────────────────────────────────────────────
 
 function formatDate(iso: string | null | undefined): string {
   if (!iso) return "—";
@@ -1138,7 +1096,6 @@ function UserDetailsModal({
           <div className="p-10 text-center text-sm text-[#9ca3af]">User not found.</div>
         ) : (
           <div className="px-6 py-5 space-y-5">
-            {/* Header: avatar + name + status */}
             <div className="flex items-center gap-4">
               <div className="w-16 h-16 rounded-full overflow-hidden bg-[#eff6ff] flex items-center justify-center shrink-0 border-2 border-[#e5e7eb]">
                 {user.profile_picture_url ? (
@@ -1164,7 +1121,6 @@ function UserDetailsModal({
               </div>
             </div>
 
-            {/* Info grid */}
             <div className="bg-[#f8fafc] border border-[#e5e7eb] rounded-xl px-5 py-2 divide-y divide-[#f3f4f6]">
               {user.role === "student" && (
                 <>
@@ -1183,7 +1139,6 @@ function UserDetailsModal({
               <DetailRow icon={<Clock size={15} />} label="Last Login" value={formatDateTime(user.last_login_at)} />
             </div>
 
-            {/* Account Activity — admin/director/staff only */}
             {canViewActivity && (
               <div className="bg-[#f8fafc] border border-[#e5e7eb] rounded-xl p-5 space-y-3">
                 <h4 className="text-xs font-semibold text-[#6b7280] uppercase tracking-wide">
@@ -1207,13 +1162,11 @@ function UserDetailsModal({
               </div>
             )}
 
-            {/* Face Recognition section */}
             <div className="bg-[#f8fafc] border border-[#e5e7eb] rounded-xl p-5 space-y-3">
               <h4 className="text-xs font-semibold text-[#6b7280] uppercase tracking-wide">
                 Face Recognition
               </h4>
               <div className="flex items-start gap-4">
-                {/* Face image */}
                 <div className="shrink-0">
                   {user.face_image_url ? (
                     <button
@@ -1235,7 +1188,6 @@ function UserDetailsModal({
                     </div>
                   )}
                 </div>
-                {/* Face details */}
                 <div className="flex-1 space-y-1.5 pt-1">
                   <div className="flex items-center gap-2">
                     {user.is_face_enrolled ? (
@@ -1256,7 +1208,6 @@ function UserDetailsModal({
               </div>
             </div>
 
-            {/* Close button */}
             <div className="flex justify-end pt-1 pb-1">
               <button onClick={onClose} className={btnSecondary}>
                 Close
@@ -1266,7 +1217,6 @@ function UserDetailsModal({
         )}
       </Modal>
 
-      {/* Full-size face image preview */}
       {fullPreview && (
         <div
           className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4 cursor-pointer"
@@ -1292,7 +1242,6 @@ function UserDetailsModal({
   );
 }
 
-// ── Row actions ───────────────────────────────────────────────────────────────
 
 function UserRow({
   user,
@@ -1368,7 +1317,6 @@ function UserRow({
       </td>
       <td className="px-4 py-3">
         <div className="flex items-center gap-1.5 justify-end">
-          {/* View details */}
           <button
             title="View Details"
             onClick={() => onView(user)}
@@ -1376,7 +1324,6 @@ function UserRow({
           >
             <Eye size={15} />
           </button>
-          {/* Enroll face */}
           {!user.is_face_enrolled && (
             <button
               title="Enroll Face"
@@ -1386,7 +1333,6 @@ function UserRow({
               <Camera size={15} />
             </button>
           )}
-          {/* Activate / Deactivate */}
           <button
             title={user.is_active ? "Deactivate" : "Activate"}
             onClick={(e) => { e.stopPropagation(); onToggleActive(user); }}
@@ -1397,7 +1343,6 @@ function UserRow({
           >
             {user.is_active ? <UserX size={15} /> : <UserCheck size={15} />}
           </button>
-          {/* Delete permanently */}
           {canDelete && (
             <button
               title="Delete Account"
@@ -1413,7 +1358,6 @@ function UserRow({
   );
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
 
 type Tab = "approved" | "pending";
 
@@ -1433,15 +1377,12 @@ export default function UsersPage() {
   const canCreateUsers = currentUser && (CREATOR_ROLE_LIMITS[currentUser.role]?.length ?? 0) > 0;
   const canDeleteUsers = currentUser && ["admin", "staff", "director"].includes(currentUser.role);
 
-  // ── Data fetching ───────────────────────────────────────────────────────────
 
   const queryParams = {
     page,
     page_size: 20,
     ...(search ? { search } : {}),
-    // Filter by is_active based on tab
     ...(tab === "approved" ? { is_active: true } : tab === "pending" ? { is_active: false } : {}),
-    // Filter by role
     ...(roleFilter ? { role: roleFilter } : {}),
   };
 
@@ -1453,7 +1394,6 @@ export default function UsersPage() {
     },
   });
 
-  // ── Activate / deactivate ───────────────────────────────────────────────────
 
   const toggleActive = useMutation({
     mutationFn: async (user: UserSummary) => {
@@ -1468,7 +1408,6 @@ export default function UsersPage() {
     },
   });
 
-  // ── Delete permanently ──────────────────────────────────────────────────────
 
   const deletePermanently = useMutation({
     mutationFn: async (user: UserSummary) => {
@@ -1488,7 +1427,6 @@ export default function UsersPage() {
     },
   });
 
-  // Separate query for pending count (always runs regardless of tab)
   const { data: pendingData } = useQuery<PaginatedResponse<UserSummary>>({
     queryKey: ["users", "pending-count"],
     queryFn: async () => {
@@ -1500,7 +1438,6 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-5">
-      {/* Page header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-[22px] font-bold text-[#111827]">Users</h1>
@@ -1516,9 +1453,7 @@ export default function UsersPage() {
         )}
       </div>
 
-      {/* Tabs + Search + Role Filter */}
       <div className="flex items-center gap-3 flex-wrap">
-        {/* Tabs */}
         <div className="flex gap-1 bg-[#f3f4f6] p-1 rounded-lg">
           {(["approved", "pending"] as Tab[]).map((t) => (
             <button
@@ -1545,7 +1480,6 @@ export default function UsersPage() {
           ))}
         </div>
 
-        {/* Role Filter */}
         <select
           value={roleFilter}
           onChange={(e) => {
@@ -1562,7 +1496,6 @@ export default function UsersPage() {
           ))}
         </select>
 
-        {/* Search */}
         <div className="relative flex-1 max-w-xs">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9ca3af]" />
           <input
@@ -1578,9 +1511,7 @@ export default function UsersPage() {
         </div>
       </div>
 
-      {/* Table */}
       <div className="bg-white border border-[#e5e7eb] rounded-xl overflow-hidden">
-        {/* Pending approval banner */}
         {tab === "pending" && (
           <div className="px-5 py-3 bg-amber-50 border-b border-amber-100 flex items-center gap-2">
             <ShieldCheck size={15} className="text-amber-600 shrink-0" />
@@ -1656,7 +1587,6 @@ export default function UsersPage() {
           </table>
         </div>
 
-        {/* Pagination */}
         {data && data.pages > 1 && (
           <div className="flex items-center justify-between px-5 py-3 border-t border-[#f3f4f6]">
             <p className="text-xs text-[#6b7280]">
@@ -1682,7 +1612,6 @@ export default function UsersPage() {
         )}
       </div>
 
-      {/* Modals */}
       {showCreate && <CreateUserModal onClose={() => setShowCreate(false)} />}
       {viewUserId && (
         <UserDetailsModal userId={viewUserId} onClose={() => setViewUserId(null)} />

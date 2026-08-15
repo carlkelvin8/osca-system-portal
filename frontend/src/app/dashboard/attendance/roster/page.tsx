@@ -26,7 +26,6 @@ export default function PlayerRosterPage() {
       ? user?.assigned_sport ?? null
       : user?.sport_or_art ?? null;
 
-  // Fetch all students in coach's sport
   const { data: studentsData, isLoading: studentsLoading } = useQuery<
     PaginatedResponse<Student>
   >({
@@ -42,7 +41,6 @@ export default function PlayerRosterPage() {
     },
   });
 
-  // Fetch recent sessions for this sport
   const { data: sessionsData, isLoading: sessionsLoading } = useQuery<
     PaginatedResponse<Session>
   >({
@@ -55,13 +53,11 @@ export default function PlayerRosterPage() {
     },
   });
 
-  // Fetch all attendance records for the sport's sessions
   const sessionIds = (sessionsData?.items ?? []).map((s) => s.id);
   const { data: recordsData, isLoading: recordsLoading } = useQuery<AttendanceRecord[]>({
     queryKey: ["roster-records", sessionIds],
     queryFn: async () => {
       if (sessionIds.length === 0) return [];
-      // Fetch records for all sessions (up to 10 recent)
       const results = await Promise.all(
         sessionIds.map((sid) =>
           attendanceApi
@@ -80,7 +76,6 @@ export default function PlayerRosterPage() {
   const sessions = sessionsData?.items ?? [];
   const records = recordsData ?? [];
 
-  // For each student, count how many sessions they attended
   const getAttendanceStats = (studentId: string) => {
     const attended = records.filter((r) => r.student_id === studentId).length;
     const total = sessions.length;
@@ -88,7 +83,6 @@ export default function PlayerRosterPage() {
     return { attended, total, pct };
   };
 
-  // Last session attended per student
   const getLastSeen = (studentId: string): string | null => {
     const studentRecords = records
       .filter((r) => r.student_id === studentId && r.time_in)
@@ -98,7 +92,6 @@ export default function PlayerRosterPage() {
 
   return (
     <div className="space-y-6">
-      {/* Back */}
       <Link
         href="/dashboard/attendance"
         className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition"
@@ -106,7 +99,6 @@ export default function PlayerRosterPage() {
         <ArrowLeft size={15} /> Back to Sessions
       </Link>
 
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Player Roster</h1>
@@ -122,7 +114,6 @@ export default function PlayerRosterPage() {
         </div>
       </div>
 
-      {/* Summary cards */}
       <div className="grid grid-cols-3 gap-4">
         <div className="bg-white rounded-xl shadow-sm p-4 text-center">
           <p className="text-2xl font-bold text-[#1E3A5F]">{students.length}</p>
@@ -140,7 +131,6 @@ export default function PlayerRosterPage() {
         </div>
       </div>
 
-      {/* Roster table */}
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-[#1E3A5F] text-white">
@@ -246,7 +236,6 @@ export default function PlayerRosterPage() {
         </table>
       </div>
 
-      {/* Recent sessions reference */}
       {sessions.length > 0 && (
         <div className="bg-white rounded-xl shadow-sm p-4">
           <h2 className="text-sm font-semibold text-gray-700 mb-3">

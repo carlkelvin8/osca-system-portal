@@ -166,7 +166,6 @@ export default function ReturnScannerPage() {
         </div>
       )}
 
-      {/* Camera scanner */}
       {scanning && (
         <div className="relative bg-black rounded-xl overflow-hidden max-w-md mx-auto">
           <video ref={videoRef} autoPlay muted playsInline className="w-full aspect-square object-cover" />
@@ -179,7 +178,6 @@ export default function ReturnScannerPage() {
         </div>
       )}
 
-      {/* Idle state */}
       {step === "idle" && !scanning && (
         <div className="text-center py-12">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-[#1E3A5F]/10 rounded-full mb-4">
@@ -227,7 +225,6 @@ export default function ReturnScannerPage() {
         </div>
       )}
 
-      {/* Transaction result */}
       {step === "result" && transaction && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-5">
           <div className="flex items-center justify-between">
@@ -307,7 +304,6 @@ export default function ReturnScannerPage() {
             </div>
           </div>
 
-          {/* Items */}
           <div>
             <h3 className="text-sm font-semibold text-gray-700 mb-2">Items to Return</h3>
             <table className="w-full text-sm">
@@ -336,7 +332,6 @@ export default function ReturnScannerPage() {
             </table>
           </div>
 
-          {/* Actions */}
           <div className="space-y-3 pt-2">
             {txIsLate && (
               <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 rounded-lg">
@@ -382,7 +377,6 @@ export default function ReturnScannerPage() {
         </div>
       )}
 
-      {/* Done state */}
       {step === "done" && (
         <div className="bg-white rounded-xl shadow-sm border border-green-200 p-8 text-center space-y-4">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full">

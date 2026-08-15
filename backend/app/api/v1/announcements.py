@@ -1,13 +1,3 @@
-"""
-Announcement endpoints.
-
-Routes:
-    GET    /announcements           — List active announcements (any authenticated user)
-    POST   /announcements           — Create announcement (Admin / Director)
-    PATCH  /announcements/{id}      — Update announcement (Admin / Director)
-    DELETE /announcements/{id}      — Soft-delete announcement (Admin / Director)
-    POST   /announcements/{id}/image — Upload announcement image (Admin / Director)
-"""
 import uuid
 from typing import Annotated
 
@@ -53,7 +43,6 @@ async def list_announcements(
     query = select(Announcement)
     if not include_inactive:
         query = query.where(Announcement.is_active == True)
-    # Pinned first, then upcoming events (NULL last), then created_at desc
     query = query.order_by(
         Announcement.pinned.desc(),
         Announcement.event_date.asc().nullslast(),
@@ -67,7 +56,6 @@ async def list_announcements(
 
     ann_ids = [a.id for a in rows]
 
-    # Bulk-fetch author names
     creators: dict[uuid.UUID, str] = {}
     author_ids = {a.created_by_id for a in rows}
     if author_ids:
@@ -76,7 +64,6 @@ async def list_announcements(
         )
         creators = {u.id: u.full_name for u in creator_rows.scalars()}
 
-    # Bulk-fetch acknowledgement + comment aggregates and the current user's acks
     ack_counts: dict[uuid.UUID, int] = {}
     comment_counts: dict[uuid.UUID, int] = {}
     my_acked: set[uuid.UUID] = set()
@@ -248,12 +235,10 @@ async def upload_announcement_image(
     if not ann or not ann.is_active:
         raise NotFoundError("Announcement", str(announcement_id))
 
-    # Validate file type
     allowed_types = {"image/jpeg", "image/png", "image/webp"}
     if file.content_type not in allowed_types:
         raise ForbiddenError("Only JPEG, PNG, and WebP images are allowed.")
 
-    # Validate file size (max 5 MB per file)
     contents = await file.read()
     if len(contents) > 5 * 1024 * 1024:
         raise ForbiddenError("Image must be 5 MB or smaller.")
@@ -270,7 +255,6 @@ async def upload_announcement_image(
 
     image_url = storage.get_presigned_url("osca-reports", key, expires_in=86400)
 
-    # Append to the ordered list (no fixed limit). image_url mirrors the first entry.
     urls = list(ann.image_urls or [])
     urls.append(image_url)
     ann.image_urls = urls
@@ -319,7 +303,6 @@ async def remove_announcement_image(
     ann.image_urls = urls or None
     ann.image_url = urls[0] if urls else None
 
-    # Best-effort purge of the object from MinIO (ignore failures).
     try:
         storage = StorageService()
         from urllib.parse import urlparse
@@ -355,7 +338,6 @@ async def acknowledge_announcement(
     current_user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AcknowledgementRead:
-    """Idempotently add the current user's acknowledgement to an announcement."""
     ann = await db.get(Announcement, announcement_id)
     if not ann or not ann.is_active:
         raise NotFoundError("Announcement", str(announcement_id))
@@ -402,7 +384,6 @@ async def unacknowledge_announcement(
     current_user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> None:
-    """Remove the current user's acknowledgement (toggle off)."""
     ann = await db.get(Announcement, announcement_id)
     if not ann or not ann.is_active:
         raise NotFoundError("Announcement", str(announcement_id))

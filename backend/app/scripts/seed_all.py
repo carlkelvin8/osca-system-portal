@@ -1,7 +1,3 @@
-"""
-Full database seeder — populates all tables with realistic demo data.
-Run: docker compose exec api python -m app.scripts.seed_all
-"""
 import asyncio
 import uuid
 from datetime import date, datetime, time, timedelta, UTC
@@ -25,14 +21,12 @@ TODAY = date.today()
 
 
 async def seed():
-    # Ensure all tables exist before seeding
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
     async with AsyncSessionLocal() as db:
         print("🌱 Starting full database seed...\n")
 
-        # ─── USERS ───────────────────────────────────────────────────────
         print("👤 Seeding users...")
         users_data = [
             {"email": "admin@osca.edu.ph", "first_name": "OSCA", "last_name": "Admin", "role": UserRole.ADMIN, "sport_or_art": "All"},
@@ -69,7 +63,6 @@ async def seed():
         await db.flush()
         print(f"   ✓ {len(users_data)} users ready")
 
-        # ─── FACILITIES ──────────────────────────────────────────────────
         print("🏟️  Seeding facilities...")
         facilities_data = [
             {"name": "Covered Court", "description": "Multi-purpose covered court for basketball and volleyball games.", "location": "Covered Court", "capacity": 500, "status": FacilityStatus.AVAILABLE, "condition": FacilityCondition.GOOD},
@@ -92,7 +85,6 @@ async def seed():
         await db.flush()
         print(f"   ✓ {len(facilities_data)} facilities ready")
 
-        # ─── FACILITY SCHEDULES ──────────────────────────────────────────
         print("📅 Seeding facility schedules...")
         schedules_data = [
             {"facility": "Covered Court", "title": "Basketball Practice - Varsity", "date": TODAY, "start": time(6, 0), "end": time(8, 0), "sport": "Basketball"},
@@ -109,7 +101,6 @@ async def seed():
         await db.flush()
         print(f"   ✓ {len(schedules_data)} schedules ready")
 
-        # ─── EQUIPMENT ───────────────────────────────────────────────────
         print("📦 Seeding equipment...")
         equipment_data = [
             {"name": "Basketball - Molten", "category": EquipmentCategory.BALLS, "condition": EquipmentCondition.GOOD, "total_quantity": 20, "available_quantity": 15, "sport_or_art": "Basketball", "storage_location": "Storage Room A"},
@@ -131,7 +122,6 @@ async def seed():
         await db.flush()
         print(f"   ✓ {len(equipment_data)} equipment items ready")
 
-        # ─── SESSIONS ────────────────────────────────────────────────────
         print("📋 Seeding attendance sessions...")
         sessions_data = [
             {"name": "Morning Practice - Basketball", "activity_type": "practice", "sport_or_art": "Basketball", "venue": "Covered Court", "start": NOW - timedelta(hours=3), "end": NOW - timedelta(hours=1)},
@@ -150,7 +140,6 @@ async def seed():
         await db.flush()
         print(f"   ✓ {len(sessions_data)} sessions ready")
 
-        # ─── ATTENDANCE RECORDS ──────────────────────────────────────────
         print("✅ Seeding attendance records...")
         students = [user_map[e] for e in ["student@osca.edu.ph", "student2@osca.edu.ph", "student3@osca.edu.ph", "student4@osca.edu.ph", "student5@osca.edu.ph", "student6@osca.edu.ph"]]
         if session_objs:
@@ -161,7 +150,6 @@ async def seed():
         await db.flush()
         print("   ✓ Attendance records seeded")
 
-        # ─── ELIGIBILITY ─────────────────────────────────────────────────
         print("🛡️  Seeding eligibility records...")
         elig_data = [
             {"student": "student3@osca.edu.ph", "status": EligibilityStatus.RESTRICTED, "reason_type": EligibilityReasonType.INJURY, "reason_detail": "Sprained ankle during practice", "start_date": TODAY - timedelta(days=5)},
@@ -176,7 +164,6 @@ async def seed():
         await db.flush()
         print(f"   ✓ {len(elig_data)} eligibility records ready")
 
-        # ─── INCIDENTS ───────────────────────────────────────────────────
         print("⚠️  Seeding incidents...")
         incidents_data = [
             {"title": "Student injured during practice", "description": "Mark Lopez twisted his ankle during basketball drills", "category": IncidentCategory.INJURY, "severity": IncidentSeverity.MEDIUM, "student": "student3@osca.edu.ph", "location": "Covered Court"},
@@ -192,7 +179,6 @@ async def seed():
         await db.flush()
         print(f"   ✓ {len(incidents_data)} incidents ready")
 
-        # ─── SANCTIONS ───────────────────────────────────────────────────
         print("⚖️  Seeding sanctions...")
         sanctions_data = [
             {"student": "student3@osca.edu.ph", "violation_type": ViolationType.TARDINESS, "severity": SanctionSeverity.WARNING, "description": "Late to practice 3 consecutive times", "violation_date": TODAY - timedelta(days=7), "start_date": TODAY - timedelta(days=7)},
@@ -209,7 +195,6 @@ async def seed():
         await db.flush()
         print(f"   ✓ {len(sanctions_data)} sanctions ready")
 
-        # ─── ANNOUNCEMENTS ───────────────────────────────────────────────
         print("📢 Seeding announcements...")
         announcements_data = [
             {"title": "Inter-School Basketball Tournament", "content": "OSCA will be hosting the annual inter-school basketball tournament. All varsity players must attend the orientation meeting.", "event_date": NOW + timedelta(days=14)},
@@ -223,7 +208,6 @@ async def seed():
         await db.flush()
         print(f"   ✓ {len(announcements_data)} announcements ready")
 
-        # ─── COMMIT ──────────────────────────────────────────────────────
         await db.commit()
         print("\n🎉 Database seeding complete! All tables populated.")
         print(f"   Password for all accounts: {PASSWORD}")

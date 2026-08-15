@@ -1,11 +1,3 @@
-"""Facility monitoring + venue reservation endpoints.
-
-Permissions:
-- View venues / reservations   : Admin, Director, Staff, Coach, PE Instructor
-- Manage venues / reservations : Admin, Director, Staff
-- Submit reservations          : Coach, PE Instructor
-- Students                     : no access
-"""
 import uuid
 from datetime import date as dt_date, datetime as dt_datetime, time as dt_time
 from typing import Annotated
@@ -43,7 +35,6 @@ _EDITOR_ROLES = (UserRole.ADMIN, UserRole.DIRECTOR, UserRole.STAFF)
 
 
 def _jsonable(d: dict) -> dict:
-    """Convert UUID / date / time / datetime values to strings for JSONB audit columns."""
     from datetime import date as _date, datetime as _datetime, time as _time
 
     def conv(v):
@@ -74,7 +65,6 @@ async def _conflicting_reservation(
     exclude_id: uuid.UUID | None = None,
     statuses: tuple[ReservationStatus, ...] | None = None,
 ) -> VenueReservationRequest | None:
-    """Return an existing reservation that overlaps the given slot."""
     statuses = statuses or (ReservationStatus.PENDING, ReservationStatus.APPROVED)
     q = select(VenueReservationRequest).where(
         VenueReservationRequest.facility_id == facility_id,
@@ -200,7 +190,6 @@ async def delete_facility(
     if not facility or not facility.is_active:
         raise HTTPException(status_code=404, detail="Facility not found")
 
-    # Soft delete — keep history/FKs intact.
     facility.is_active = False
     await audit_log(
         db=db,
@@ -256,8 +245,6 @@ async def upload_facility_image(
     return _read_facility(facility)
 
 
-# ── Venue Reservation Requests ──────────────────────────────────────────────
-
 @router.get("/reservations", response_model=PaginatedResponse[ReservationRead], summary="List venue reservation requests")
 async def list_reservations(
     current_user: CurrentUser,
@@ -272,7 +259,6 @@ async def list_reservations(
 
     query = select(VenueReservationRequest)
     if current_user.role not in _EDITOR_ROLES:
-        # Coach / PE Instructor — own requests only
         query = query.where(VenueReservationRequest.requester_id == current_user.id)
     if status_filter:
         query = query.where(VenueReservationRequest.status == status_filter)
@@ -492,7 +478,6 @@ async def list_venue_reservations(
     current_user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    """Return upcoming reservations (today onward) for a venue, any status, for non-students."""
     if current_user.role == UserRole.STUDENT:
         raise HTTPException(status_code=403, detail="Access denied.")
 
@@ -525,8 +510,6 @@ async def list_venue_reservations(
         items.append(item)
     return items
 
-
-# ── Schedules (legacy, no longer surfaced in the UI) ───────────────────────
 
 @router.get("/schedules", response_model=list[ScheduleRead], summary="List facility schedules")
 async def list_schedules(

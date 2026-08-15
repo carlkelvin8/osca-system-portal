@@ -1,7 +1,3 @@
-"""
-OSCA System - FastAPI Application Entry Point
-Python 3.12 | FastAPI 0.115.x | 2026 Best Practices
-"""
 import structlog
 from contextlib import asynccontextmanager
 
@@ -19,10 +15,8 @@ from app.database import Base
 logger = structlog.get_logger(__name__)
 
 
-# ── Lifespan (startup / shutdown) ─────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application startup and shutdown events."""
     logger.info(
         "osca_startup",
         app_name=settings.APP_NAME,
@@ -31,13 +25,10 @@ async def lifespan(app: FastAPI):
         fr_model=settings.FR_MODEL,
     )
 
-    # Create DB tables automatically in dev & testing.
-    # Production should use ``alembic upgrade head`` explicitly.
     if settings.APP_ENV != "production":
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
 
-    # Pre-warm facial recognition model on startup
     if settings.FR_MODEL == "insightface":
         try:
             from app.services.facial_recognition import FacialRecognitionService
@@ -56,12 +47,10 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # Shutdown
     logger.info("osca_shutdown")
     await engine.dispose()
 
 
-# ── App Instance ──────────────────────────────────────────────────────────────
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
@@ -73,12 +62,11 @@ app = FastAPI(
     docs_url=settings.docs_url,
     redoc_url=settings.redoc_url,
     openapi_url="/openapi.json" if not settings.is_production else None,
-    default_response_class=ORJSONResponse,  # Faster JSON serialization
+    default_response_class=ORJSONResponse,
     lifespan=lifespan,
-    redirect_slashes=False,  # Prevent 308 redirects that browsers cache permanently
+    redirect_slashes=False,
 )
 
-# ── Middleware ─────────────────────────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
@@ -89,14 +77,11 @@ app.add_middleware(
 )
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-# ── Exception Handlers ────────────────────────────────────────────────────────
 register_exception_handlers(app)
 
-# ── Routers ───────────────────────────────────────────────────────────────────
 app.include_router(api_router, prefix=settings.API_PREFIX)
 
 
-# ── Health Check ──────────────────────────────────────────────────────────────
 @app.get("/health", tags=["Health"], include_in_schema=False)
 async def health_check() -> dict:
     return {

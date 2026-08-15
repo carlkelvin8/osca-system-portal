@@ -5,24 +5,18 @@ import { inventoryApi } from "@/lib/api";
 import { equipmentCache, offlineQueue, type OfflineTransaction } from "@/lib/offlineStore";
 import { useNetworkStatus } from "./useNetworkStatus";
 
-/**
- * Manages the offline transaction queue and syncs to server when online.
- * Also keeps the local equipment cache up to date.
- */
 export function useOfflineSync() {
   const { isServerReachable } = useNetworkStatus();
   const [pending, setPending] = useState<OfflineTransaction[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastCacheUpdate, setLastCacheUpdate] = useState<string | null>(null);
 
-  // Load pending transactions on mount
   useEffect(() => {
     setPending(offlineQueue.getPending());
     const cached = equipmentCache.load();
     if (cached) setLastCacheUpdate(cached.cachedAt);
   }, []);
 
-  // Refresh the local equipment cache when server is reachable
   const refreshCache = useCallback(async () => {
     if (!isServerReachable) return;
     try {
@@ -30,18 +24,15 @@ export function useOfflineSync() {
       equipmentCache.save(res.data.items);
       setLastCacheUpdate(new Date().toISOString());
     } catch {
-      // Silently fail — keep existing cache
     }
   }, [isServerReachable]);
 
-  // Auto-refresh cache when coming online
   useEffect(() => {
     if (isServerReachable) {
       refreshCache();
     }
   }, [isServerReachable, refreshCache]);
 
-  // Sync pending transactions to server
   const sync = useCallback(async () => {
     if (!isServerReachable || isSyncing) return;
     const pendingTxs = offlineQueue.getPending();
@@ -73,18 +64,15 @@ export function useOfflineSync() {
     setPending(offlineQueue.getPending());
     setIsSyncing(false);
 
-    // Refresh cache after sync to get updated quantities
     refreshCache();
   }, [isServerReachable, isSyncing, refreshCache]);
 
-  // Auto-sync when coming back online
   useEffect(() => {
     if (isServerReachable && offlineQueue.getPending().length > 0) {
       sync();
     }
   }, [isServerReachable, sync]);
 
-  // Queue a new offline transaction
   const queueTransaction = useCallback(
     (type: OfflineTransaction["type"], payload: Record<string, unknown>) => {
       const tx = offlineQueue.add(type, payload);
@@ -94,7 +82,6 @@ export function useOfflineSync() {
     []
   );
 
-  // Dismiss a failed transaction
   const dismissTransaction = useCallback((id: string) => {
     offlineQueue.remove(id);
     setPending(offlineQueue.getPending());

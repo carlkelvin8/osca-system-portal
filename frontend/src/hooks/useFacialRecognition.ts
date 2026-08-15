@@ -1,8 +1,3 @@
-/**
- * Custom hook for kiosk facial recognition.
- * Captures webcam frames, sends to FastAPI /attendance/scan,
- * and returns scan result for UI feedback.
- */
 "use client";
 
 import { useCallback, useRef, useState } from "react";
@@ -44,7 +39,6 @@ export function useFacialRecognition({
       return;
     }
 
-    // Extract base64 data (remove data:image/jpeg;base64, prefix)
     const base64 = screenshot.split(",")[1];
 
     setState({ isScanning: true, lastResult: null, error: null });

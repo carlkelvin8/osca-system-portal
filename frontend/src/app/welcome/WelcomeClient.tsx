@@ -6,14 +6,12 @@ import Image from "next/image";
 import { motion } from "framer-motion";
 import { UserPlus, Calendar, Trophy, Building2, Palette, Users, ExternalLink, ArrowRight } from "lucide-react";
 
-/* ═══ HERO CAROUSEL IMAGES ═══ */
 const HERO_SLIDES = [
   { src: "/osca_pic.jpg", alt: "OSCA Sports and Cultural Affairs" },
   { src: "/osca_pic2.jpg", alt: "OSCA Athletic Events" },
   { src: "/osca_pic3.jpg", alt: "OSCA Cultural Performances" },
 ];
 
-/* ═══ NEWS ITEMS ═══ */
 const NEWS_ITEMS = [
   {
     title: "Community Outreach: Supporting Assoc. Prof. Joselito N. Bacani",
@@ -25,7 +23,6 @@ const NEWS_ITEMS = [
   },
 ];
 
-/* ═══ NAV LINKS ═══ */
 const NAV_LINKS = [
   { label: "Home", section: "home" },
   { label: "News", section: "news" },
@@ -34,14 +31,12 @@ const NAV_LINKS = [
   { label: "Contact", section: "contact" },
 ];
 
-/* ═══ MAIN PAGE ═══ */
 export default function WelcomeClient() {
   const [active, setActive] = useState("Home");
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // ── IntersectionObserver for active nav ──
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
@@ -93,8 +88,7 @@ export default function WelcomeClient() {
 
   return (
     <div style={{ fontFamily: "'Inter', system-ui, sans-serif", background: "#ffffff", color: "#0f1b2d", minHeight: "100vh" }}>
-     {/* ─── NAVBAR (crest style) ─── */}
-<nav style={{ background: "#0d1f3c", borderTop: "3px solid #C9A84C", borderBottom: "3px solid #C9A84C", position: "sticky", top: 0, zIndex: 100 }}>
+     <nav style={{ background: "#0d1f3c", borderTop: "3px solid #C9A84C", borderBottom: "3px solid #C9A84C", position: "sticky", top: 0, zIndex: 100 }}>
   <div style={{ maxWidth: 1280, margin: "0 auto", padding: "10px 24px 10px 8px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
     <Link href="/" style={{ display: "flex", alignItems: "center", gap: 6, textDecoration: "none" }}>
       <div style={{ width: 44, height: 44, borderRadius: "50%", border: "2px solid #C9A84C", overflow: "hidden", background: "#132a4d", flexShrink: 0 }}>
@@ -127,7 +121,6 @@ export default function WelcomeClient() {
   </div>
  </nav>
 
-      {/* ─── HERO CAROUSEL ─── */}
       <section id="home"
         onMouseEnter={() => setIsPaused(true)}
         onMouseLeave={() => setIsPaused(false)}
@@ -140,7 +133,6 @@ export default function WelcomeClient() {
           padding: "0 0 48px",
         }}
       >
-        {/* Slides */}
         {HERO_SLIDES.map((slide, idx) => (
           <div
             key={idx}
@@ -163,7 +155,6 @@ export default function WelcomeClient() {
           </div>
         ))}
 
-        {/* Gradient overlay */}
         <div
           style={{
             position: "absolute",
@@ -173,7 +164,6 @@ export default function WelcomeClient() {
           }}
         />
 
-        {/* Prev / Next arrows */}
         <button
           onClick={goPrev}
           aria-label="Previous slide"
@@ -233,7 +223,6 @@ export default function WelcomeClient() {
           &#8250;
         </button>
 
-        {/* Pagination dots */}
         <div
           style={{
             position: "absolute",
@@ -264,7 +253,6 @@ export default function WelcomeClient() {
           ))}
         </div>
 
-        {/* Text overlay */}
         <div style={{ position: "relative", zIndex: 5, maxWidth: 1280, margin: "0 auto", padding: "0 24px", width: "100%" }}>
           <motion.h1
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}
@@ -294,18 +282,14 @@ export default function WelcomeClient() {
         </div>
       </section>
 
-      {/* ─── DASHBOARD (3‑COLUMN) ─── */}
       <section style={{ maxWidth: 1280, margin: "0 auto", padding: "8px 24px 0" }}>
         <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
           style={{ display: "grid", gridTemplateColumns: "260px 1fr 260px", gap: 22, alignItems: "start" }}>
 
-          {/* ── LEFT COLUMN ── */}
           <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
 
-            {/* Announcements Mini Carousel */}
             <AnnouncementsCarousel />
 
-            {/* Open for Tryouts Card */}
             <div style={{ borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
               <div style={{ borderTop: "3px solid #C9A84C", padding: 20, background: "#fff" }}>
                 <h3 style={{ fontSize: 14, fontWeight: 800, color: "#0d1f3c", marginBottom: 8 }}>Open for Tryouts</h3>
@@ -320,9 +304,7 @@ export default function WelcomeClient() {
             </div>
           </div>
 
-          {/* ── CENTER COLUMN ── */}
           <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
-            {/* Quick Links Panel */}
             <div style={{ borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
               <div style={{ background: "#0d1f3c", padding: "14px 20px" }}>
                 <h3 style={{ fontSize: 12, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: "0.08em" }}>Quick Links</h3>
@@ -351,7 +333,6 @@ export default function WelcomeClient() {
               </div>
             </div>
 
-            {/* Message Card */}
             <div style={{ borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
               <div style={{ position: "relative", height: 180, overflow: "hidden", background: "#e7eaf0" }}>
                 <Image src="/osca_pic.jpg" alt="OSCA" fill style={{ objectFit: "cover" }} />
@@ -368,9 +349,7 @@ export default function WelcomeClient() {
             </div>
           </div>
 
-          {/* ── RIGHT COLUMN ── */}
           <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
-            {/* Follow Us Card */}
             <div style={{ borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
               <div style={{ background: "#0d1f3c", padding: "14px 20px" }}>
                 <h3 style={{ fontSize: 12, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: "0.08em" }}>Follow Us</h3>
@@ -392,7 +371,6 @@ export default function WelcomeClient() {
               </div>
             </div>
 
-            {/* Find Your Team Card */}
             <div style={{ borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
               <div style={{ background: "#0d1f3c", padding: "14px 20px" }}>
                 <h3 style={{ fontSize: 12, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: "0.08em" }}>Find Your Team</h3>
@@ -412,7 +390,6 @@ export default function WelcomeClient() {
               </div>
             </div>
 
-            {/* Motivation Banner */}
             <div style={{ padding: "28px 20px", borderRadius: 12, background: "linear-gradient(135deg, #1d4ed8, #0d1f3c)", textAlign: "center" }}>
               <p style={{ fontSize: 16, fontWeight: 900, color: "#fff", lineHeight: 1.4, letterSpacing: "0.02em" }}>
                 EXCELLENCE<br />HAS NO LIMITS
@@ -423,7 +400,6 @@ export default function WelcomeClient() {
         </motion.div>
       </section>
 
-      {/* ─── LATEST NEWS & ANNOUNCEMENTS ─── */}
       <section id="news" style={{ padding: "60px 24px", maxWidth: 1100, margin: "0 auto" }}>
         <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} style={{ textAlign: "center", marginBottom: 40 }}>
           <span style={{ display: "inline-block", padding: "5px 16px", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#0d1f3c", background: "rgba(201,168,76,0.15)", borderRadius: 50, marginBottom: 14 }}>Latest News</span>
@@ -470,7 +446,6 @@ export default function WelcomeClient() {
         )}
       </section>
 
-      {/* ─── VISION & MISSION ─── */}
       <section id="about" style={{ padding: "60px 24px", maxWidth: 1100, margin: "0 auto" }}>
         <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} style={{ textAlign: "center", marginBottom: 40 }}>
           <span style={{ display: "inline-block", padding: "5px 16px", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#0d1f3c", background: "rgba(201,168,76,0.15)", borderRadius: 50, marginBottom: 14 }}>About OSCA</span>
@@ -495,14 +470,12 @@ export default function WelcomeClient() {
         </div>
       </section>
 
-      {/* ─── OSCA PERSONNEL ─── */}
       <section id="sports" style={{ padding: "60px 24px", maxWidth: 1100, margin: "0 auto", background: "#fafafa" }}>
         <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} style={{ textAlign: "center", marginBottom: 40 }}>
           <span style={{ display: "inline-block", padding: "5px 16px", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#0d1f3c", background: "rgba(201,168,76,0.15)", borderRadius: 50, marginBottom: 14 }}>OSCA Personnel</span>
           <h2 style={{ fontSize: "clamp(22px, 3.5vw, 32px)", fontWeight: 800, color: "#0d1f3c" }}>Our Team</h2>
         </motion.div>
 
-        {/* President */}
         <motion.div
           initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
           style={{ textAlign: "center", marginBottom: 40, padding: "26px 20px", borderRadius: 10, background: "#0d1f3c", border: "1px solid #0d1f3c" }}
@@ -512,7 +485,6 @@ export default function WelcomeClient() {
           <p style={{ fontSize: 12, color: "#C9A84C", fontWeight: 600, marginTop: 4 }}>President of National Aviation Academy of the Philippines</p>
         </motion.div>
 
-        {/* Director & Staff */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16, marginBottom: 36 }}>
           {[
             { name: "ENGR. JEQ ZYRIUS A. SUDWESTE, MEA", role: "Vice President of Student Affairs" },
@@ -530,7 +502,6 @@ export default function WelcomeClient() {
           ))}
         </div>
 
-        {/* Sports Coaches */}
         <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} style={{ marginBottom: 36 }}>
           <h3 style={{ fontSize: 13, fontWeight: 700, color: "#0d1f3c", textTransform: "uppercase", letterSpacing: "0.08em", textAlign: "center", marginBottom: 18 }}>Sports Coaches</h3>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 12 }}>
@@ -553,7 +524,6 @@ export default function WelcomeClient() {
           </div>
         </motion.div>
 
-        {/* Trainers */}
         <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}>
           <h3 style={{ fontSize: 13, fontWeight: 700, color: "#0d1f3c", textTransform: "uppercase", letterSpacing: "0.08em", textAlign: "center", marginBottom: 18 }}>Trainers</h3>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 12 }}>
@@ -572,7 +542,6 @@ export default function WelcomeClient() {
         </motion.div>
       </section>
 
-      {/* ─── CONTACT ─── */}
       <section id="contact" style={{ padding: "56px 24px", maxWidth: 600, margin: "0 auto", textAlign: "center" }}>
         <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}>
           <span style={{ display: "inline-block", padding: "5px 16px", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#0d1f3c", background: "rgba(201,168,76,0.15)", borderRadius: 50, marginBottom: 16 }}>Contact</span>
@@ -584,7 +553,6 @@ export default function WelcomeClient() {
         </motion.div>
       </section>
 
-      {/* ─── FOOTER ─── */}
       <footer style={{ background: "#0d1f3c", borderTop: "3px solid #C9A84C", padding: "24px" }}>
         <div style={{ maxWidth: 1100, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -602,7 +570,6 @@ export default function WelcomeClient() {
   );
 }
 
-/* ═══ ANNOUNCEMENTS MINI CAROUSEL ═══ */
 const ANNOUNCEMENTS = [
   { title: "Basketball & Volleyball Tryouts", date: "March 15, 2026", excerpt: "Tryouts for the NAAP men's and women's basketball and volleyball teams are now open for all students." },
   { title: "OSCA Choir Auditions", date: "March 22, 2026", excerpt: "Showcase your vocal talent! Auditions for the OSCA Chorale are open to all grade levels." },

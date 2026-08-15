@@ -1,6 +1,3 @@
-"""
-FastAPI dependency injection — authentication, RBAC, rate limiting.
-"""
 import uuid
 from typing import Annotated
 
@@ -21,8 +18,6 @@ logger = structlog.get_logger(__name__)
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
-# ── Redis Client ──────────────────────────────────────────────────────────────
-
 _redis_client: aioredis.Redis | None = None
 
 
@@ -37,18 +32,12 @@ async def get_redis() -> aioredis.Redis:
     return _redis_client
 
 
-# ── Token Extraction & Validation ─────────────────────────────────────────────
-
 async def get_current_user(
     request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
     db: Annotated[AsyncSession, Depends(get_db)],
     redis: Annotated[aioredis.Redis, Depends(get_redis)],
 ) -> User:
-    """
-    Validate Bearer JWT, check token blacklist (Redis), return User.
-    Raises 401 on any failure.
-    """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -60,7 +49,6 @@ async def get_current_user(
 
     token = credentials.credentials
 
-    # Check token blacklist (logout / rotation invalidation)
     blacklisted = await redis.get(f"blacklist:{token}")
     if blacklisted:
         raise credentials_exception
@@ -82,13 +70,10 @@ async def get_current_user(
     if user is None or not user.is_active:
         raise credentials_exception
 
-    # Attach the request so audit logging can extract IP / browser / device context.
     user._current_request = request
 
     return user
 
-
-# ── Typed Current User Aliases ────────────────────────────────────────────────
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
 
@@ -99,10 +84,6 @@ async def get_optional_user(
     db: Annotated[AsyncSession, Depends(get_db)],
     redis: Annotated[aioredis.Redis, Depends(get_redis)],
 ) -> User | None:
-    """
-    Like get_current_user but returns None instead of raising 401.
-    Used for endpoints that behave differently for authenticated vs anonymous callers.
-    """
     if not credentials:
         return None
     try:
@@ -130,10 +111,7 @@ async def get_optional_user(
 OptionalUser = Annotated[User | None, Depends(get_optional_user)]
 
 
-# ── RBAC Role Checkers ────────────────────────────────────────────────────────
-
 def require_roles(*roles: UserRole):
-    """Factory that returns a dependency enforcing role membership."""
     async def _check(current_user: CurrentUser) -> User:
         if current_user.role not in roles:
             raise HTTPException(
@@ -144,7 +122,6 @@ def require_roles(*roles: UserRole):
     return _check
 
 
-# Pre-built role dependencies — Director shares Admin privileges
 AdminOnly = Annotated[User, Depends(require_roles(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.STAFF))]
 AdminOrCoach = Annotated[User, Depends(require_roles(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.STAFF, UserRole.COACH))]
 CoachOrPe = Annotated[User, Depends(require_roles(UserRole.COACH, UserRole.PE_INSTRUCTOR))]
@@ -154,24 +131,16 @@ StaffOnly = Annotated[User, Depends(
 NotStudent = Annotated[User, Depends(
     require_roles(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.STAFF, UserRole.COACH, UserRole.PE_INSTRUCTOR)
 )]
-# For attendance scan — must be logged-in user (not public)
 ScanStaff = Annotated[User, Depends(
     require_roles(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.STAFF, UserRole.COACH, UserRole.PE_INSTRUCTOR, UserRole.STUDENT)
 )]
 
 
-# ── Rate Limiting ─────────────────────────────────────────────────────────────
-
 async def check_login_rate_limit(request: Request, redis: Annotated[aioredis.Redis, Depends(get_redis)]) -> None:
-    """
-    Enforces login rate limit: 5 attempts per 15 min, then 30-min lockout.
-    Key is based on client IP.
-    """
     client_ip = request.client.host if request.client else "unknown"
     lockout_key = f"login_lockout:{client_ip}"
     attempt_key = f"login_attempts:{client_ip}"
 
-    # Check lockout
     if await redis.exists(lockout_key):
         ttl = await redis.ttl(lockout_key)
         raise HTTPException(
@@ -179,7 +148,6 @@ async def check_login_rate_limit(request: Request, redis: Annotated[aioredis.Red
             detail=f"Too many failed attempts. Try again in {ttl} seconds.",
         )
 
-    # Increment attempts
     attempts = await redis.incr(attempt_key)
     if attempts == 1:
         await redis.expire(attempt_key, settings.LOGIN_RATE_LIMIT_WINDOW_SECONDS)
@@ -194,6 +162,5 @@ async def check_login_rate_limit(request: Request, redis: Annotated[aioredis.Red
 
 
 async def clear_login_rate_limit(client_ip: str, redis: aioredis.Redis) -> None:
-    """Clear rate limit counters on successful login."""
     await redis.delete(f"login_attempts:{client_ip}")
     await redis.delete(f"login_lockout:{client_ip}")

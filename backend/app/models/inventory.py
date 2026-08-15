@@ -1,7 +1,3 @@
-"""
-Inventory models: Equipment, BorrowingID, BorrowTransaction,
-EquipmentRequest, EquipmentRequestItem.
-"""
 import enum
 import uuid
 from datetime import datetime
@@ -32,8 +28,8 @@ class EquipmentCategory(str, enum.Enum):
     UNIFORMS = "uniforms"
     TRAINING_AIDS = "training_aids"
     ELECTRONIC = "electronic"
-    CULTURAL = "cultural"           # Musical instruments, costumes, etc.
-    STORAGE_UNIT = "storage_unit"   # Non-labelable → QR code on container
+    CULTURAL = "cultural"
+    STORAGE_UNIT = "storage_unit"
     OTHER = "other"
 
 
@@ -54,17 +50,13 @@ class EquipmentCondition(str, enum.Enum):
 
 
 class TransactionStatus(str, enum.Enum):
-    ACTIVE = "active"           # Currently borrowed
-    RETURNED = "returned"       # All items returned
-    OVERDUE = "overdue"         # Past expected_return and not returned
-    PARTIAL_RETURN = "partial_return"  # Some items returned
+    ACTIVE = "active"
+    RETURNED = "returned"
+    OVERDUE = "overdue"
+    PARTIAL_RETURN = "partial_return"
 
 
 class Equipment(Base):
-    """
-    Physical equipment managed by OSCA.
-    Each piece gets a QR code label printed via Zebra GK420d.
-    """
     __tablename__ = "equipment"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -79,25 +71,21 @@ class Equipment(Base):
         default=EquipmentCondition.GOOD,
     )
 
-    # QR Code identifier
     qr_code: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
     qr_image_key: Mapped[str | None] = mapped_column(
         String(500), nullable=True,
         comment="MinIO object key for printed QR code label image"
     )
 
-    # Quantity tracking
     total_quantity: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     available_quantity: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
 
-    # Location
     storage_location: Mapped[str | None] = mapped_column(String(200), nullable=True)
     sport_or_art: Mapped[str | None] = mapped_column(
         String(100), nullable=True,
         comment="Which sport/art this equipment belongs to"
     )
 
-    # Metadata
     acquisition_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     acquisition_cost: Mapped[float | None] = mapped_column(Float, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
@@ -113,7 +101,6 @@ class Equipment(Base):
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
     )
 
-    # Relationships
     transaction_items: Mapped[list["BorrowTransactionItem"]] = relationship(
         "BorrowTransactionItem", back_populates="equipment"
     )
@@ -133,10 +120,6 @@ class Equipment(Base):
 
 
 class BorrowingID(Base):
-    """
-    Physical QR Code card issued to PE Instructors.
-    Printed via Zebra GK420d on destructible vinyl labels.
-    """
     __tablename__ = "borrowing_ids"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -155,7 +138,6 @@ class BorrowingID(Base):
     )
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    # Relationships
     instructor: Mapped["User"] = relationship("User", back_populates="borrowing_id")  # noqa: F821
     transactions: Mapped[list["BorrowTransaction"]] = relationship(
         "BorrowTransaction", back_populates="borrowing_id_record"
@@ -163,15 +145,10 @@ class BorrowingID(Base):
 
 
 class BorrowTransaction(Base):
-    """
-    A borrowing session initiated by a PE Instructor.
-    One transaction can include multiple equipment items.
-    """
     __tablename__ = "borrow_transactions"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
-    # PE Instructor who borrowed
     borrowing_id_record_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("borrowing_ids.id"), nullable=False
     )
@@ -179,7 +156,6 @@ class BorrowTransaction(Base):
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
     )
 
-    # Who processed the transaction
     processed_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
     )
@@ -196,13 +172,11 @@ class BorrowTransaction(Base):
     expected_return: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     returned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    # Overdue notification tracking
     overdue_notified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     overdue_notified_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 
-    # Transaction QR Code for staff release workflow
     transaction_qr_code: Mapped[str | None] = mapped_column(
         String(100), nullable=True, unique=True, index=True,
         comment="Unique QR code for this transaction (used by staff to confirm release)"
@@ -211,7 +185,6 @@ class BorrowTransaction(Base):
 
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    # Relationships
     borrowing_id_record: Mapped["BorrowingID"] = relationship(
         "BorrowingID", back_populates="transactions"
     )
@@ -231,7 +204,6 @@ class BorrowTransaction(Base):
 
 
 class BorrowTransactionItem(Base):
-    """Line item: one equipment unit in one borrow transaction."""
     __tablename__ = "borrow_transaction_items"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -250,7 +222,6 @@ class BorrowTransactionItem(Base):
     )
     notes: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
-    # Relationships
     transaction: Mapped["BorrowTransaction"] = relationship(
         "BorrowTransaction", back_populates="items"
     )
@@ -262,15 +233,7 @@ class BorrowTransactionItem(Base):
     )
 
 
-# ── Equipment Request / Approval Workflow ──────────────────────────────────────
-
-
 class EquipmentRequest(Base):
-    """
-    A Coach or PE Instructor submits a request for equipment.
-    An Admin or Director reviews and approves or rejects it.
-    On approval a BorrowTransaction is created automatically.
-    """
     __tablename__ = "equipment_requests"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -288,7 +251,6 @@ class EquipmentRequest(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
-    # Approval fields (nullable until approved/rejected)
     approved_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
     )
@@ -296,7 +258,6 @@ class EquipmentRequest(Base):
     rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     return_qr_code: Mapped[str | None] = mapped_column(String(100), nullable=True, unique=True)
 
-    # Relationships
     requester: Mapped["User"] = relationship("User", foreign_keys=[requester_id])  # noqa: F821
     approved_by: Mapped["User | None"] = relationship(  # noqa: F821
         "User", foreign_keys=[approved_by_id]
@@ -312,7 +273,6 @@ class EquipmentRequest(Base):
 
 
 class EquipmentRequestItem(Base):
-    """Line item within an EquipmentRequest."""
     __tablename__ = "equipment_request_items"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -325,7 +285,6 @@ class EquipmentRequestItem(Base):
     )
     quantity: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
 
-    # Relationships
     request: Mapped["EquipmentRequest"] = relationship("EquipmentRequest", back_populates="items")
     equipment: Mapped["Equipment"] = relationship("Equipment", back_populates="request_items")
 

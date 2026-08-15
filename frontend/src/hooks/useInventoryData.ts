@@ -1,10 +1,5 @@
 "use client";
 
-/**
- * React Query hooks for the Inventory module.
- * Maps to SQL queries Q-34 – Q-39 in OSCA_SQL_Queries.sql.
- */
-
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { inventoryApi } from "@/lib/api";
 import { equipmentCache } from "@/lib/offlineStore";
@@ -13,8 +8,6 @@ import type { Equipment, PaginatedResponse } from "@/types";
 
 const PAGE_SIZE = 20;
 
-// ── Filter params shared by Q-35 and Q-36 ────────────────────────────────────
-
 export interface EquipmentFilters {
   search?: string;
   category?: string;
@@ -22,12 +15,6 @@ export interface EquipmentFilters {
   available_only?: boolean;
 }
 
-// ── Q-35: Count equipment (with optional filters) ─────────────────────────────
-
-/**
- * Returns the total count of active equipment matching the given filters.
- * Reuses the paginated list endpoint's `total` field — no separate endpoint needed.
- */
 export function useEquipmentCount(filters: EquipmentFilters = {}) {
   const { isServerReachable } = useNetworkStatus();
 
@@ -54,15 +41,6 @@ export function useEquipmentCount(filters: EquipmentFilters = {}) {
   });
 }
 
-// ── Q-36: Paginated equipment list ───────────────────────────────────────────
-
-/**
- * Returns a paginated list of active equipment with optional filters.
- * Matches: SELECT id, name, description, category, condition, barcode,
- *          total_quantity, available_quantity, storage_location, sport_or_art,
- *          acquisition_date, acquisition_cost, is_active, notes, created_at
- *          FROM equipment WHERE is_active = TRUE ...
- */
 export function useInventoryList(
   page: number,
   search: string,
@@ -73,7 +51,6 @@ export function useInventoryList(
   return useQuery<PaginatedResponse<Equipment>>({
     queryKey: ["equipment", page, search, filters],
     queryFn: async () => {
-      // ── Offline: serve from localStorage cache ──────────────────────────
       if (!isServerReachable) {
         const cached = equipmentCache.load();
         if (!cached) return { items: [], total: 0, page: 1, page_size: PAGE_SIZE, pages: 0 };
@@ -91,7 +68,6 @@ export function useInventoryList(
         };
       }
 
-      // ── Online: fetch from API ──────────────────────────────────────────
       const params: Record<string, string | number | boolean> = {
         page,
         page_size: PAGE_SIZE,
@@ -103,12 +79,11 @@ export function useInventoryList(
 
       const res = await inventoryApi.listEquipment(params);
 
-      // Refresh offline cache in the background (backend max page_size = 100)
       if (page === 1 && !search) {
         inventoryApi
           .listEquipment({ page_size: 100 })
           .then((r) => equipmentCache.save(r.data.items))
-          .catch(() => {/* keep existing cache on failure */});
+          .catch(() => {});
       }
 
       return res.data;
@@ -117,12 +92,6 @@ export function useInventoryList(
   });
 }
 
-// ── Q-37: Get equipment by ID ────────────────────────────────────────────────
-
-/**
- * Fetches a single equipment record by UUID.
- * Matches: SELECT ... FROM equipment WHERE id = :equipment_id
- */
 export function useEquipmentById(id: string | null) {
   return useQuery<Equipment>({
     queryKey: ["equipment", id],
@@ -135,13 +104,6 @@ export function useEquipmentById(id: string | null) {
   });
 }
 
-// ── Q-38: Get equipment by barcode / QR code ─────────────────────────────────
-
-/**
- * Looks up equipment by its barcode (QR code value).
- * Matches: SELECT ... FROM equipment WHERE barcode = :barcode
- * Falls back to local cache when offline.
- */
 export function useEquipmentByBarcode(barcode: string | null) {
   const { isServerReachable } = useNetworkStatus();
 
@@ -161,9 +123,6 @@ export function useEquipmentByBarcode(barcode: string | null) {
   });
 }
 
-// ── Invalidation helper ───────────────────────────────────────────────────────
-
-/** Call after Q-34 (create) or Q-39 (update) to refetch the list. */
 export function useInvalidateInventory() {
   const queryClient = useQueryClient();
   return () => queryClient.invalidateQueries({ queryKey: ["equipment"] });

@@ -1,4 +1,3 @@
-"""Athlete eligibility endpoints."""
 import uuid
 from datetime import date as _date, datetime as _datetime, UTC
 from typing import Annotated
@@ -22,7 +21,6 @@ _storage = StorageService()
 
 
 def _jsonable(d: dict) -> dict:
-    """Convert UUID / date / time / datetime values to strings for JSONB audit columns."""
     def conv(v):
         if isinstance(v, (uuid.UUID, _date, _datetime)):
             return str(v)
@@ -31,7 +29,6 @@ def _jsonable(d: dict) -> dict:
 
 
 def _attach_student(item: EligibilityRead, record: AthleteEligibility) -> EligibilityRead:
-    """Attach the student's registered ID and full name (from Users) for display."""
     stu = record.student
     if stu is not None:
         item.student_registered_id = stu.student_id
@@ -50,7 +47,6 @@ async def list_eligibility(
 ):
     query = select(AthleteEligibility).options(selectinload(AthleteEligibility.student))
 
-    # Students can only see their own
     if current_user.role == UserRole.STUDENT:
         query = query.where(AthleteEligibility.student_id == current_user.id)
     elif student_id:
@@ -150,7 +146,6 @@ async def update_eligibility(
 
     updates = body.model_dump(exclude_unset=True)
 
-    # If marking as cleared
     if updates.get("medical_clearance") is True and not record.medical_clearance:
         record.cleared_by_id = user.id
         record.cleared_at = _datetime.now(UTC)

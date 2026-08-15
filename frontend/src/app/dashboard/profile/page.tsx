@@ -56,7 +56,6 @@ export default function ProfilePage() {
       useAuthStore.setState({ user: { ...user, profile_picture_url: res.data.profile_picture_url } });
       qc.invalidateQueries({ queryKey: ["users"] });
     } catch {
-      // silently fail
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -74,7 +73,6 @@ export default function ProfilePage() {
       link.href = dataUrl;
       link.click();
     } catch {
-      // silently fail
     } finally {
       setDownloading(false);
     }
@@ -126,7 +124,6 @@ export default function ProfilePage() {
         <p className="text-sm text-gray-500">Your account information</p>
       </div>
 
-      {/* Profile card */}
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
         <div className="h-24 bg-gradient-to-r from-[#1E3A5F] to-[#2563eb]" />
 
@@ -169,7 +166,6 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* Digital ID — Coach / PE Instructor only */}
       {hasBorrowingQR && (
         <div className="flex flex-col items-center gap-4">
           {qrDataUrl && borrowingId ? (
@@ -215,7 +211,6 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* Info table */}
       <div className="bg-white rounded-xl shadow-sm divide-y divide-gray-100">
         {visibleRows.map((row) => {
           const Icon = row.icon;
@@ -229,7 +224,6 @@ export default function ProfilePage() {
         })}
       </div>
 
-      {/* Status badges */}
       <div className="flex flex-wrap gap-3">
         <span
           className={`px-3 py-1.5 text-xs font-medium rounded-full ${

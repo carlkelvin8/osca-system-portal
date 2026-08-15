@@ -1,13 +1,3 @@
-"""
-Audit Log endpoints.
-
-Routes:
-    GET  /audit-logs              — List audit logs with filters (Admin/Director)
-    GET  /audit-logs/{id}         — Get audit log detail (Admin/Director)
-    GET  /audit-logs/export/csv   — Export to CSV (Admin/Director)
-    GET  /audit-logs/export/xlsx  — Export to Excel (Admin/Director)
-    GET  /audit-logs/export/pdf   — Export to PDF (Admin/Director)
-"""
 import csv
 import io
 import re
@@ -41,8 +31,6 @@ def _require_editor(current_user: CurrentUser) -> None:
         from app.core.exceptions import ForbiddenError
         raise ForbiddenError("Only admin can access audit logs.")
 
-
-# ── Helpers ────────────────────────────────────────────────────────────────────
 
 def _build_filters(
     search: str | None,
@@ -86,8 +74,6 @@ def _log_to_read(log: AuditLog) -> AuditLogRead:
     return AuditLogRead.model_validate(log)
 
 
-# ── List ───────────────────────────────────────────────────────────────────────
-
 @router.get(
     "",
     response_model=PaginatedResponse[AuditLogRead],
@@ -112,13 +98,11 @@ async def list_audit_logs(
 
     filters = _build_filters(search, module, action, status, user_id, ip_address, date_from, date_to)
 
-    # Count
     count_q = select(func.count()).select_from(AuditLog)
     if filters:
         count_q = count_q.where(and_(*filters))
     total = (await db.execute(count_q)).scalar() or 0
 
-    # Fetch page
     order = AuditLog.created_at.desc() if sort_order == "desc" else AuditLog.created_at.asc()
     q = (
         select(AuditLog)
@@ -128,7 +112,7 @@ async def list_audit_logs(
     result = await db.execute(q)
     logs = result.scalars().all()
 
-    pages = max(1, -(-total // page_size))  # ceil division
+    pages = max(1, -(-total // page_size))
     return PaginatedResponse(
         items=[_log_to_read(l) for l in logs],
         total=total,
@@ -137,8 +121,6 @@ async def list_audit_logs(
         pages=pages,
     )
 
-
-# ── Detail ─────────────────────────────────────────────────────────────────────
 
 @router.get(
     "/{log_id}",
@@ -156,7 +138,6 @@ async def get_audit_log(
     if not log:
         raise NotFoundError("Audit log", str(log_id))
 
-    # Log access to the audit log itself
     await audit_log(
         db=db,
         action="AUDIT_LOG_VIEWED",
@@ -169,8 +150,6 @@ async def get_audit_log(
 
     return _log_to_read(log)
 
-
-# ── Distinct values for filters ────────────────────────────────────────────────
 
 @router.get(
     "/filters/modules",
@@ -202,8 +181,6 @@ async def get_distinct_actions(
     return sorted([r[0] for r in result.all() if r[0]])
 
 
-# ── Export CSV ─────────────────────────────────────────────────────────────────
-
 @router.get(
     "/export/csv",
     summary="Export audit logs to CSV",
@@ -226,7 +203,7 @@ async def export_audit_logs_csv(
     q = select(AuditLog).order_by(AuditLog.created_at.desc())
     if filters:
         q = q.where(and_(*filters))
-    q = q.limit(10000)  # Safety cap
+    q = q.limit(10000)
     result = await db.execute(q)
     logs = result.scalars().all()
 
@@ -261,8 +238,6 @@ async def export_audit_logs_csv(
         headers={"Content-Disposition": f"attachment; filename=audit-logs-{datetime.now(UTC).strftime('%Y%m%d')}.csv"},
     )
 
-
-# ── Export Excel ───────────────────────────────────────────────────────────────
 
 @router.get(
     "/export/xlsx",
@@ -332,7 +307,6 @@ async def export_audit_logs_xlsx(
         ws.cell(row=row, column=16, value=log.request_url or "")
         ws.cell(row=row, column=17, value=log.http_method or "")
 
-    # Auto-fit column widths
     for col in range(1, len(headers) + 1):
         max_len = max(len(str(ws.cell(row=r, column=col).value or "")) for r in range(1, min(len(logs) + 2, 50)))
         ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = min(max_len + 4, 40)
@@ -348,13 +322,10 @@ async def export_audit_logs_xlsx(
     )
 
 
-# ── Export PDF ─────────────────────────────────────────────────────────────────
-
 _ISO_DT_RE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?")
 
 
 def _fmt_embedded_datetimes(text: str) -> str:
-    """Replace embedded raw ISO timestamps in free text with a readable format."""
     def _repl(m: re.Match) -> str:
         try:
             dt = datetime.fromisoformat(m.group(0).replace("Z", "+00:00"))

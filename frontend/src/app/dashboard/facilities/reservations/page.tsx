@@ -220,7 +220,6 @@ export default function FacilityReservationsPage() {
         </div>
       )}
 
-      {/* View Details Modal */}
       {viewRes && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="bg-white rounded-xl w-full max-w-md shadow-xl overflow-hidden max-h-[85vh] flex flex-col">
@@ -312,7 +311,6 @@ export default function FacilityReservationsPage() {
         </div>
       )}
 
-      {/* Reject Modal */}
       {rejectRes && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md">

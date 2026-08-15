@@ -1,7 +1,3 @@
-"""
-User management endpoints.
-Admin: full CRUD. Students: self-register.
-"""
 import base64
 import uuid
 from datetime import UTC, datetime
@@ -33,7 +29,6 @@ _storage = StorageService()
 
 
 def _resolve_user_profile_urls(user: User) -> None:
-    """Resolve stored profile picture key to a fresh presigned URL on the User model."""
     try:
         user.profile_picture_url = _storage.resolve_profile_picture_url(user.profile_picture_url)
     except Exception:
@@ -52,26 +47,17 @@ async def create_user(
     current_user: OptionalUser = None,
     request: Request = None,
 ) -> UserRead:
-    # ── Role-based access control ─────────────────────────────────────────
-    # No token  → self-registration: only students allowed
-    # Admin      → can create any role
-    # Director   → can create coach, pe_instructor, student only
-    # Staff      → can create coach, pe_instructor, student only
-    # Others     → cannot create users
-
     if current_user is None:
-        # Self-registration — force student role and require approval
         if body.role != UserRole.STUDENT:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Self-registration is only available for students.",
             )
         body.role = UserRole.STUDENT
-        body.is_active = False  # Must be approved by admin/staff/director
+        body.is_active = False
     else:
-        # Authenticated caller — check what roles they may assign
         if current_user.role == UserRole.ADMIN:
-            pass  # Admin can create any role
+            pass
         elif current_user.role in (UserRole.DIRECTOR, UserRole.STAFF):
             allowed = {UserRole.STUDENT, UserRole.COACH, UserRole.PE_INSTRUCTOR}
             if body.role not in allowed:
@@ -84,19 +70,15 @@ async def create_user(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You do not have permission to create users.",
             )
-    # Check email uniqueness
     existing = await db.execute(select(User).where(User.email == body.email))
     if existing.scalar_one_or_none():
         raise ConflictError("Email already registered")
 
-    # Check student_id uniqueness (for students)
     if body.student_id:
         existing_sid = await db.execute(select(User).where(User.student_id == body.student_id))
         if existing_sid.scalar_one_or_none():
             raise ConflictError("Student ID already registered")
 
-    # Prevent self-promotion to admin during self-registration
-    # (proper enforcement done via auth middleware in production)
     user_data = body.model_dump(exclude={"password", "face_images_base64"})
     user = User(
         **user_data,
@@ -120,7 +102,6 @@ async def create_user(
     await db.commit()
     await db.refresh(user)
 
-    # ── Auto-generate Borrowing ID for Coach / PE Instructor ─────────────────
     if user.role in (UserRole.COACH, UserRole.PE_INSTRUCTOR):
         existing_bid = await db.execute(
             select(BorrowingID).where(BorrowingID.instructor_id == user.id)
@@ -139,7 +120,6 @@ async def create_user(
             await db.commit()
             await db.refresh(user)
 
-    # ── Auto-enroll face if images provided ───────────────────────────────────
     if body.face_images_base64 and len(body.face_images_base64) >= 5 and request is not None:
         fr_svc = getattr(request.app.state, "fr_service", None)
         if fr_svc is not None:
@@ -250,7 +230,6 @@ async def get_user(
     db: Annotated[AsyncSession, Depends(get_db)],
     redis=Depends(get_redis),
 ) -> UserRead:
-    # Students can only view their own profile
     if current_user.role == UserRole.STUDENT and current_user.id != user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
@@ -268,7 +247,6 @@ async def get_user(
     if user.face_embedding:
         result.face_enrolled_at = user.face_embedding.enrolled_at
     result.last_logout_at = user.last_logout_at
-    # Only expose online status to admin/director/staff
     if current_user.role in (UserRole.ADMIN, UserRole.DIRECTOR, UserRole.STAFF):
         try:
             online_key = await redis.get(f"online:{user.id}")
@@ -285,10 +263,8 @@ async def update_user(
     current_user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> UserRead:
-    # Students can only update their own profile
     if current_user.role == UserRole.STUDENT and current_user.id != user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
-    # Only admins/directors/staff can change is_active
     if body.is_active is not None and current_user.role not in (UserRole.ADMIN, UserRole.DIRECTOR, UserRole.STAFF):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins/staff can change active status")
 
@@ -381,11 +357,9 @@ async def upload_profile_picture(
     current_user: CurrentUser = None,
     db: Annotated[AsyncSession, Depends(get_db)] = None,
 ) -> UserRead:
-    # Students can only update their own picture; admins can update anyone
     if current_user.role == UserRole.STUDENT and current_user.id != user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
-    # Validate file type
     allowed_types = {"image/jpeg", "image/png", "image/webp"}
     if file.content_type not in allowed_types:
         raise HTTPException(
@@ -393,7 +367,6 @@ async def upload_profile_picture(
             detail="Only JPEG, PNG, and WebP images are allowed.",
         )
 
-    # Validate file size (max 5 MB)
     contents = await file.read()
     if len(contents) > 5 * 1024 * 1024:
         raise HTTPException(
@@ -413,7 +386,6 @@ async def upload_profile_picture(
         content_type=file.content_type,
     )
 
-    # Store the object key (not presigned URL) so it never expires
     user.profile_picture_url = key
     await audit_log(
         db=db,

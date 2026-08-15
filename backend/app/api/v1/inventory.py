@@ -1,7 +1,3 @@
-"""
-Inventory endpoints: equipment CRUD, borrowing IDs, borrow/return workflow,
-equipment request/approval flow, and staff-assisted borrow with QR workflow.
-"""
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
@@ -59,13 +55,9 @@ from app.services.storage_service import StorageService
 router = APIRouter()
 logger = structlog.get_logger(__name__)
 
-# Roles allowed to submit equipment requests
 _REQUEST_ROLES = {UserRole.COACH, UserRole.PE_INSTRUCTOR}
-# Roles allowed to approve/reject
 _APPROVAL_ROLES = {UserRole.ADMIN, UserRole.DIRECTOR, UserRole.STAFF}
 
-
-# ── Equipment ─────────────────────────────────────────────────────────────────
 
 @router.post(
     "/equipment",
@@ -194,8 +186,6 @@ async def update_equipment(
     return EquipmentRead.model_validate(eq)
 
 
-# ── Borrowing ID ──────────────────────────────────────────────────────────────
-
 @router.get(
     "/borrowing-ids/me",
     response_model=BorrowingIDRead,
@@ -282,8 +272,6 @@ async def issue_borrowing_id(
     return result_schema
 
 
-# ── Equipment Request / Approval ───────────────────────────────────────────────
-
 @router.post(
     "/requests",
     response_model=EquipmentRequestRead,
@@ -347,7 +335,6 @@ async def list_equipment_requests(
     date_to: datetime | None = Query(None),
 ) -> PaginatedResponse[EquipmentRequestRead]:
     query = select(EquipmentRequest)
-    # Coaches / instructors see only their own
     if current_user.role in _REQUEST_ROLES:
         query = query.where(EquipmentRequest.requester_id == current_user.id)
     if status_filter:
@@ -482,7 +469,6 @@ async def approve_equipment_request(
     now = datetime.now(UTC)
 
     if body.create_transaction:
-        # Validate stock for each item
         items_result = await db.execute(
             select(EquipmentRequestItem).where(EquipmentRequestItem.request_id == req.id)
         )
@@ -494,7 +480,6 @@ async def approve_equipment_request(
             if eq.available_quantity < ri.quantity:
                 raise ConflictError(f"Insufficient stock for {eq.name}. Available: {eq.available_quantity}")
 
-        # Deduct stock and create BorrowTransaction
         requester = await db.get(User, req.requester_id)
         bid_result = await db.execute(
             select(BorrowingID).where(
@@ -534,7 +519,6 @@ async def approve_equipment_request(
                 quantity=ri.quantity,
             ))
 
-        # Generate Return QR Code (reuse the code generated at request time)
         await db.flush()
         transaction.transaction_qr_code = req.return_qr_code or f"TXN-{transaction.id.hex[:12].upper()}"
 
@@ -580,7 +564,6 @@ async def release_equipment_request(
     if req.status != RequestStatus.PENDING:
         raise ConflictError(f"Request is already {req.status.value}.")
 
-    # Validate stock for each item
     items_result = await db.execute(
         select(EquipmentRequestItem).where(EquipmentRequestItem.request_id == req.id)
     )
@@ -592,7 +575,6 @@ async def release_equipment_request(
         if eq.available_quantity < ri.quantity:
             raise ConflictError(f"Insufficient stock for {eq.name}. Available: {eq.available_quantity}")
 
-    # Ensure BorrowingID exists
     bid_result = await db.execute(
         select(BorrowingID).where(
             BorrowingID.instructor_id == req.requester_id,
@@ -613,7 +595,6 @@ async def release_equipment_request(
         db.add(bid)
         await db.flush()
 
-    # Create transaction
     transaction = BorrowTransaction(
         borrowing_id_record_id=bid.id,
         instructor_id=req.requester_id,
@@ -632,7 +613,6 @@ async def release_equipment_request(
             quantity=ri.quantity,
         ))
 
-    # Generate Return QR Code (reuse the code generated at request time)
     await db.flush()
     transaction.transaction_qr_code = req.return_qr_code or f"TXN-{transaction.id.hex[:12].upper()}"
 
@@ -777,8 +757,6 @@ async def delete_equipment_request(
     await db.commit()
     return MessageResponse(message="Equipment request deleted.")
 
-
-# ── Admin Direct Borrow (bypasses request flow) ────────────────────────────────
 
 @router.post(
     "/borrow",
@@ -952,8 +930,6 @@ async def list_transactions(
                              pages=(total + page_size - 1) // page_size)
 
 
-# ── Staff Borrow Workflow ─────────────────────────────────────────────────────
-
 _STAFF_BORROW_ROLES = {UserRole.ADMIN, UserRole.DIRECTOR, UserRole.STAFF}
 
 
@@ -980,7 +956,6 @@ async def scan_borrowing_id(
     if not instructor:
         raise NotFoundError("User", str(bid.instructor_id))
 
-    # Eligibility
     eligibility_result = await db.execute(
         select(AthleteEligibility).where(
             AthleteEligibility.student_id == instructor.id,
@@ -989,7 +964,6 @@ async def scan_borrowing_id(
     )
     eligibility = eligibility_result.scalar_one_or_none()
 
-    # Current active borrows
     borrows_result = await db.execute(
         select(BorrowTransaction).where(
             BorrowTransaction.instructor_id == instructor.id,
@@ -1019,7 +993,6 @@ async def scan_borrowing_id(
             "items": items_data,
         })
 
-    # Pending requests
     pending_reqs_result = await db.execute(
         select(EquipmentRequest).where(
             EquipmentRequest.requester_id == instructor.id,
@@ -1028,7 +1001,6 @@ async def scan_borrowing_id(
     )
     pending_reqs = [await _build_request_read(r, db) for r in pending_reqs_result.scalars().all()]
 
-    # Active sanctions
     sanctions_result = await db.execute(
         select(Sanction).where(
             Sanction.student_id == instructor.id,
@@ -1119,7 +1091,6 @@ async def staff_borrow(
         )
         db.add(tx_item)
 
-    # Generate Return QR Code
     await db.flush()
     transaction_qr = f"TXN-{transaction.id.hex[:12].upper()}"
     transaction.transaction_qr_code = transaction_qr
@@ -1266,14 +1237,12 @@ async def complete_transaction(
     if transaction.status not in (TransactionStatus.ACTIVE, TransactionStatus.OVERDUE):
         raise ConflictError(f"Transaction is already {transaction.status.value}.")
 
-    # A return is LATE if the Expected Return deadline has passed.
     now = datetime.now(UTC)
     er = transaction.expected_return
     if er.tzinfo is None:
         er = er.replace(tzinfo=UTC)
     was_overdue = now > er
 
-    # Return all items
     items_result = await db.execute(
         select(BorrowTransactionItem).where(BorrowTransactionItem.transaction_id == transaction.id)
     )
@@ -1285,7 +1254,6 @@ async def complete_transaction(
             if eq:
                 eq.available_quantity += item.quantity
 
-    # Record the late return for traceability
     if was_overdue:
         overdue_delta = now - er
         overdue_days = max(0, overdue_delta.days)
@@ -1313,10 +1281,7 @@ async def complete_transaction(
     return await _build_transaction_read(transaction, db)
 
 
-# ── Private helpers ────────────────────────────────────────────────────────────
-
 async def _build_transaction_read(transaction: BorrowTransaction, db: AsyncSession) -> BorrowTransactionRead:
-    """Build a BorrowTransactionRead with nested items."""
     items_result = await db.execute(
         select(BorrowTransactionItem).where(BorrowTransactionItem.transaction_id == transaction.id)
     )
@@ -1355,7 +1320,6 @@ async def _build_transaction_read(transaction: BorrowTransaction, db: AsyncSessi
 
 
 async def _build_request_read(req: EquipmentRequest, db: AsyncSession) -> EquipmentRequestRead:
-    """Build an EquipmentRequestRead with nested items."""
     items_result = await db.execute(
         select(EquipmentRequestItem).where(EquipmentRequestItem.request_id == req.id)
     )
@@ -1388,7 +1352,6 @@ async def _build_request_read(req: EquipmentRequest, db: AsyncSession) -> Equipm
         items=item_reads,
     )
 
-    # Attach Return QR info (generated at request creation; functional after approval)
     if req.return_qr_code:
         rr.return_qr_code = req.return_qr_code
         if req.status == RequestStatus.APPROVED:
@@ -1405,7 +1368,6 @@ async def _build_request_read(req: EquipmentRequest, db: AsyncSession) -> Equipm
                     tx.status,
                 )
     elif req.status == RequestStatus.APPROVED:
-        # Legacy requests created before return_qr_code existed
         tx_result = await db.execute(
             select(BorrowTransaction).where(
                 BorrowTransaction.instructor_id == req.requester_id,
@@ -1421,7 +1383,6 @@ async def _build_request_read(req: EquipmentRequest, db: AsyncSession) -> Equipm
                 tx.status,
             )
 
-    # Attach requester's active/overdue borrows for awareness
     active_tx_result = await db.execute(
         select(BorrowTransaction).where(
             BorrowTransaction.instructor_id == req.requester_id,

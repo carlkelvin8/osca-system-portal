@@ -1,13 +1,3 @@
-"""add announcement acknowledgements + comments tables
-
-Revision ID: c3d4e5f6a7b8
-Revises: b1c2d3e4f5a6
-Create Date: 2026-08-08 12:00:00.000000
-
-Note: the app's startup `Base.metadata.create_all` may already have created the
-`announcement_acknowledgements` and `announcement_comments` tables on containers
-with a bind mount. This migration is idempotent so it can run safely either way.
-"""
 from typing import Sequence, Union
 
 from alembic import op
@@ -21,7 +11,6 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # 1. Announcement acknowledgements
     op.execute("""
     CREATE TABLE IF NOT EXISTS announcement_acknowledgements (
         id UUID NOT NULL,
@@ -42,7 +31,6 @@ def upgrade() -> None:
     op.create_index('ix_announcement_acks_user', 'announcement_acknowledgements',
                     ['user_id'], unique=False, if_not_exists=True)
 
-    # 2. Announcement comments
     op.execute("""
     CREATE TABLE IF NOT EXISTS announcement_comments (
         id UUID NOT NULL,

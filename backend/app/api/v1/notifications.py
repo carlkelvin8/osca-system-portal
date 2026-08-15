@@ -1,10 +1,3 @@
-"""In-app notification endpoints.
-
-Routes:
-    GET  /notifications         — Current user's notifications + unread count
-    PATCH /notifications/{id}/read    — Mark one notification as read
-    PATCH /notifications/read-all     — Mark all as read
-"""
 import uuid
 from datetime import datetime
 from typing import Annotated

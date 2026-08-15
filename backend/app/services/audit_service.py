@@ -1,21 +1,3 @@
-"""
-Audit logging service — centralized helper for creating audit log entries.
-
-Usage:
-    from app.services.audit_service import audit_log
-
-    await audit_log(
-        db=db,
-        action="USER_CREATED",
-        module="Users",
-        description="Created new user account",
-        resource_type="User",
-        resource_id=str(user.id),
-        new_values={"email": user.email, "role": user.role.value},
-        current_user=current_user,
-        request=request,
-    )
-"""
 from __future__ import annotations
 
 import uuid
@@ -28,14 +10,12 @@ from app.models.audit import AuditLog
 
 
 def request_of(user: Any | None) -> Any | None:
-    """Return the FastAPI Request attached to the authenticated user (if any)."""
     if user is None:
         return None
     return getattr(user, "_current_request", None)
 
 
 def _parse_user_agent(ua_string: str | None) -> dict[str, str | None]:
-    """Parse user-agent string into browser, OS, and device info."""
     if not ua_string:
         return {"browser": None, "os": None, "device_info": None}
 
@@ -71,10 +51,6 @@ async def audit_log(
     request: Any | None = None,
     ip_address: str | None = None,
 ) -> AuditLog:
-    """
-    Create an audit log entry. Accepts either a `current_user` object (with
-    id, full_name, email, role attributes) or explicit `user_id`.
-    """
     resolved_user_id = user_id
     admin_name = None
     admin_email = None
@@ -87,19 +63,16 @@ async def audit_log(
         role_val = getattr(current_user, "role", None)
         admin_role = role_val.value if hasattr(role_val, "value") else str(role_val) if role_val else None
 
-    # Extract request context
     req_ip = ip_address
     req_ua = None
     req_url = None
     req_method = None
     session_id = None
 
-    # If no explicit request was passed, fall back to the one attached to the user
     if request is None:
         request = request_of(current_user)
 
     if request is not None:
-        # FastAPI Request object
         if hasattr(request, "client") and request.client:
             forwarded = request.headers.get("x-forwarded-for")
             req_ip = req_ip or (forwarded.split(",")[0].strip() if forwarded else request.client.host)
@@ -107,11 +80,9 @@ async def audit_log(
         req_url = str(request.url) if hasattr(request, "url") else None
         req_method = request.method if hasattr(request, "method") else None
 
-        # Try to get session ID from cookie or header
         cookies = getattr(request, "cookies", {})
         session_id = cookies.get("session_id") or request.headers.get("x-session-id") if hasattr(request, "headers") else None
 
-    # Parse user-agent
     ua_info = _parse_user_agent(req_ua)
 
     log_entry = AuditLog(
@@ -140,5 +111,4 @@ async def audit_log(
     )
 
     db.add(log_entry)
-    # Note: auto-committed by get_db() dependency or caller's transaction
     return log_entry

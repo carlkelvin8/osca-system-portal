@@ -1,4 +1,3 @@
-"""Incident reporting endpoints."""
 import uuid
 from datetime import datetime, UTC
 from typing import Annotated
@@ -18,7 +17,6 @@ router = APIRouter()
 
 
 def _jsonable(d: dict) -> dict:
-    """Convert UUID / date / time / datetime values to strings for JSONB audit columns."""
     from datetime import date as _date, datetime as _datetime, time as _time
 
     def conv(v):
@@ -40,7 +38,6 @@ async def list_incidents(
 ):
     query = select(Incident)
 
-    # Students can only see incidents involving them
     if current_user.role == UserRole.STUDENT:
         query = query.where(Incident.involved_student_id == current_user.id)
 
@@ -97,7 +94,6 @@ async def update_incident(
 
     updates = body.model_dump(exclude_unset=True)
 
-    # Auto-set resolved fields
     if updates.get("status") == IncidentStatus.RESOLVED and incident.status != IncidentStatus.RESOLVED:
         incident.resolved_by_id = user.id
         incident.resolved_at = datetime.now(UTC)

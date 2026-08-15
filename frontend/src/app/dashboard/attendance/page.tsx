@@ -10,7 +10,6 @@ import Link from "next/link";
 import type { Session, ActivityType, AttendanceRecord, PaginatedResponse, Facility } from "@/types";
 import { format } from "date-fns";
 
-// ── Sport / Art options ──────────────────────────────────────────────────────────
 
 export const SPORTS_OPTIONS: { group: string; items: string[] }[] = [
   {
@@ -36,7 +35,6 @@ export const SPORTS_OPTIONS: { group: string; items: string[] }[] = [
   },
 ];
 
-// ── Searchable Sport/Art Combobox ──────────────────────────────────────────────
 
 function SportArtCombobox({
   value,
@@ -109,7 +107,6 @@ function SportArtCombobox({
   );
 }
 
-// ── New Session Modal ──────────────────────────────────────────────────────────
 
 interface SessionFormData {
   name: string;
@@ -211,14 +208,12 @@ function NewSessionModal({ onClose, defaultSport }: NewSessionModalProps) {
   };
 
   return (
-    // Backdrop
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
 
-        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="text-lg font-bold text-gray-900">New Session</h2>
           <button
@@ -229,10 +224,8 @@ function NewSessionModal({ onClose, defaultSport }: NewSessionModalProps) {
           </button>
         </div>
 
-        {/* Form */}
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
 
-          {/* Session name */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Session Name <span className="text-red-500">*</span>
@@ -246,7 +239,6 @@ function NewSessionModal({ onClose, defaultSport }: NewSessionModalProps) {
             />
           </div>
 
-          {/* Activity type + Sport/Art side by side */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -282,7 +274,6 @@ function NewSessionModal({ onClose, defaultSport }: NewSessionModalProps) {
             </div>
           </div>
 
-          {/* Venue */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Venue <span className="text-red-500">*</span>
@@ -319,7 +310,6 @@ function NewSessionModal({ onClose, defaultSport }: NewSessionModalProps) {
             )}
           </div>
 
-          {/* Start / End datetimes side by side */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -345,7 +335,6 @@ function NewSessionModal({ onClose, defaultSport }: NewSessionModalProps) {
             </div>
           </div>
 
-          {/* Grace Period */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Grace Period <span className="text-xs text-gray-400 font-normal">(minutes)</span>
@@ -368,7 +357,6 @@ function NewSessionModal({ onClose, defaultSport }: NewSessionModalProps) {
             </div>
           </div>
 
-          {/* Notes */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
             <textarea
@@ -380,14 +368,12 @@ function NewSessionModal({ onClose, defaultSport }: NewSessionModalProps) {
             />
           </div>
 
-          {/* Error */}
           {error && (
             <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
               {error}
             </p>
           )}
 
-          {/* Actions */}
           <div className="flex justify-end gap-3 pt-1">
             <button
               type="button"
@@ -410,7 +396,6 @@ function NewSessionModal({ onClose, defaultSport }: NewSessionModalProps) {
   );
 }
 
-// ── Edit Session Modal ─────────────────────────────────────────────────────────
 
 interface EditSessionFormData {
   name: string;
@@ -572,7 +557,6 @@ function EditSessionModal({ session, onClose, isCoach = false }: EditSessionModa
   );
 }
 
-// ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function AttendancePage() {
   const { user } = useAuthStore();
@@ -583,7 +567,6 @@ export default function AttendancePage() {
   const isPE = user?.role === "pe_instructor";
   const userSport = (isCoach ? user?.assigned_sport : user?.sport_or_art) ?? undefined;
 
-  // PE Instructors are not allowed in the attendance module
   useEffect(() => {
     if (isPE) {
       router.replace("/dashboard");
@@ -608,7 +591,6 @@ export default function AttendancePage() {
     },
   });
 
-  // Student: fetch own attendance history
   const historyQueryParams = (() => {
     const p: Record<string, string | number | boolean> = { page: historyPage, page_size: 20 };
     const now = new Date();
@@ -638,7 +620,6 @@ export default function AttendancePage() {
     enabled: isStudent && !!user?.id,
   });
 
-  // Filter records by search text
   const filteredHistory = (historyData?.items ?? []).filter((rec) => {
     if (!historySearch) return true;
     const q = historySearch.toLowerCase();
@@ -712,7 +693,6 @@ export default function AttendancePage() {
       )}
 
       <div className="space-y-6">
-        {/* Header */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2.5">
@@ -747,7 +727,6 @@ export default function AttendancePage() {
           </div>
         </div>
 
-        {/* Stats Cards */}
         {!isStudent && (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm hover:shadow-md transition">
@@ -780,7 +759,6 @@ export default function AttendancePage() {
           </div>
         )}
 
-        {/* Student tabs */}
         {isStudent && (
           <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
             <button
@@ -802,7 +780,6 @@ export default function AttendancePage() {
           </div>
         )}
 
-        {/* ── Sessions tab (default for all, or when tab = sessions) ── */}
         {(!isStudent || activeTab === "sessions") && (
           <>
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -921,10 +898,8 @@ export default function AttendancePage() {
           </>
         )}
 
-        {/* ── My Attendance History tab (students only) ── */}
         {isStudent && activeTab === "history" && (
           <div className="space-y-4">
-            {/* Filter + Search */}
             <div className="flex flex-col sm:flex-row gap-3">
               <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
                 {(["all", "daily", "weekly", "monthly"] as const).map((f) => (

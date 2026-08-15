@@ -1,4 +1,3 @@
-"""Offline-First Sync Mode endpoints. Accepts batched offline records and syncs them."""
 import uuid
 from datetime import datetime, UTC
 from typing import Annotated
@@ -21,10 +20,6 @@ async def upload_offline_records(
     current_user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    """
-    Accepts a batch of records captured offline.
-    Processes each record and attempts to sync to the main database.
-    """
     results: list[OfflineSyncRecord] = []
     synced = 0
     failed = 0
@@ -42,7 +37,6 @@ async def upload_offline_records(
         db.add(sync_record)
         await db.flush()
 
-        # Attempt to process the record
         try:
             await _process_sync_record(sync_record, db)
             sync_record.status = SyncStatus.SYNCED
@@ -122,12 +116,9 @@ async def retry_sync(
 
 
 async def _process_sync_record(record: OfflineSyncRecord, db: AsyncSession) -> None:
-    """Process a single offline record and persist the actual data."""
     payload = record.payload
 
     if record.record_type == SyncRecordType.ATTENDANCE:
-        # Check for duplicate based on student + session + time
-        # For now, just create the attendance record
         from app.models.attendance import AttendanceRecord as AR
         ar = AR(
             student_id=payload.get("student_id") or record.user_id,
@@ -139,9 +130,7 @@ async def _process_sync_record(record: OfflineSyncRecord, db: AsyncSession) -> N
         db.add(ar)
 
     elif record.record_type == SyncRecordType.INVENTORY_TRANSACTION:
-        # Process inventory transactions from offline cache
-        # This would create borrow/return records
-        pass  # Extensible — implement based on payload structure
+        pass
 
     else:
         raise ValueError(f"Unknown record type: {record.record_type}")

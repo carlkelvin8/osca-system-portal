@@ -1,9 +1,3 @@
-"""Add last_logout_at to users table
-
-Revision ID: b8c9d0e1f2a3
-Revises: f7a8b9c0d1e2
-Create Date: 2026-07-28
-"""
 from alembic import op
 import sqlalchemy as sa
 

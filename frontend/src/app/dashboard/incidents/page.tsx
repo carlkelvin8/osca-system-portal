@@ -160,14 +160,12 @@ export default function IncidentsPage() {
         </div>
       </div>
 
-      {/* Search & Filters */}
       <div className="flex gap-3 mb-4 flex-wrap">
         <div className="relative flex-1 min-w-[200px]"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search title, description..." className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]/20" /></div>
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="px-3 py-2 text-sm border border-gray-200 rounded-lg"><option value="">All Status</option><option value="open">Open</option><option value="under_review">Under Review</option><option value="resolved">Resolved</option><option value="closed">Closed</option></select>
         <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="px-3 py-2 text-sm border border-gray-200 rounded-lg"><option value="">All Categories</option><option value="injury">Injury</option><option value="equipment_damage">Equipment Damage</option><option value="facility_damage">Facility Damage</option><option value="behavioral">Behavioral</option><option value="safety">Safety</option><option value="other">Other</option></select>
       </div>
 
-      {/* Bulk actions */}
       {selected.size > 0 && isStaff && (
         <div className="flex items-center gap-3 mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
           <CheckSquare size={16} className="text-blue-600" /><span className="text-sm text-blue-700 font-medium">{selected.size} selected</span>
@@ -211,7 +209,6 @@ export default function IncidentsPage() {
         </div>
       )}
 
-      {/* Add Modal */}
       {showAdd && (
         <div
           onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}
@@ -232,7 +229,6 @@ export default function IncidentsPage() {
               <div className="border-t border-gray-100 my-4" />
 
               <form onSubmit={(e) => { e.preventDefault(); createMutation.mutate({ ...form, incident_date: new Date(form.incident_date).toISOString(), involved_student_id: form.involved_student_id || null }); }} className="space-y-5">
-                {/* Row 1: Title */}
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1.5">Incident Title <span className="text-red-500">*</span></label>
                   <div className="relative">
@@ -241,7 +237,6 @@ export default function IncidentsPage() {
                   </div>
                 </div>
 
-                {/* Row 2: Category + Severity */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1.5">Incident Category <span className="text-red-500">*</span></label>
@@ -257,7 +252,6 @@ export default function IncidentsPage() {
                   </div>
                 </div>
 
-                {/* Row 3: Date & Time + Location */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1.5">Date & Time <span className="text-red-500">*</span></label>
@@ -275,7 +269,6 @@ export default function IncidentsPage() {
                   </div>
                 </div>
 
-                {/* Row 4: Involved Student */}
                 <div ref={dropdownRef} className="relative">
                   <label className="block text-xs font-medium text-gray-600 mb-1.5">Involved Student</label>
                   <button
@@ -332,7 +325,6 @@ export default function IncidentsPage() {
                   )}
                 </div>
 
-                {/* Row 5: Description */}
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="text-xs font-medium text-gray-600">Incident Description <span className="text-red-500">*</span></label>

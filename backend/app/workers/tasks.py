@@ -1,10 +1,3 @@
-"""
-Celery background tasks:
-1. check_overdue_transactions — email instructor + admin when borrow is overdue
-2. purge_expired_face_images — R.A. 10173 compliance: delete images after retention window
-3. mark_overdue_statuses — DB status update (runs hourly)
-4. generate_report_async — large reports generated in background, stored to MinIO
-"""
 import asyncio
 from datetime import UTC, datetime, timedelta
 
@@ -16,7 +9,6 @@ logger = structlog.get_logger(__name__)
 
 
 def _run_async(coro):
-    """Helper to run async code inside a Celery (sync) task."""
     loop = asyncio.new_event_loop()
     try:
         return loop.run_until_complete(coro)
@@ -28,13 +20,9 @@ def _run_async(coro):
     name="app.workers.tasks.check_overdue_transactions",
     bind=True,
     max_retries=3,
-    default_retry_delay=300,  # 5 min retry on failure
+    default_retry_delay=300,
 )
 def check_overdue_transactions(self):
-    """
-    Email PE Instructors and Admin about overdue borrow transactions.
-    Runs daily at 8 AM Manila time via celery-beat.
-    """
     async def _run():
         from sqlalchemy import select
         from app.database import AsyncSessionLocal
@@ -42,7 +30,6 @@ def check_overdue_transactions(self):
         from app.models.user import User
 
         async with AsyncSessionLocal() as db:
-            # Find overdue active transactions not yet notified
             now = datetime.now(UTC)
             result = await db.execute(
                 select(BorrowTransaction).where(
@@ -58,7 +45,6 @@ def check_overdue_transactions(self):
                 if not instructor:
                     continue
 
-                # Send email notification (fire-and-forget)
                 await _send_overdue_email(instructor, tx)
 
                 tx.overdue_notified = True
@@ -81,10 +67,6 @@ def check_overdue_transactions(self):
     bind=True,
 )
 def mark_overdue_statuses(self):
-    """
-    Update BorrowTransaction.status to OVERDUE where expected_return has passed.
-    Runs every hour.
-    """
     async def _run():
         from sqlalchemy import update
         from app.database import AsyncSessionLocal
@@ -111,12 +93,6 @@ def mark_overdue_statuses(self):
     bind=True,
 )
 def purge_expired_face_images(self):
-    """
-    Delete face enrollment images from MinIO after FACE_IMAGE_RETENTION_DAYS.
-    R.A. 10173 (Philippine Data Privacy Act) compliance.
-    The face embedding in pgvector is retained (needed for recognition).
-    Only the raw image files are purged.
-    """
     async def _run():
         from sqlalchemy import select
         from app.config import settings
@@ -142,7 +118,7 @@ def purge_expired_face_images(self):
                     continue
                 keys = emb.minio_image_keys.split(",")
                 await storage.delete_face_images(str(emb.user_id), keys)
-                emb.minio_image_keys = None  # Clear keys after deletion
+                emb.minio_image_keys = None
                 purged_count += 1
 
             await db.commit()
@@ -163,10 +139,6 @@ def generate_report_async(
     filters: dict,
     requested_by_user_id: str,
 ) -> str:
-    """
-    Generate a large report asynchronously and store to MinIO.
-    Returns the MinIO object key for the completed report.
-    """
     async def _run() -> str:
         from app.database import AsyncSessionLocal
         from app.services.report_service import ReportService
@@ -209,11 +181,6 @@ def generate_report_async(
     bind=True,
 )
 def release_expired_reservations(self):
-    """
-    Release venues whose approved reservation end datetime has passed.
-    Sets facility.status from RESERVED back to AVAILABLE.
-    Runs every 15 minutes via celery-beat.
-    """
     async def _run():
         from datetime import datetime, time
         from zoneinfo import ZoneInfo
@@ -248,11 +215,8 @@ def release_expired_reservations(self):
 
 
 async def _send_overdue_email(instructor, transaction) -> None:
-    """Send overdue notification email to instructor."""
     try:
         from app.config import settings
-        # FastAPI-Mail or Resend integration
-        # In production, import and use the configured email provider
         logger.info(
             "overdue_email_queued",
             instructor_email=instructor.email,

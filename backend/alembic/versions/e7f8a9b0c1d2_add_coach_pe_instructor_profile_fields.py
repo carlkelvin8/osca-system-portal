@@ -1,10 +1,3 @@
-"""add coach/pe_instructor profile fields (suffix, address, dob, gender, employee_id, department)
-
-Revision ID: e7f8a9b0c1d2
-Revises: d61caf6ffd94
-Create Date: 2026-07-29 12:00:00.000000
-
-"""
 from typing import Sequence, Union
 
 from alembic import op

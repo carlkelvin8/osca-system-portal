@@ -1,9 +1,3 @@
-/**
- * Custom hook for QR scanning via the device camera (borrow/return scanners).
- * Opens the camera with `facingMode: "environment"` first, then falls back to
- * any available camera (laptops/front webcams that have no rear camera), so
- * "decode never fires" setups still start the stream.
- */
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";

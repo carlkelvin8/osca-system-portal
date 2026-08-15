@@ -1,4 +1,3 @@
-"""Offline sync schemas."""
 import uuid
 from datetime import datetime
 from pydantic import BaseModel, Field

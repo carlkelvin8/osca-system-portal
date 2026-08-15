@@ -1,7 +1,3 @@
-"""
-Audit Log — immutable record of all sensitive system actions.
-Required by R.A. 10173 for biometric data handling.
-"""
 import uuid
 from datetime import datetime
 
@@ -17,7 +13,6 @@ class AuditLog(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
-    # Who performed the action (null for system-initiated events)
     user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
@@ -25,7 +20,6 @@ class AuditLog(Base):
     admin_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     admin_role: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
-    # What happened
     action: Mapped[str] = mapped_column(
         String(100), nullable=False, index=True,
         comment="e.g. USER_LOGIN, FACE_SCAN_SUCCESS, EQUIPMENT_BORROWED, REPORT_GENERATED"
@@ -36,18 +30,15 @@ class AuditLog(Base):
     )
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    # Resource affected
     resource_type: Mapped[str | None] = mapped_column(
         String(50), nullable=True,
         comment="e.g. User, Equipment, AttendanceRecord"
     )
     resource_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
-    # Before/after values for change tracking
     previous_values: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     new_values: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
-    # Request context
     ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True, index=True)
     user_agent: Mapped[str | None] = mapped_column(String(500), nullable=True)
     browser: Mapped[str | None] = mapped_column(String(100), nullable=True)
@@ -57,7 +48,6 @@ class AuditLog(Base):
     request_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     http_method: Mapped[str | None] = mapped_column(String(10), nullable=True)
 
-    # Legacy details JSON (backward compatible)
     details: Mapped[dict | None] = mapped_column(
         JSONB, nullable=True,
         comment="Structured additional context (never store raw biometric data here)"
@@ -72,7 +62,6 @@ class AuditLog(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
-    # Relationships
     user: Mapped["User | None"] = relationship(  # noqa: F821
         "User", back_populates="audit_logs", foreign_keys=[user_id]
     )

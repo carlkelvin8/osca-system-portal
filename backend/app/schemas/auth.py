@@ -1,4 +1,3 @@
-"""Authentication schemas."""
 from pydantic import EmailStr, Field
 
 from app.schemas.common import OSCABaseModel
@@ -13,7 +12,7 @@ class TokenResponse(OSCABaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
-    expires_in: int  # seconds
+    expires_in: int
 
 
 class RefreshRequest(OSCABaseModel):

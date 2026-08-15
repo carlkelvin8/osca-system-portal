@@ -40,12 +40,10 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex bg-[#081428] relative overflow-hidden">
-      {/* Left brand panel — big logo */}
       <div className="hidden md:flex w-[42%] shrink-0 relative items-center justify-center bg-[#0d1f3c] border-r-4 border-[#C9A84C] overflow-hidden">
         <div className="absolute -top-[15%] -left-[15%] w-[60%] h-[60%] rounded-full opacity-20 animate-pulse" style={{ background: "radial-gradient(circle, #C9A84C, transparent 70%)", filter: "blur(90px)" }} />
         <div className="absolute -bottom-[15%] -right-[10%] w-[55%] h-[55%] rounded-full opacity-15 animate-pulse" style={{ background: "radial-gradient(circle, #1d4ed8, transparent 70%)", filter: "blur(90px)" }} />
 
-        {/* Back to Main Website */}
         <Link
           href="/"
           className="group absolute top-6 left-6 z-20 inline-flex items-center gap-2 text-xs font-semibold text-white/80 hover:text-white transition-all duration-300 ease-out"
@@ -77,9 +75,7 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Right panel — form */}
       <div className="flex-1 flex items-center justify-center relative overflow-hidden py-10 px-6">
-        {/* Animated background */}
         <div className="absolute inset-0">
           <div className="absolute -top-[40%] -left-[20%] w-[70vw] h-[70vw] rounded-full opacity-20 animate-pulse" style={{ background: "radial-gradient(circle, #1d4ed8, transparent 70%)", filter: "blur(80px)" }} />
           <div className="absolute top-[30%] -right-[15%] w-[50vw] h-[50vw] rounded-full opacity-15 animate-pulse" style={{ background: "radial-gradient(circle, #C9A84C, transparent 70%)", filter: "blur(80px)" }} />
@@ -88,7 +84,6 @@ export default function LoginPage() {
 
         <div className="relative z-10 w-full max-w-[460px]">
           <div className="bg-[#0f1d3a]/90 backdrop-blur-xl border border-white/[0.06] rounded-2xl overflow-hidden shadow-[0_20px_80px_rgba(0,0,0,0.5)]">
-            {/* Header */}
             <div className="flex items-center gap-3 px-8 pt-7 pb-6 border-b border-white/[0.06]">
               <div className="w-10 h-10 rounded-full bg-[#132a4d] border-2 border-[#C9A84C] overflow-hidden flex items-center justify-center shrink-0">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -104,14 +99,12 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Form */}
             <div className="px-8 pt-6 pb-8">
               <h2 className="text-sm font-semibold text-white/70 uppercase tracking-widest mb-5">
                 Account Credentials
               </h2>
 
               <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-                {/* Email */}
                 <div>
                   <label className="block text-[11px] font-semibold text-white/50 mb-2 uppercase tracking-widest">
                     Email Address
@@ -128,7 +121,6 @@ export default function LoginPage() {
                   )}
                 </div>
 
-                {/* Password */}
                 <div>
                   <label className="block text-[11px] font-semibold text-white/50 mb-2 uppercase tracking-widest">
                     Password
@@ -154,7 +146,6 @@ export default function LoginPage() {
                   )}
                 </div>
 
-                {/* Error */}
                 {apiError && (
                   <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/20 text-red-300 text-sm px-4 py-3 rounded-lg">
                     <div className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
@@ -162,7 +153,6 @@ export default function LoginPage() {
                   </div>
                 )}
 
-                {/* Submit */}
                 <button
                   type="submit"
                   disabled={isSubmitting}

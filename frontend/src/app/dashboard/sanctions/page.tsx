@@ -164,14 +164,12 @@ export default function SanctionsPage() {
 
       {isStudent && <div className="mb-4 p-3 bg-blue-50 border border-blue-100 rounded-lg text-sm text-blue-700">Below are sanctions/warnings issued to you. Please acknowledge receipt.</div>}
 
-      {/* Search & Filters */}
       <div className="flex gap-3 mb-4 flex-wrap">
         <div className="relative flex-1 min-w-[200px]"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search description, type..." className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]/20" /></div>
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="px-3 py-2 text-sm border border-gray-200 rounded-lg"><option value="">All Status</option><option value="active">Active</option><option value="served">Served</option><option value="appealed">Appealed</option><option value="lifted">Lifted</option></select>
         <select value={violationFilter} onChange={(e) => setViolationFilter(e.target.value)} className="px-3 py-2 text-sm border border-gray-200 rounded-lg"><option value="">All Violations</option><option value="tardiness">Tardiness</option><option value="absence">Absence</option><option value="misconduct">Misconduct</option><option value="dress_code">Dress Code</option><option value="equipment_misuse">Equipment Misuse</option><option value="unsportsmanlike">Unsportsmanlike</option><option value="substance">Substance</option><option value="academic">Academic</option><option value="other">Other</option></select>
       </div>
 
-      {/* Bulk actions */}
       {selected.size > 0 && isCoachOrAdmin && (
         <div className="flex items-center gap-3 mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
           <CheckSquare size={16} className="text-blue-600" /><span className="text-sm text-blue-700 font-medium">{selected.size} selected</span>
@@ -216,7 +214,6 @@ export default function SanctionsPage() {
         </div>
       )}
 
-      {/* Add Modal */}
       {showAdd && (
         <div
           onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}
@@ -237,7 +234,6 @@ export default function SanctionsPage() {
               <div className="border-t border-gray-100 my-4" />
 
               <form onSubmit={(e) => { e.preventDefault(); createMutation.mutate({ ...form, penalty: form.penalty || null, start_date: format(new Date(), "yyyy-MM-dd") }); }} className="space-y-5">
-                {/* Row 1: Student */}
                 <div ref={dropdownRef} className="relative">
                   <label className="block text-xs font-medium text-gray-600 mb-1.5">Student <span className="text-red-500">*</span></label>
                   <button
@@ -294,7 +290,6 @@ export default function SanctionsPage() {
                   )}
                 </div>
 
-                {/* Row 2: Violation Type + Sanction Level */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1.5">Violation Type <span className="text-red-500">*</span></label>
@@ -310,7 +305,6 @@ export default function SanctionsPage() {
                   </div>
                 </div>
 
-                {/* Row 3: Description */}
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="text-xs font-medium text-gray-600">Description <span className="text-red-500">*</span></label>
@@ -319,7 +313,6 @@ export default function SanctionsPage() {
                   <textarea rows={5} required value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Describe the violation and what happened..." className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg resize-none hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]/20 transition-colors" />
                 </div>
 
-                {/* Row 4: Violation Date */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1.5">Violation Date <span className="text-red-500">*</span></label>
@@ -330,7 +323,6 @@ export default function SanctionsPage() {
                   </div>
                 </div>
 
-                {/* Row 5: Penalty */}
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1.5">Penalty</label>
                   <div className="relative">

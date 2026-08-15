@@ -1,4 +1,3 @@
-"""Notification schemas."""
 from pydantic import BaseModel
 
 

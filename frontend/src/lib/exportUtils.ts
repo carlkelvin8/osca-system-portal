@@ -1,8 +1,3 @@
-/**
- * Client-side export utilities for tables.
- * Generates CSV downloads and simple PDF via print.
- */
-
 export function exportToCSV(data: Record<string, unknown>[], filename: string) {
   if (data.length === 0) return;
   const headers = Object.keys(data[0]);
@@ -25,7 +20,6 @@ export function exportToCSV(data: Record<string, unknown>[], filename: string) {
 }
 
 export function exportToPrintPDF(title: string) {
-  // Simple approach: open print dialog which allows Save as PDF
   const printWindow = window.open("", "_blank");
   if (!printWindow) return;
   const tableEl = document.querySelector("[data-export-table]");
