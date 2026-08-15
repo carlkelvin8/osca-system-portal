@@ -62,7 +62,6 @@ import {
   Cell,
 } from "recharts";
 
-// ── Announcement Tag Config ───────────────────────────────────────────────────
 
 const tagConfig: Record<string, { label: string; icon: React.ElementType; bg: string; text: string; border: string }> = {
   urgent: { label: "Urgent", icon: AlertTriangle, bg: "bg-red-100", text: "text-red-700", border: "border-red-300" },
@@ -70,8 +69,6 @@ const tagConfig: Record<string, { label: string; icon: React.ElementType; bg: st
   notice: { label: "Notice", icon: Megaphone, bg: "bg-amber-100", text: "text-amber-700", border: "border-amber-300" },
 };
 
-// ── Dashboard Design System ────────────────────────────────────────────────────
-// Shared card + stat primitives for the premium school-management look.
 
 const CARD =
   "rounded-2xl border border-gray-100 bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04),0_12px_32px_-16px_rgba(16,24,40,0.10)]";
@@ -86,7 +83,6 @@ const TONES: Record<string, { chip: string }> = {
   gray: { chip: "bg-slate-100 text-slate-500" },
 };
 
-// Map legacy `bg-{color}-500` badge classes to the new restrained tones.
 function toneFromLegacy(color: string): string {
   if (color.includes("amber")) return "amber";
   if (color.includes("green")) return "green";
@@ -198,9 +194,6 @@ function StatusBadge({ status }: { status?: string | null }) {
   );
 }
 
-// ── Quick Actions (role-aware) ────────────────────────────────────────────────
-// Each action's `roles` mirrors the existing sidebar/navigation role permissions.
-// Do NOT add actions for roles that cannot already access the target route.
 
 interface QuickAction {
   href: string;
@@ -262,7 +255,6 @@ const QUICK_ACTIONS: QuickAction[] = [
   },
 ];
 
-// ── Weekly attendance log row (subset of GET /reports/attendance/weekly) ──────
 
 interface WeeklyAttendanceLog {
   id: string;
@@ -272,7 +264,6 @@ interface WeeklyAttendanceLog {
   status: string | null;
 }
 
-// ── Announcement Form Modal ───────────────────────────────────────────────────
 
 interface AnnouncementFormProps {
   existing?: Announcement;
@@ -322,11 +313,9 @@ function AnnouncementFormModal({ existing, onClose }: AnnouncementFormProps) {
         const res = await announcementsApi.create(payload);
         annId = res.data.id as string;
       }
-      // Upload new images (backend appends them after existing ones)
       for (const img of newImages) {
         await announcementsApi.uploadImage(annId, img.file);
       }
-      // Remove existing images — descending index keeps remaining indices valid
       const toRemove = [...removedExisting].sort((a, b) => b - a);
       for (const idx of toRemove) {
         await announcementsApi.deleteImage(annId, idx);
@@ -575,7 +564,6 @@ function AnnouncementFormModal({ existing, onClose }: AnnouncementFormProps) {
   );
 }
 
-// ── Announcements Feed ────────────────────────────────────────────────────────
 
 interface AnnouncementsFeedProps {
   announcements: Announcement[];
@@ -616,7 +604,6 @@ function AnnouncementsFeed({ announcements, isEditor, onCreate, onEdit, onDelete
   );
 }
 
-// ── Announcement actions (shared by card + photo viewer) ──────────────────────
 
 function useAnnouncementActions(ann: Announcement) {
   const queryClient = useQueryClient();
@@ -785,13 +772,106 @@ function CommentSection({ actions, autoFocus }: { actions: AnnouncementActions; 
   );
 }
 
-// ── Announcement Card (Acknowledge + Comment + clickable image) ───────────────
 
 interface AnnouncementCardProps {
   ann: Announcement;
   isEditor: boolean;
   onEdit: (a: Announcement) => void;
   onDelete: (id: string) => void;
+}
+
+
+function PhotoGrid({
+  images,
+  onOpen,
+  alt,
+}: {
+  images: string[];
+  onOpen: (index: number) => void;
+  alt: string;
+}) {
+  const tile = "relative block w-full cursor-zoom-in overflow-hidden";
+  const img = "absolute inset-0 h-full w-full object-cover";
+
+  const renderTile = (index: number, cls: string, overlay?: number) => (
+    <button type="button" onClick={() => onOpen(index)} className={`${tile} ${cls}`} title="View full image">
+      <img src={images[index]} alt={alt} className={img} loading="lazy" />
+      {overlay !== undefined && overlay > 0 && (
+        <span className="absolute inset-0 flex items-center justify-center bg-black/50 text-lg font-bold text-white">
+          +{overlay}
+        </span>
+      )}
+    </button>
+  );
+
+  const n = images.length;
+
+  if (n === 1) {
+    return (
+      <div className="overflow-hidden rounded-xl border border-gray-100">
+        {renderTile(0, "aspect-[4/3]")}
+      </div>
+    );
+  }
+
+  if (n === 2) {
+    return (
+      <div className="grid grid-cols-2 gap-1 overflow-hidden rounded-xl border border-gray-100">
+        {renderTile(0, "aspect-[4/3]")}
+        {renderTile(1, "aspect-[4/3]")}
+      </div>
+    );
+  }
+
+  if (n === 3) {
+    return (
+      <div className="grid grid-cols-2 gap-1 overflow-hidden rounded-xl border border-gray-100">
+        {renderTile(0, "aspect-[4/3]")}
+        <div className="flex flex-col gap-1">
+          {renderTile(1, "min-h-0 flex-1")}
+          {renderTile(2, "min-h-0 flex-1")}
+        </div>
+      </div>
+    );
+  }
+
+  if (n === 4) {
+    return (
+      <div className="grid grid-cols-2 gap-1 overflow-hidden rounded-xl border border-gray-100">
+        {renderTile(0, "aspect-square")}
+        {renderTile(1, "aspect-square")}
+        {renderTile(2, "aspect-square")}
+        {renderTile(3, "aspect-square")}
+      </div>
+    );
+  }
+
+  const rest = images.slice(4);
+  const visibleRest = rest.slice(0, 2);
+  const extra = images.length - 4 - visibleRest.length;
+  const twoPerRow = visibleRest.length === 2;
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-gray-100">
+      <div className="grid grid-cols-2 gap-1">
+        {renderTile(0, "aspect-square")}
+        {renderTile(1, "aspect-square")}
+        {renderTile(2, "aspect-square")}
+        {renderTile(3, "aspect-square")}
+      </div>
+      <div className={`mt-1 grid gap-1 ${twoPerRow ? "grid-cols-2" : "grid-cols-1"}`}>
+        {visibleRest.map((_, i) => {
+          const absoluteIndex = 4 + i;
+          const isLast = absoluteIndex === images.length - 1;
+          return renderTile(
+            absoluteIndex,
+            twoPerRow ? "aspect-[4/3]" : "aspect-[16/9]",
+            isLast && extra > 0 ? extra : undefined,
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function AnnouncementCard({ ann, isEditor, onEdit, onDelete }: AnnouncementCardProps) {
@@ -809,7 +889,6 @@ function AnnouncementCard({ ann, isEditor, onEdit, onDelete }: AnnouncementCardP
 
   return (
     <div className={`group border rounded-xl overflow-hidden transition ${ann.pinned ? "border-amber-200 bg-amber-50/30" : "border-gray-100 bg-white"}`}>
-      {/* Header */}
       <div className="flex items-center justify-between px-4 pt-4 pb-2">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-full bg-[#1E3A5F] flex items-center justify-center text-white text-sm font-semibold shrink-0">
@@ -852,71 +931,17 @@ function AnnouncementCard({ ann, isEditor, onEdit, onDelete }: AnnouncementCardP
         </div>
       </div>
 
-      {/* Title + Content */}
       <div className="px-4 pb-2">
         <p className="text-sm font-bold text-gray-900">{ann.title}</p>
         <p className="text-sm text-gray-600 mt-1 leading-relaxed whitespace-pre-line">{ann.content}</p>
       </div>
 
-      {/* Images — aspect-preserving gallery; single image keeps the plain layout */}
       {images.length > 0 && (
         <div className="px-4 pb-2">
-          {images.length === 1 ? (
-            <button
-              type="button"
-              onClick={() => openViewer(0)}
-              className="block w-full cursor-zoom-in text-left"
-              title="View full image"
-            >
-              <img
-                src={images[0]}
-                alt={ann.title}
-                className="mx-auto max-h-64 w-auto max-w-full object-contain rounded-lg border border-gray-100"
-              />
-            </button>
-          ) : images.length === 2 ? (
-            <div className="grid grid-cols-2 gap-1.5">
-              {images.map((src, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => openViewer(i)}
-                  className="block cursor-zoom-in text-left overflow-hidden rounded-lg border border-gray-100"
-                  title="View full image"
-                >
-                  <img src={src} alt={ann.title} className="h-44 w-full object-contain bg-gray-50" />
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-              {images.slice(0, 6).map((src, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => openViewer(i)}
-                  className="block cursor-zoom-in text-left overflow-hidden rounded-lg border border-gray-100"
-                  title="View full image"
-                >
-                  <img src={src} alt={ann.title} className="h-32 w-full object-contain bg-gray-50" />
-                </button>
-              ))}
-              {images.length > 6 && (
-                <button
-                  type="button"
-                  onClick={() => openViewer(6)}
-                  className="flex h-32 items-center justify-center rounded-lg border border-gray-100 bg-gray-50 text-sm font-semibold text-gray-500 hover:bg-gray-100 cursor-zoom-in transition"
-                  title="View all images"
-                >
-                  +{images.length - 6}
-                </button>
-              )}
-            </div>
-          )}
+          <PhotoGrid images={images} onOpen={openViewer} alt={ann.title} />
         </div>
       )}
 
-      {/* Event Date */}
       {ann.event_date && (
         <div className="px-4 pb-2 flex items-center gap-1.5 text-xs text-[#1E3A5F] font-medium">
           <Calendar size={12} />
@@ -924,7 +949,6 @@ function AnnouncementCard({ ann, isEditor, onEdit, onDelete }: AnnouncementCardP
         </div>
       )}
 
-      {/* Actions: Acknowledge + Comment */}
       <div className="border-t border-gray-100 mx-4" />
       <div className="flex items-center gap-1 px-4 py-2">
         <AckButton actions={actions} />
@@ -942,14 +966,12 @@ function AnnouncementCard({ ann, isEditor, onEdit, onDelete }: AnnouncementCardP
         </button>
       </div>
 
-      {/* Comment section */}
       {actions.commentsOpen && (
         <div className="px-4 pb-4">
           <CommentSection actions={actions} />
         </div>
       )}
 
-      {/* Photo viewer modal */}
       {viewerOpen && (
         <AnnouncementPhotoViewer
           ann={ann}
@@ -966,7 +988,6 @@ function AnnouncementCard({ ann, isEditor, onEdit, onDelete }: AnnouncementCardP
   );
 }
 
-// ── Announcement Photo Viewer (Facebook-style lightbox) ───────────────────────
 
 function AnnouncementPhotoViewer({
   ann,
@@ -1024,14 +1045,12 @@ function AnnouncementPhotoViewer({
       aria-modal="true"
       aria-label="Photo viewer"
     >
-      {/* Dark semi-transparent overlay */}
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
 
       <div
         className="relative z-10 flex h-full max-h-full w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl lg:flex-row"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Close button (upper-right) */}
         <button
           onClick={onClose}
           className="absolute right-3 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white transition hover:bg-black/80"
@@ -1040,7 +1059,6 @@ function AnnouncementPhotoViewer({
           <X size={18} />
         </button>
 
-        {/* LEFT: large image viewer */}
         <div className="relative flex min-h-[45vh] flex-1 items-center justify-center overflow-hidden bg-black lg:min-h-0">
           <img
             key={images[index] ?? ""}
@@ -1050,12 +1068,10 @@ function AnnouncementPhotoViewer({
             style={{ transform: `scale(${zoom})`, transition: "transform 0.15s ease-out" }}
           />
 
-          {/* Image counter */}
           <div className="absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded-full bg-black/70 px-3 py-1 text-xs font-semibold text-white tabular-nums">
             {total > 0 ? `${index + 1} / ${total}` : "0 / 0"}
           </div>
 
-          {/* Prev / Next navigation */}
           {total > 1 && (
             <>
               <button
@@ -1079,7 +1095,6 @@ function AnnouncementPhotoViewer({
             </>
           )}
 
-          {/* Zoom controls */}
           <div className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 rounded-full bg-black/70 px-2 py-1.5 text-white">
             <button
               onClick={zoomOut}
@@ -1109,9 +1124,7 @@ function AnnouncementPhotoViewer({
           </div>
         </div>
 
-        {/* RIGHT: announcement details + comments panel */}
         <div className="flex w-full flex-col overflow-y-auto bg-white lg:w-[400px] lg:shrink-0 lg:border-l lg:border-gray-100">
-          {/* Author / profile info */}
           <div className="flex items-center gap-3 border-b border-gray-100 px-5 py-4">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#1E3A5F] text-sm font-semibold text-white">
               {(ann.created_by_name || "OSCA").charAt(0).toUpperCase()}
@@ -1144,7 +1157,6 @@ function AnnouncementPhotoViewer({
             </div>
           </div>
 
-          {/* Title + content */}
           <div className="px-5 py-4">
             <h3 className="text-base font-bold text-gray-900">{ann.title}</h3>
             <p className="mt-1.5 text-sm text-gray-600 leading-relaxed whitespace-pre-line">{ann.content}</p>
@@ -1156,7 +1168,6 @@ function AnnouncementPhotoViewer({
             )}
           </div>
 
-          {/* Acknowledge + comment counts */}
           <div className="flex items-center justify-between border-y border-gray-100 px-5 py-3">
             <AckButton actions={actions} size="md" />
             <span className="flex items-center gap-1 text-sm font-medium text-gray-500">
@@ -1165,7 +1176,6 @@ function AnnouncementPhotoViewer({
             </span>
           </div>
 
-          {/* Existing comments + input */}
           <div className="px-5 py-4">
             <CommentSection actions={actions} autoFocus />
           </div>
@@ -1176,7 +1186,6 @@ function AnnouncementPhotoViewer({
   );
 }
 
-// ── Role-aware welcome subtitle ───────────────────────────────────────────────
 
 const WELCOME_SUBTITLES: Record<UserRole, string> = {
   admin: "Here's what's happening with OSCA today.",
@@ -1187,7 +1196,6 @@ const WELCOME_SUBTITLES: Record<UserRole, string> = {
   student: "Here's your attendance, updates, and account overview.",
 };
 
-// ── Welcome Section (shared by ALL roles, role-specific subtitle) ─────────────
 
 function WelcomeSection({ user }: { user: User }) {
   return (
@@ -1202,17 +1210,12 @@ function WelcomeSection({ user }: { user: User }) {
   );
 }
 
-// ── OSCA NAAP banner (Dashboard page ONLY) ────────────────────────────────────
-// Spans the full main width (breaks out of the layout padding) and sits directly
-// below the sticky top navigation. Sticky so it stays visible while the Dashboard
-// content scrolls beneath it. No date/time, no "System Online".
 
 function OSCABanner() {
   const { isDark } = useThemeStore();
 
   return (
     <div className="sticky top-0 z-30 -mx-5 -mt-5 mb-6 overflow-hidden rounded-b-[20px] lg:-mx-7 lg:-mt-7 lg:mb-7">
-      {/* NAAP campus photo */}
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
         style={{
@@ -1221,7 +1224,6 @@ function OSCABanner() {
           backgroundPosition: "center",
         }}
       />
-      {/* Soft deep-navy overlay — photo stays visible underneath */}
       <div
         className={
           isDark
@@ -1230,7 +1232,6 @@ function OSCABanner() {
         }
       />
 
-      {/* Smooth curved wave along the bottom edge — blends into the page background */}
       <svg
         className="pointer-events-none absolute bottom-[-1px] left-0 h-[38px] w-full md:h-[45px]"
         viewBox="0 0 1440 100"
@@ -1244,7 +1245,6 @@ function OSCABanner() {
       </svg>
 
       <div className="relative z-10 flex h-[150px] flex-col justify-center gap-4 px-6 py-6 md:h-[165px] md:flex-row md:items-center md:justify-between md:gap-5 md:px-10">
-        {/* Left: OSCA branding (logo sits directly on the photo, no white box) */}
         <div className="flex items-center gap-3 md:gap-4">
           <Image
             src="/osca-logo.png"
@@ -1268,7 +1268,6 @@ function OSCABanner() {
   );
 }
 
-// ── Manager Dashboard (Admin / Director / Staff) ─────────────────────────────
 
 interface ManagerViewProps {
   user: User;
@@ -1302,7 +1301,6 @@ function ManagerView({
 
   return (
     <div className="space-y-7">
-      {/* Pending accounts alert */}
       {pendingCount > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
           <p className="flex items-center gap-2 text-sm font-medium text-amber-800">
@@ -1314,7 +1312,6 @@ function ManagerView({
         </div>
       )}
 
-      {/* KPI cards */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           wide
@@ -1351,51 +1348,83 @@ function ManagerView({
         />
       </div>
 
-      {/* Attendance chart (wide) + Quick Actions (right) */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        <div className="lg:col-span-7 xl:col-span-8">
-          {/* Attendance This Week */}
-          <SectionCard
-            title="Attendance This Week"
-            subtitle="Scans logged from Monday to Sunday"
-            icon={TrendingUp}
-            action={
-              (role === "admin" || role === "director") && (
-                <Link
-                  href="/dashboard/attendance"
-                  className="flex items-center gap-1 text-xs font-semibold text-[#1557C0] transition hover:text-[#123D78]"
-                >
-                  Manage sessions <ArrowUpRight size={13} />
-                </Link>
-              )
-            }
-          >
-            <div className="h-[240px]">
-              {weeklyLoading ? (
-                <div className="flex h-full items-center justify-center">
-                  <Loader2 className="animate-spin text-gray-300" size={28} />
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={attendanceTrend} barCategoryGap="30%">
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <XAxis dataKey="day" tick={{ fontSize: 12 }} />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
-                    <Tooltip />
-                    <Bar dataKey="scans" fill="#1557C0" radius={[6, 6, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </div>
-          </SectionCard>
-        </div>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <SectionCard
+          title="Attendance This Week"
+          subtitle="Scans logged from Monday to Sunday"
+          icon={TrendingUp}
+          className="h-full"
+          action={
+            (role === "admin" || role === "director") && (
+              <Link
+                href="/dashboard/attendance"
+                className="flex items-center gap-1 text-xs font-semibold text-[#1557C0] transition hover:text-[#123D78]"
+              >
+                Manage sessions <ArrowUpRight size={13} />
+              </Link>
+            )
+          }
+        >
+          <div className="h-[200px]">
+            {weeklyLoading ? (
+              <div className="flex h-full items-center justify-center">
+                <Loader2 className="animate-spin text-gray-300" size={28} />
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={attendanceTrend} barCategoryGap="30%">
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="day" tick={{ fontSize: 12 }} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
+                  <Tooltip />
+                  <Bar dataKey="scans" fill="#1557C0" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </SectionCard>
 
-        {/* Quick Actions */}
+        <SectionCard
+          title="Equipment Status"
+          subtitle="Current availability across the inventory"
+          icon={Package}
+          className="h-full"
+          action={
+            <Link
+              href="/dashboard/inventory"
+              className="flex items-center gap-1 text-xs font-semibold text-[#1557C0] transition hover:text-[#123D78]"
+            >
+              Manage inventory <ArrowUpRight size={13} />
+            </Link>
+          }
+        >
+          <div className="mb-4 flex flex-wrap gap-2.5">
+            {equipmentChartData.map((e) => (
+              <MiniStat key={e.name} label={e.name} value={e.qty} />
+            ))}
+          </div>
+          <div className="h-[200px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={equipmentChartData} barCategoryGap="40%">
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
+                <Tooltip />
+                <Bar dataKey="qty" radius={[6, 6, 0, 0]}>
+                  {equipmentChartData.map((entry, idx) => (
+                    <Cell key={idx} fill={entry.fill} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </SectionCard>
+
         <SectionCard
           title="Quick Actions"
           subtitle="Jump straight to the tools you use most"
           icon={LayoutDashboard}
-          className="lg:col-span-5 xl:col-span-4 h-full"
+          className="h-full"
         >
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
             {quickActions.map((action) => {
@@ -1423,43 +1452,6 @@ function ManagerView({
         </SectionCard>
       </div>
 
-      {/* Equipment Status — full width */}
-      <SectionCard
-        title="Equipment Status"
-        subtitle="Current availability across the inventory"
-        icon={Package}
-        action={
-          <Link
-            href="/dashboard/inventory"
-            className="flex items-center gap-1 text-xs font-semibold text-[#1557C0] transition hover:text-[#123D78]"
-          >
-            Manage inventory <ArrowUpRight size={13} />
-          </Link>
-        }
-      >
-        <div className="mb-4 flex flex-wrap gap-2.5">
-          {equipmentChartData.map((e) => (
-            <MiniStat key={e.name} label={e.name} value={e.qty} />
-          ))}
-        </div>
-        <div className="h-[240px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={equipmentChartData} barCategoryGap="40%">
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-              <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
-              <Tooltip />
-              <Bar dataKey="qty" radius={[6, 6, 0, 0]}>
-                {equipmentChartData.map((entry, idx) => (
-                  <Cell key={idx} fill={entry.fill} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </SectionCard>
-
-      {/* Updates & Notices */}
       <AnnouncementsFeed
         announcements={announcements}
         isEditor={isEditor}
@@ -1475,8 +1467,6 @@ function ManagerView({
   );
 }
 
-// ── Role Dashboard (Coach / PE Instructor / Student) ─────────────────────────
-// Same light card design as the manager dashboard, but only role-appropriate content.
 
 interface RoleViewProps {
   role: string;
@@ -1505,7 +1495,6 @@ function RoleView({
 }: RoleViewProps) {
   return (
     <div className="space-y-7">
-      {/* Role-specific stat cards */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
         {stats.map((stat) => (
           <StatCard
@@ -1520,9 +1509,7 @@ function RoleView({
         ))}
       </div>
 
-      {/* Charts grid */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        {/* Attendance Trend */}
         <SectionCard
           title="Attendance This Week"
           subtitle="Your scans from the past seven days"
@@ -1542,7 +1529,6 @@ function RoleView({
           </div>
         </SectionCard>
 
-        {/* Equipment Status — hidden for students */}
         {role !== "student" && (
           <SectionCard
             title="Equipment Status"
@@ -1574,7 +1560,6 @@ function RoleView({
         )}
       </div>
 
-      {/* Announcements Feed */}
       <AnnouncementsFeed
         announcements={announcements}
         isEditor={isEditor}
@@ -1590,13 +1575,12 @@ function RoleView({
   );
 }
 
-// ── Student Dashboard (full-width, 12-col grid) ───────────────────────────────
 
 function eligibilityTone(status?: AthleteEligibility["status"] | null): string {
   if (status === "eligible") return "green";
   if (status === "restricted") return "amber";
   if (status === "ineligible") return "red";
-  return "blue"; // pending_clearance or no record
+  return "blue";
 }
 
 function InfoTile({
@@ -1650,7 +1634,6 @@ function StudentView({
   onEditAnnouncement,
   onDeleteAnnouncement,
 }: StudentViewProps) {
-  // Weekly stats from the student's own attendance records
   const weekStats = useMemo(() => {
     const items = studentRecords?.items ?? [];
     let present = 0,
@@ -1669,7 +1652,6 @@ function StudentView({
     return { present, late, absent, excused, rate };
   }, [studentRecords]);
 
-  // Eligibility status (backend auto-filters to own record for students)
   const { data: eligibilityData } = useQuery<PaginatedResponse<AthleteEligibility>>({
     queryKey: ["student-eligibility", user?.id],
     queryFn: async () => {
@@ -1682,7 +1664,6 @@ function StudentView({
 
   return (
     <div className="space-y-7">
-      {/* Welcome card */}
       <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_12px_32px_-16px_rgba(16,24,40,0.10)]">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -1701,7 +1682,6 @@ function StudentView({
         </div>
       </div>
 
-      {/* Summary cards */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           wide
@@ -1723,7 +1703,6 @@ function StudentView({
         />
       </div>
 
-      {/* Attendance overview */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         <div className="lg:col-span-7 xl:col-span-8">
           <SectionCard title="Attendance This Week" subtitle="Your scans from the past seven days" icon={TrendingUp}>
@@ -1766,7 +1745,6 @@ function StudentView({
         </div>
       </div>
 
-      {/* Updates & Notices */}
       <AnnouncementsFeed
         announcements={announcements}
         isEditor={isEditor}
@@ -1775,7 +1753,6 @@ function StudentView({
         onDelete={onDeleteAnnouncement}
       />
 
-      {/* Student Quick Info */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
         <InfoTile icon={Trophy} label="Assigned Sport / Art" value={user.sport_or_art ?? "—"} />
         <InfoTile
@@ -1801,7 +1778,6 @@ function StudentView({
   );
 }
 
-// ── Main Dashboard Page ────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
   const { user } = useAuthStore();
@@ -1833,7 +1809,6 @@ export default function DashboardPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["announcements"] }),
   });
 
-  // Staff: fetch pending account count for dashboard card
   const { data: pendingData } = useQuery<PaginatedResponse<UserSummary>>({
     queryKey: ["users", "pending-count"],
     queryFn: async () => {
@@ -1845,7 +1820,6 @@ export default function DashboardPage() {
   });
   const pendingCount = pendingData?.total ?? 0;
 
-  // Student: fetch own attendance records for weekly chart
   const startOfWeek = new Date();
   startOfWeek.setDate(startOfWeek.getDate() - 6);
   startOfWeek.setHours(0, 0, 0, 0);
@@ -1858,7 +1832,6 @@ export default function DashboardPage() {
     enabled: role === "student" && !!user?.id,
   });
 
-  // Student: count today's attendance from own records
   const studentTodayAttendance = (() => {
     if (role !== "student" || !studentRecords?.items) return 0;
     const todayStart = new Date();
@@ -1869,7 +1842,6 @@ export default function DashboardPage() {
     }).length;
   })();
 
-  // Manager: real weekly attendance logs (current week, Mon–Sun)
   const isManager = role === "admin" || role === "director" || role === "staff";
   const { data: weeklyLogs, isLoading: weeklyLoading } = useQuery<WeeklyAttendanceLog[]>({
     queryKey: ["dashboard-weekly-attendance"],
@@ -1959,16 +1931,11 @@ export default function DashboardPage() {
     },
   ];
 
-  // Student: only equipment available + attendance
-  // PE Instructor: only equipment + overdue stats
-  // Coach: attendance + equipment + overdue (sport-specific label)
-  // Staff: equipment + overdue (inventory-focused)
-  // Admin/Director: all stats
   const stats = allStats.filter((s) => {
     if (role === "student") return s.key === "attendance";
     if (role === "pe_instructor") return s.key === "equipment" || s.key === "overdue";
     if (role === "coach") return s.key !== "students" && s.key !== "pending";
-    return true; // admin, director, staff see all
+    return true;
   });
 
   const equipmentChartData = summary
@@ -1978,10 +1945,8 @@ export default function DashboardPage() {
       ]
     : [];
 
-  // Weekly attendance trend (legacy roles — unchanged behavior)
   const attendanceTrend = (() => {
     const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-    // Student: compute from real attendance records
     if (role === "student" && studentRecords?.items) {
       const dayCount = [0, 0, 0, 0, 0, 0, 0];
       const now = new Date();
@@ -1990,12 +1955,11 @@ export default function DashboardPage() {
         const d = new Date(rec.time_in);
         const diffDays = Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
         if (diffDays < 0 || diffDays > 6) continue;
-        const dayIdx = (d.getDay() + 6) % 7; // Mon=0 … Sun=6
+        const dayIdx = (d.getDay() + 6) % 7;
         dayCount[dayIdx]++;
       }
       return days.map((day, i) => ({ day, scans: dayCount[i] }));
     }
-    // Others: mock based on summary data
     return days.map((d, i) => ({
       day: d,
       scans: i <= (new Date().getDay() === 0 ? 6 : new Date().getDay() - 1) ? Math.floor(Math.random() * (summary?.attendance.today || 5) + 2) : 0,
@@ -2010,7 +1974,6 @@ export default function DashboardPage() {
 
   return (
     <>
-      {/* OSCA NAAP banner — Dashboard page only, directly below the sticky top nav */}
       <OSCABanner />
 
       {announcementModal && (
@@ -2032,7 +1995,6 @@ export default function DashboardPage() {
         />
       ) : (
         <div className="space-y-7">
-          {/* Shared welcome section (role-specific subtitle) */}
           <WelcomeSection user={user} />
 
           {isManager ? (
