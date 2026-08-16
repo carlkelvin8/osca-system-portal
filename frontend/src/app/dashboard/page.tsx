@@ -1514,7 +1514,7 @@ function RoleView({
           title="Attendance This Week"
           subtitle="Your scans from the past seven days"
           icon={TrendingUp}
-          className="lg:col-span-7 xl:col-span-8"
+          className="lg:col-span-12"
         >
           <div className="h-[240px]">
             <ResponsiveContainer width="100%" height="100%">
@@ -1528,36 +1528,6 @@ function RoleView({
             </ResponsiveContainer>
           </div>
         </SectionCard>
-
-        {role !== "student" && (
-          <SectionCard
-            title="Equipment Status"
-            subtitle="Current availability across the inventory"
-            icon={Package}
-            className="lg:col-span-5 xl:col-span-4"
-          >
-            <div className="mb-4 flex flex-wrap gap-2.5">
-              {equipmentChartData.map((e) => (
-                <MiniStat key={e.name} label={e.name} value={e.qty} />
-              ))}
-            </div>
-            <div className="h-[240px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={equipmentChartData} barCategoryGap="40%">
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                  <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
-                  <Tooltip />
-                  <Bar dataKey="qty" radius={[6, 6, 0, 0]}>
-                    {equipmentChartData.map((entry, idx) => (
-                      <Cell key={idx} fill={entry.fill} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </SectionCard>
-        )}
       </div>
 
       <AnnouncementsFeed

@@ -372,7 +372,7 @@ class ReportService:
 
     def _html_to_pdf(self, html: str) -> bytes:
         from xhtml2pdf import pisa
-        page_css = "<style>@page { size: A4 landscape; margin: 12mm 9mm; }</style>"
+        page_css = "<style>@page { size: legal landscape; margin: 12mm 9mm; }</style>"
         html = html.replace("<head>", "<head>" + page_css, 1) if "<head>" in html else page_css + html
         buffer = io.BytesIO()
         pisa.CreatePDF(io.StringIO(html), dest=buffer)

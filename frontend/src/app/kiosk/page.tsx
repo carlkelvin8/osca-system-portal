@@ -37,7 +37,7 @@ import { useThemeStore } from "@/store/useThemeStore";
 import { format } from "date-fns";
 import Link from "next/link";
 
-const ALLOWED_ROLES = ["admin", "coach", "pe_instructor"] as const;
+const ALLOWED_ROLES = ["admin", "director", "staff", "coach", "pe_instructor"] as const;
 
 const CARD =
   "rounded-2xl border border-gray-100 bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04),0_12px_32px_-16px_rgba(16,24,40,0.10)]";

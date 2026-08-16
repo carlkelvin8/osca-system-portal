@@ -423,7 +423,7 @@ export default function ReportsPage() {
   const { user } = useAuthStore();
   const isCoach = user?.role === "coach";
   const isAdmin = user?.role === "admin" || user?.role === "director" || user?.role === "staff";
-  const isNonStudent = isCoach || isAdmin;
+  const isNonStudent = isAdmin;
 
   const [activeTab, setActiveTab] = useState<TabId>("attendance");
   const [logDate, setLogDate] = useState(() => new Date().toISOString().slice(0, 10));

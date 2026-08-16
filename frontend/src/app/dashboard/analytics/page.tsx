@@ -19,7 +19,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { reportsApi, attendanceApi, sanctionsApi } from "@/lib/api";
 import { useAuthStore } from "@/store/useAuthStore";
-import { BarChart3, TrendingUp, Users, Package, Gavel } from "lucide-react";
+import { BarChart3, TrendingUp, Users, Package, Gavel, AlertTriangle } from "lucide-react";
 import type { PaginatedResponse, Sanction, AttendanceRecord } from "@/types";
 
 const PIE_COLORS = ["#2563eb", "#22c55e", "#f59e0b", "#ef4444", "#8b5cf6"];
@@ -116,6 +116,8 @@ function groupSanctionsByType(sanctions: Sanction[]) {
 
 export default function AnalyticsPage() {
   const { user } = useAuthStore();
+  const role = user?.role;
+  const isAllowed = role === "admin" || role === "director" || role === "staff";
   const [trendView, setTrendView] = useState<"week" | "month">("week");
 
   const { data: attendanceData, isLoading: loadingAttendance } = useQuery({
@@ -124,7 +126,7 @@ export default function AnalyticsPage() {
       const res = await attendanceApi.getRecords({ page_size: 100 });
       return res.data as PaginatedResponse<AttendanceRecord>;
     },
-    enabled: !!user,
+    enabled: !!user && isAllowed,
   });
 
   const { data: sanctionsData, isLoading: loadingSanctions } = useQuery({
@@ -133,7 +135,7 @@ export default function AnalyticsPage() {
       const res = await sanctionsApi.list({ page_size: 100 });
       return res.data as PaginatedResponse<Sanction>;
     },
-    enabled: !!user,
+    enabled: !!user && isAllowed,
   });
 
   const { data: summaryData, isLoading: loadingSummary } = useQuery({
@@ -145,10 +147,20 @@ export default function AnalyticsPage() {
         transactions: { overdue: number };
       };
     },
-    enabled: !!user,
+    enabled: !!user && isAllowed,
   });
 
   const isLoading = loadingAttendance || loadingSanctions || loadingSummary;
+
+  if (user && !isAllowed) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-4">
+        <AlertTriangle size={48} className="text-amber-500" />
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white">Access Denied</h2>
+        <p className="text-sm text-gray-500">Only Admin, Director, and Staff can view analytics.</p>
+      </div>
+    );
+  }
 
   const attendanceRecords = attendanceData?.items || [];
   const sanctions = sanctionsData?.items || [];

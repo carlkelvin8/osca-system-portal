@@ -386,7 +386,7 @@ async def export_audit_logs_pdf(
 
     html = f"""
     <html><head><style>
-        @page {{ size: A4 landscape; margin: 12mm 9mm; }}
+        @page {{ size: legal landscape; margin: 12mm 9mm; }}
         body {{ font-family: Helvetica, sans-serif; font-size: 9pt; }}
         h1 {{ font-size: 16pt; color: #1E3A5F; }}
         p {{ color: #666; font-size: 8pt; }}

@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 from xhtml2pdf import pisa
 
-from app.core.dependencies import AdminOnly, CurrentUser, NotStudent, get_db
+from app.core.dependencies import AdminOnly, CurrentUser, get_db
 from app.models.attendance import AttendanceRecord, Session
 from app.models.eligibility import AthleteEligibility, EligibilityStatus
 from app.models.facility import Facility
@@ -61,7 +61,7 @@ async def _log_report_export(
     response_class=StreamingResponse,
 )
 async def attendance_pdf(
-    _user: NotStudent,
+    _user: AdminOnly,
     db: Annotated[AsyncSession, Depends(get_db)],
     sport_or_art: str | None = Query(None),
     session_id: str | None = Query(None),
@@ -98,7 +98,7 @@ async def attendance_pdf(
     response_class=StreamingResponse,
 )
 async def attendance_xlsx(
-    _user: NotStudent,
+    _user: AdminOnly,
     db: Annotated[AsyncSession, Depends(get_db)],
     sport_or_art: str | None = Query(None),
     date_from: datetime | None = Query(None),
@@ -134,7 +134,7 @@ async def attendance_xlsx(
     response_class=StreamingResponse,
 )
 async def inventory_pdf(
-    _user: NotStudent,
+    _user: AdminOnly,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> StreamingResponse:
     report_service = ReportService(db)
@@ -162,7 +162,7 @@ async def inventory_pdf(
     response_class=StreamingResponse,
 )
 async def inventory_xlsx(
-    _user: NotStudent,
+    _user: AdminOnly,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> StreamingResponse:
     report_service = ReportService(db)
@@ -341,7 +341,7 @@ def _build_attendance_html(rows: list[dict], title: str, period: str) -> str:
     return f"""
     <html><head><meta charset="UTF-8">
     <style>
-        @page {{ size: A4 landscape; margin: 12mm 9mm; }}
+        @page {{ size: legal landscape; margin: 12mm 9mm; }}
         body {{ font-family: Helvetica, sans-serif; font-size: 9pt; }}
         h1 {{ color: #1E3A5F; font-size: 14pt; }}
         p {{ color: #666; font-size: 8pt; }}
@@ -364,7 +364,7 @@ def _build_attendance_html(rows: list[dict], title: str, period: str) -> str:
     summary="Daily attendance log",
 )
 async def daily_attendance(
-    _user: NotStudent,
+    _user: AdminOnly,
     db: Annotated[AsyncSession, Depends(get_db)],
     log_date: date | None = Query(None, description="Date (default: today)"),
     sport_or_art: str | None = Query(None),
@@ -412,7 +412,7 @@ async def daily_attendance(
     summary="Weekly attendance log",
 )
 async def weekly_attendance(
-    _user: NotStudent,
+    _user: AdminOnly,
     db: Annotated[AsyncSession, Depends(get_db)],
     week_start: date | None = Query(None, description="Start of week (Monday, default: current week)"),
     sport_or_art: str | None = Query(None),
@@ -460,7 +460,7 @@ async def weekly_attendance(
     summary="Monthly attendance log",
 )
 async def monthly_attendance(
-    _user: NotStudent,
+    _user: AdminOnly,
     db: Annotated[AsyncSession, Depends(get_db)],
     year: int = Query(None, ge=2020, le=2100),
     month: int = Query(None, ge=1, le=12),
@@ -603,7 +603,7 @@ def _rows_to_pdf(rows: list[dict], headers: list[str], title: str, subtitle: str
     html = f"""
     <!DOCTYPE html><html><head><meta charset="UTF-8">
     <style>
-        @page {{ size: A4 landscape; margin: 12mm 9mm; }}
+        @page {{ size: legal landscape; margin: 12mm 9mm; }}
         body {{ font-family: Arial, sans-serif; font-size: 9pt; }}
         h1 {{ color: #1E3A5F; font-size: 14pt; }}
         p {{ color: #666; font-size: 8pt; }}
@@ -960,7 +960,7 @@ async def _fetch_facility_status(db: AsyncSession) -> list[dict]:
     summary="Venue reservations report",
 )
 async def venue_reservations_report(
-    _user: NotStudent,
+    _user: AdminOnly,
     db: Annotated[AsyncSession, Depends(get_db)],
     date_from: date | None = Query(None),
     date_to: date | None = Query(None),
@@ -980,7 +980,7 @@ async def venue_reservations_report(
     summary="Venue usage summary report",
 )
 async def venue_usage_report(
-    _user: NotStudent,
+    _user: AdminOnly,
     db: Annotated[AsyncSession, Depends(get_db)],
     date_from: date | None = Query(None),
     date_to: date | None = Query(None),
@@ -999,7 +999,7 @@ async def venue_usage_report(
     summary="Facility status report",
 )
 async def facility_status_report(
-    _user: NotStudent,
+    _user: AdminOnly,
     db: Annotated[AsyncSession, Depends(get_db)],
     format: str = Query("json", pattern="^(json|csv|xlsx|pdf)$"),
 ) -> StreamingResponse | list:
@@ -1039,7 +1039,7 @@ async def _fetch_eligibility(db: AsyncSession, statuses: list, date_from, date_t
 
 
 async def _eligibility_report(
-    _user: NotStudent,
+    _user: AdminOnly,
     db: AsyncSession,
     statuses: list,
     title: str,
@@ -1057,7 +1057,7 @@ async def _eligibility_report(
 
 @router.get("/eligibility/eligible", response_model=None, summary="Eligible students report")
 async def eligible_students_report(
-    _user: NotStudent,
+    _user: AdminOnly,
     db: Annotated[AsyncSession, Depends(get_db)],
     date_from: date | None = Query(None),
     date_to: date | None = Query(None),
@@ -1070,7 +1070,7 @@ async def eligible_students_report(
 
 @router.get("/eligibility/restricted", response_model=None, summary="Restricted students report")
 async def restricted_students_report(
-    _user: NotStudent,
+    _user: AdminOnly,
     db: Annotated[AsyncSession, Depends(get_db)],
     date_from: date | None = Query(None),
     date_to: date | None = Query(None),
@@ -1083,7 +1083,7 @@ async def restricted_students_report(
 
 @router.get("/eligibility/ineligible", response_model=None, summary="Ineligible students report")
 async def ineligible_students_report(
-    _user: NotStudent,
+    _user: AdminOnly,
     db: Annotated[AsyncSession, Depends(get_db)],
     date_from: date | None = Query(None),
     date_to: date | None = Query(None),
@@ -1177,7 +1177,7 @@ async def _fetch_incident_summary(db: AsyncSession, date_from, date_to) -> list[
 
 
 async def _incident_report(
-    _user: NotStudent,
+    _user: AdminOnly,
     db: AsyncSession,
     fetch,
     title: str,
@@ -1195,7 +1195,7 @@ async def _incident_report(
 
 @router.get("/incidents/reports", response_model=None, summary="Incident reports log")
 async def incident_reports_log(
-    _user: NotStudent,
+    _user: AdminOnly,
     db: Annotated[AsyncSession, Depends(get_db)],
     date_from: date | None = Query(None),
     date_to: date | None = Query(None),
@@ -1207,7 +1207,7 @@ async def incident_reports_log(
 
 @router.get("/incidents/categories", response_model=None, summary="Incident categories report")
 async def incident_categories_log(
-    _user: NotStudent,
+    _user: AdminOnly,
     db: Annotated[AsyncSession, Depends(get_db)],
     date_from: date | None = Query(None),
     date_to: date | None = Query(None),
@@ -1222,7 +1222,7 @@ async def incident_categories_log(
 
 @router.get("/incidents/summary", response_model=None, summary="Incident summary report")
 async def incident_summary_log(
-    _user: NotStudent,
+    _user: AdminOnly,
     db: Annotated[AsyncSession, Depends(get_db)],
     date_from: date | None = Query(None),
     date_to: date | None = Query(None),
@@ -1271,7 +1271,7 @@ async def _fetch_sanctions(db: AsyncSession, statuses: list | None, date_from, d
 
 
 async def _sanction_report(
-    _user: NotStudent,
+    _user: AdminOnly,
     db: AsyncSession,
     statuses: list | None,
     title: str,
@@ -1290,7 +1290,7 @@ async def _sanction_report(
 
 @router.get("/sanctions/active", response_model=None, summary="Active sanctions report")
 async def active_sanctions_report(
-    _user: NotStudent,
+    _user: AdminOnly,
     db: Annotated[AsyncSession, Depends(get_db)],
     date_from: date | None = Query(None),
     date_to: date | None = Query(None),
@@ -1303,7 +1303,7 @@ async def active_sanctions_report(
 
 @router.get("/sanctions/completed", response_model=None, summary="Completed sanctions report")
 async def completed_sanctions_report(
-    _user: NotStudent,
+    _user: AdminOnly,
     db: Annotated[AsyncSession, Depends(get_db)],
     date_from: date | None = Query(None),
     date_to: date | None = Query(None),
@@ -1316,7 +1316,7 @@ async def completed_sanctions_report(
 
 @router.get("/sanctions/history", response_model=None, summary="Sanction history report")
 async def sanction_history_report(
-    _user: NotStudent,
+    _user: AdminOnly,
     db: Annotated[AsyncSession, Depends(get_db)],
     date_from: date | None = Query(None),
     date_to: date | None = Query(None),
