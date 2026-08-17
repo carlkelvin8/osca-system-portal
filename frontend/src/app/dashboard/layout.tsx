@@ -24,6 +24,7 @@ import {
   Gavel,
   TrendingUp,
   ScrollText,
+  Megaphone,
   Moon,
   Sun,
   Menu,
@@ -106,6 +107,12 @@ const navItems: NavItem[] = [
       href: "/dashboard/users",
       label: "Users",
       icon: Users,
+      roles: ["admin", "director", "staff"],
+    },
+    {
+      href: "/dashboard/announcements",
+      label: "Announcements",
+      icon: Megaphone,
       roles: ["admin", "director", "staff"],
     },
     {

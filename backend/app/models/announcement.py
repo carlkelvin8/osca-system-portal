@@ -27,8 +27,20 @@ class Announcement(Base):
     )
     pinned: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    visibility: Mapped[str] = mapped_column(
+        String(20), default="all_dashboards", server_default="all_dashboards", nullable=False,
+        comment="Where this announcement appears: all_dashboards, public_website, or both"
+    )
+    link_url: Mapped[str | None] = mapped_column(
+        String(500), nullable=True,
+        comment="Optional external URL; makes the announcement clickable"
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+        comment="Timestamp when soft-deleted; NULL means not deleted"
+    )
     created_by_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

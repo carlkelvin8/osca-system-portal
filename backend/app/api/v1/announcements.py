@@ -1,10 +1,12 @@
 import uuid
-from typing import Annotated
+from typing import Annotated, Literal
 
 import structlog
 from fastapi import APIRouter, Depends, File, Query, UploadFile, status
-from sqlalchemy import func, select
+from sqlalchemy import Select, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from datetime import datetime, timezone
 
 from app.core.dependencies import CurrentUser, get_db
 from app.core.exceptions import ForbiddenError, NotFoundError
@@ -26,29 +28,28 @@ router = APIRouter()
 logger = structlog.get_logger(__name__)
 
 _EDITOR_ROLES = {UserRole.ADMIN, UserRole.DIRECTOR, UserRole.STAFF}
+_DASHBOARD_VISIBILITY = ("all_dashboards", "both")
+_PUBLIC_VISIBILITY = ("public_website", "both")
 
 
-@router.get(
-    "",
-    response_model=PaginatedResponse[AnnouncementRead],
-    summary="List active announcements",
-)
-async def list_announcements(
-    _user: CurrentUser,
-    db: Annotated[AsyncSession, Depends(get_db)],
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
-    include_inactive: bool = Query(False),
+def _jsonable(d: dict) -> dict:
+    from datetime import date as _date, datetime as _datetime, time as _time
+
+    def conv(v):
+        if isinstance(v, (uuid.UUID, _date, _datetime, _time)):
+            return str(v)
+        return v
+
+    return {k: conv(v) for k, v in d.items()}
+
+
+async def _build_announcement_page(
+    db: AsyncSession,
+    query: Select,
+    page: int,
+    page_size: int,
+    viewer: User | None,
 ) -> PaginatedResponse[AnnouncementRead]:
-    query = select(Announcement)
-    if not include_inactive:
-        query = query.where(Announcement.is_active == True)
-    query = query.order_by(
-        Announcement.pinned.desc(),
-        Announcement.event_date.asc().nullslast(),
-        Announcement.created_at.desc(),
-    )
-
     total_q = select(func.count()).select_from(query.subquery())
     total = (await db.execute(total_q)).scalar_one()
     query = query.offset((page - 1) * page_size).limit(page_size)
@@ -82,13 +83,14 @@ async def list_announcements(
         )
         comment_counts = dict(comment_rows.all())
 
-        my_rows = await db.execute(
-            select(AnnouncementAcknowledgement.announcement_id).where(
-                AnnouncementAcknowledgement.announcement_id.in_(ann_ids),
-                AnnouncementAcknowledgement.user_id == _user.id,
+        if viewer is not None:
+            my_rows = await db.execute(
+                select(AnnouncementAcknowledgement.announcement_id).where(
+                    AnnouncementAcknowledgement.announcement_id.in_(ann_ids),
+                    AnnouncementAcknowledgement.user_id == viewer.id,
+                )
             )
-        )
-        my_acked = set(my_rows.scalars().all())
+            my_acked = set(my_rows.scalars().all())
 
     items = []
     for ann in rows:
@@ -103,6 +105,96 @@ async def list_announcements(
                              pages=(total + page_size - 1) // page_size)
 
 
+@router.get(
+    "",
+    response_model=PaginatedResponse[AnnouncementRead],
+    summary="List announcements visible on dashboards",
+)
+async def list_announcements(
+    _user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    include_inactive: bool = Query(False),
+    publish_to: Literal["all_dashboards", "public_website"] = Query("all_dashboards"),
+) -> PaginatedResponse[AnnouncementRead]:
+    query = select(Announcement)
+    query = query.where(Announcement.visibility.in_(_DASHBOARD_VISIBILITY if publish_to == "all_dashboards" else _PUBLIC_VISIBILITY))
+    query = query.where(Announcement.deleted_at.is_(None))
+    if not include_inactive:
+        query = query.where(Announcement.is_active == True)
+    query = query.order_by(
+        Announcement.pinned.desc(),
+        Announcement.event_date.asc().nullslast(),
+        Announcement.created_at.desc(),
+    )
+    return await _build_announcement_page(db, query, page, page_size, _user)
+
+
+@router.get(
+    "/public",
+    response_model=PaginatedResponse[AnnouncementRead],
+    summary="Public announcements (no authentication)",
+)
+async def list_public_announcements(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+) -> PaginatedResponse[AnnouncementRead]:
+    query = (
+        select(Announcement)
+        .where(Announcement.is_active == True)
+        .where(Announcement.deleted_at.is_(None))
+        .where(Announcement.visibility.in_(_PUBLIC_VISIBILITY))
+    )
+    query = query.order_by(
+        Announcement.pinned.desc(),
+        Announcement.event_date.asc().nullslast(),
+        Announcement.created_at.desc(),
+    )
+    return await _build_announcement_page(db, query, page, page_size, None)
+
+
+@router.get(
+    "/manage",
+    response_model=PaginatedResponse[AnnouncementRead],
+    summary="Manage announcements (Admin / Director / Staff)",
+)
+async def manage_announcements(
+    current_user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    search: str | None = Query(None, max_length=200),
+    publish_to: Literal["all_dashboards", "public_website", "both"] | None = Query(None),
+    status: Literal["active", "inactive", "deleted"] | None = Query(None),
+    sort: Literal["newest", "oldest"] = Query("newest"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+) -> PaginatedResponse[AnnouncementRead]:
+    if current_user.role not in _EDITOR_ROLES:
+        raise ForbiddenError("Only admin, director, and staff may manage announcements.")
+
+    query = select(Announcement)
+    if search:
+        like = f"%{search}%"
+        query = query.where(or_(Announcement.title.ilike(like), Announcement.content.ilike(like)))
+    if publish_to:
+        query = query.where(Announcement.visibility == publish_to)
+
+    if status == "deleted":
+        query = query.where(Announcement.deleted_at.isnot(None))
+    elif status == "active":
+        query = query.where(Announcement.is_active == True).where(Announcement.deleted_at.is_(None))
+    elif status == "inactive":
+        query = query.where(Announcement.is_active == False).where(Announcement.deleted_at.is_(None))
+    else:
+        query = query.where(Announcement.deleted_at.is_(None))
+    if sort == "oldest":
+        query = query.order_by(Announcement.created_at.asc())
+    else:
+        query = query.order_by(Announcement.created_at.desc())
+    return await _build_announcement_page(db, query, page, page_size, current_user)
+
+
 @router.post(
     "",
     response_model=AnnouncementRead,
@@ -115,7 +207,7 @@ async def create_announcement(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AnnouncementRead:
     if current_user.role not in _EDITOR_ROLES:
-        raise ForbiddenError("Only admin and director may create announcements.")
+        raise ForbiddenError("Only admin, director, and staff may create announcements.")
 
     ann = Announcement(
         title=body.title,
@@ -123,6 +215,8 @@ async def create_announcement(
         event_date=body.event_date,
         tag=body.tag,
         pinned=body.pinned,
+        visibility=body.visibility,
+        link_url=body.link_url,
         created_by_id=current_user.id,
     )
     db.add(ann)
@@ -135,7 +229,14 @@ async def create_announcement(
         description=f"Created announcement '{body.title}'",
         resource_type="Announcement",
         resource_id=str(ann.id),
-        new_values={"title": body.title, "tag": body.tag, "pinned": body.pinned},
+        new_values=_jsonable({
+            "title": body.title,
+            "event_date": body.event_date,
+            "tag": body.tag,
+            "pinned": body.pinned,
+            "visibility": body.visibility,
+            "link_url": body.link_url,
+        }),
         current_user=current_user,
     )
     await db.commit()
@@ -155,17 +256,24 @@ async def update_announcement(
     current_user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AnnouncementRead:
+    logger.info(
+        "announcement_update_start",
+        announcement_id=str(announcement_id),
+        user_id=str(current_user.id),
+        payload=_jsonable(body.model_dump(exclude_unset=True)),
+    )
+
     if current_user.role not in _EDITOR_ROLES:
-        raise ForbiddenError("Only admin and director may update announcements.")
+        raise ForbiddenError("Only admin, director, and staff may update announcements.")
 
     ann = await db.get(Announcement, announcement_id)
-    if not ann or not ann.is_active:
+    if not ann:
         raise NotFoundError("Announcement", str(announcement_id))
 
-    for field, value in body.model_dump(exclude_unset=True).items():
+    update_data = body.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
         setattr(ann, field, value)
 
-    update_data = body.model_dump(exclude_unset=True)
     await audit_log(
         db=db,
         action="ANNOUNCEMENT_UPDATED",
@@ -173,11 +281,12 @@ async def update_announcement(
         description=f"Updated announcement '{ann.title}'",
         resource_type="Announcement",
         resource_id=str(announcement_id),
-        new_values=update_data,
+        new_values=_jsonable(update_data),
         current_user=current_user,
     )
     await db.commit()
     await db.refresh(ann)
+    logger.info("announcement_update_success", announcement_id=str(announcement_id))
     r = AnnouncementRead.model_validate(ann)
     creator = await db.get(type(ann).created_by.property.mapper.class_, ann.created_by_id)
     r.created_by_name = creator.full_name if creator else ""
@@ -194,27 +303,115 @@ async def delete_announcement(
     current_user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> None:
+    logger.info(
+        "announcement_delete_start",
+        announcement_id=str(announcement_id),
+        user_id=str(current_user.id),
+    )
+
     if current_user.role not in _EDITOR_ROLES:
-        raise ForbiddenError("Only admin and director may delete announcements.")
+        raise ForbiddenError("Only admin, director, and staff may delete announcements.")
 
     ann = await db.get(Announcement, announcement_id)
-    if not ann or not ann.is_active:
+    if not ann:
         raise NotFoundError("Announcement", str(announcement_id))
 
+    now = datetime.now(timezone.utc)
+    previous_is_active = ann.is_active
     ann.is_active = False
+    ann.deleted_at = now
     await audit_log(
         db=db,
         action="ANNOUNCEMENT_DELETED",
         module="Announcements",
-        description=f"Deleted announcement '{ann.title}'",
+        description=f"Soft-deleted announcement '{ann.title}'",
         resource_type="Announcement",
         resource_id=str(announcement_id),
-        previous_values={"is_active": True},
-        new_values={"is_active": False},
+        previous_values={"is_active": previous_is_active},
+        new_values={"is_active": False, "deleted_at": str(now)},
         current_user=current_user,
     )
     await db.commit()
     logger.info("announcement_deleted", announcement_id=str(announcement_id), admin_id=str(current_user.id))
+
+
+@router.post(
+    "/{announcement_id}/restore",
+    response_model=AnnouncementRead,
+    summary="Restore a soft-deleted announcement (Admin / Director / Staff)",
+)
+async def restore_announcement(
+    announcement_id: uuid.UUID,
+    current_user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AnnouncementRead:
+    if current_user.role not in _EDITOR_ROLES:
+        raise ForbiddenError("Only admin, director, and staff may restore announcements.")
+
+    ann = await db.get(Announcement, announcement_id)
+    if not ann:
+        raise NotFoundError("Announcement", str(announcement_id))
+
+    if ann.deleted_at is None:
+        raise ForbiddenError("This announcement is not deleted.")
+
+    ann.deleted_at = None
+    ann.is_active = True
+    await audit_log(
+        db=db,
+        action="ANNOUNCEMENT_RESTORED",
+        module="Announcements",
+        description=f"Restored announcement '{ann.title}'",
+        resource_type="Announcement",
+        resource_id=str(announcement_id),
+        new_values={"is_active": True, "deleted_at": None},
+        current_user=current_user,
+    )
+    await db.commit()
+    await db.refresh(ann)
+    logger.info("announcement_restored", announcement_id=str(announcement_id), admin_id=str(current_user.id))
+
+    r = AnnouncementRead.model_validate(ann)
+    r.created_by_name = current_user.full_name
+    return r
+
+
+@router.delete(
+    "/{announcement_id}/permanent",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Permanently delete an announcement (Admin / Director / Staff)",
+)
+async def permanent_delete_announcement(
+    announcement_id: uuid.UUID,
+    current_user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> None:
+    logger.info(
+        "announcement_permanent_delete_start",
+        announcement_id=str(announcement_id),
+        user_id=str(current_user.id),
+    )
+
+    if current_user.role not in _EDITOR_ROLES:
+        raise ForbiddenError("Only admin, director, and staff may permanently delete announcements.")
+
+    ann = await db.get(Announcement, announcement_id)
+    if not ann:
+        raise NotFoundError("Announcement", str(announcement_id))
+
+    await audit_log(
+        db=db,
+        action="ANNOUNCEMENT_PERMANENTLY_DELETED",
+        module="Announcements",
+        description=f"Permanently deleted announcement '{ann.title}'",
+        resource_type="Announcement",
+        resource_id=str(announcement_id),
+        previous_values={"title": ann.title, "is_active": ann.is_active},
+        current_user=current_user,
+    )
+    await db.delete(ann)
+    await db.commit()
+    logger.info("announcement_permanent_delete_done", announcement_id=str(announcement_id), admin_id=str(current_user.id))
 
 
 @router.post(
@@ -229,10 +426,10 @@ async def upload_announcement_image(
     db: Annotated[AsyncSession, Depends(get_db)] = None,
 ) -> AnnouncementRead:
     if current_user.role not in _EDITOR_ROLES:
-        raise ForbiddenError("Only admin and director may update announcements.")
+        raise ForbiddenError("Only admin, director, and staff may update announcements.")
 
     ann = await db.get(Announcement, announcement_id)
-    if not ann or not ann.is_active:
+    if not ann:
         raise NotFoundError("Announcement", str(announcement_id))
 
     allowed_types = {"image/jpeg", "image/png", "image/webp"}
@@ -289,10 +486,10 @@ async def remove_announcement_image(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> None:
     if current_user.role not in _EDITOR_ROLES:
-        raise ForbiddenError("Only admin and director may update announcements.")
+        raise ForbiddenError("Only admin, director, and staff may update announcements.")
 
     ann = await db.get(Announcement, announcement_id)
-    if not ann or not ann.is_active:
+    if not ann:
         raise NotFoundError("Announcement", str(announcement_id))
 
     urls = list(ann.image_urls or [])

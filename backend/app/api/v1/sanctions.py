@@ -111,6 +111,35 @@ async def update_sanction(
     return SanctionRead.model_validate(sanction)
 
 
+@router.delete("/{sanction_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete sanction")
+async def delete_sanction(
+    sanction_id: uuid.UUID,
+    user: AdminOrCoach,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    result = await db.execute(select(Sanction).where(Sanction.id == sanction_id))
+    sanction = result.scalar_one_or_none()
+    if not sanction:
+        raise HTTPException(status_code=404, detail="Sanction not found")
+
+    await audit_log(
+        db=db,
+        action="SANCTION_DELETED",
+        module="Sanctions",
+        description=f"Deleted sanction for student {sanction.student_id} ({sanction.violation_type.value if hasattr(sanction.violation_type, 'value') else sanction.violation_type})",
+        resource_type="Sanction",
+        resource_id=str(sanction_id),
+        new_values=_jsonable({
+            "student_id": sanction.student_id,
+            "violation_type": sanction.violation_type.value if hasattr(sanction.violation_type, "value") else sanction.violation_type,
+            "status": sanction.status.value if hasattr(sanction.status, "value") else sanction.status,
+        }),
+        current_user=user,
+    )
+    await db.delete(sanction)
+    await db.flush()
+
+
 @router.post("/{sanction_id}/acknowledge", response_model=SanctionRead, summary="Student acknowledges sanction")
 async def acknowledge_sanction(
     sanction_id: uuid.UUID,

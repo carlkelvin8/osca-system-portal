@@ -114,3 +114,28 @@ async def update_incident(
     await db.flush()
     await db.refresh(incident)
     return IncidentRead.model_validate(incident)
+
+
+@router.delete("/{incident_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete incident")
+async def delete_incident(
+    incident_id: uuid.UUID,
+    user: AdminOrCoach,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    result = await db.execute(select(Incident).where(Incident.id == incident_id))
+    incident = result.scalar_one_or_none()
+    if not incident:
+        raise HTTPException(status_code=404, detail="Incident not found")
+
+    await audit_log(
+        db=db,
+        action="INCIDENT_DELETED",
+        module="Incidents",
+        description=f"Deleted incident: {incident.title}",
+        resource_type="Incident",
+        resource_id=str(incident_id),
+        new_values=_jsonable({"title": incident.title, "category": incident.category.value if hasattr(incident.category, "value") else incident.category}),
+        current_user=user,
+    )
+    await db.delete(incident)
+    await db.flush()

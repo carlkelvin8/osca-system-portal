@@ -23,7 +23,7 @@ class VenueReservationRequest(Base):
         UUID(as_uuid=True), ForeignKey("facilities.id", ondelete="CASCADE"), index=True
     )
     requester_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), index=True
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), index=True
     )
     purpose: Mapped[str] = mapped_column(String(300), nullable=False)
     reservation_date: Mapped[date] = mapped_column(Date, nullable=False)

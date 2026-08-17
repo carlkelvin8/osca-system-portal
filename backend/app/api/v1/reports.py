@@ -1,4 +1,5 @@
 import csv
+import html as _html
 import io
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Annotated
@@ -328,14 +329,14 @@ def _build_attendance_html(rows: list[dict], title: str, period: str) -> str:
     for r in rows:
         rows_html += f"""
         <tr>
-            <td>{r['student_name']}</td>
-            <td>{r['student_id']}</td>
-            <td>{r['student_role']}</td>
-            <td>{r['sport_or_art']}</td>
-            <td>{r['status']}</td>
-            <td>{_fmt_iso_time(r['time_in'])}</td>
-            <td>{_fmt_iso_time(r['time_out'])}</td>
-            <td>{_fmt_iso_date(r['attendance_date'])}</td>
+            <td>{_html.escape(str(r['student_name']))}</td>
+            <td>{_html.escape(str(r['student_id']))}</td>
+            <td>{_html.escape(str(r['student_role']))}</td>
+            <td>{_html.escape(str(r['sport_or_art']))}</td>
+            <td>{_html.escape(str(r['status']))}</td>
+            <td>{_html.escape(str(_fmt_iso_time(r['time_in'])))}</td>
+            <td>{_html.escape(str(_fmt_iso_time(r['time_out'])))}</td>
+            <td>{_html.escape(str(_fmt_iso_date(r['attendance_date'])))}</td>
         </tr>"""
 
     return f"""

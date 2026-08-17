@@ -28,7 +28,7 @@ class OfflineSyncRecord(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     device_id: Mapped[str] = mapped_column(String(200), nullable=False)
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
     record_type: Mapped[SyncRecordType] = mapped_column(
         Enum(SyncRecordType, name="sync_record_type_enum"), nullable=False
     )

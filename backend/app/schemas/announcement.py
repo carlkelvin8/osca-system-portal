@@ -1,9 +1,12 @@
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import Field, field_validator, model_validator
 
 from app.schemas.common import OSCABaseModel
+
+AnnouncementVisibility = Literal["all_dashboards", "public_website", "both"]
 
 
 class AnnouncementCreate(OSCABaseModel):
@@ -13,6 +16,8 @@ class AnnouncementCreate(OSCABaseModel):
     image_url: str | None = None
     tag: str | None = Field(default=None, max_length=20)
     pinned: bool = False
+    visibility: AnnouncementVisibility = "all_dashboards"
+    link_url: str | None = Field(default=None, max_length=500)
 
 
 class AnnouncementUpdate(OSCABaseModel):
@@ -22,6 +27,8 @@ class AnnouncementUpdate(OSCABaseModel):
     image_url: str | None = None
     tag: str | None = Field(default=None, max_length=20)
     pinned: bool | None = None
+    visibility: AnnouncementVisibility | None = None
+    link_url: str | None = Field(default=None, max_length=500)
 
 
 class AnnouncementRead(OSCABaseModel):
@@ -33,7 +40,10 @@ class AnnouncementRead(OSCABaseModel):
     event_date: datetime | None
     tag: str | None = None
     pinned: bool = False
+    visibility: str = "all_dashboards"
+    link_url: str | None = None
     is_active: bool
+    deleted_at: datetime | None = None
     created_by_id: uuid.UUID
     created_by_name: str = ""
     created_at: datetime

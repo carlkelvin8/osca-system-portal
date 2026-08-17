@@ -8,6 +8,7 @@ from fastapi.responses import ORJSONResponse
 
 from app.api.v1.router import api_router
 from app.config import settings
+from app.core.dependencies import close_redis
 from app.core.exceptions import register_exception_handlers
 from app.database import engine
 from app.database import Base
@@ -48,6 +49,7 @@ async def lifespan(app: FastAPI):
     yield
 
     logger.info("osca_shutdown")
+    await close_redis()
     await engine.dispose()
 
 

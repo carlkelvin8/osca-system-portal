@@ -289,11 +289,17 @@ export const reportsApi = {
 export const announcementsApi = {
   list: (params?: Record<string, string | number | boolean>) =>
     api.get("/announcements", { params }),
+  publicList: (params?: Record<string, string | number | boolean>) =>
+    axios.get(`${API_BASE}/announcements/public`, { params }),
+  manageList: (params?: Record<string, string | number | boolean | undefined>) =>
+    api.get("/announcements/manage", { params }),
   create: (data: Record<string, unknown>) =>
     api.post("/announcements", data),
   update: (id: string, data: Record<string, unknown>) =>
     api.patch(`/announcements/${id}`, data),
   remove: (id: string) => api.delete(`/announcements/${id}`),
+  restore: (id: string) => api.post(`/announcements/${id}/restore`),
+  permanentDelete: (id: string) => api.delete(`/announcements/${id}/permanent`),
   uploadImage: (id: string, file: File) => {
     const formData = new FormData();
     formData.append("file", file);
@@ -368,6 +374,7 @@ export const incidentsApi = {
     api.post("/incidents", data),
   update: (id: string, data: Record<string, unknown>) =>
     api.patch(`/incidents/${id}`, data),
+  delete: (id: string) => api.delete(`/incidents/${id}`),
 };
 
 export const sanctionsApi = {
@@ -377,6 +384,8 @@ export const sanctionsApi = {
     api.post("/sanctions", data),
   update: (id: string, data: Record<string, unknown>) =>
     api.patch(`/sanctions/${id}`, data),
+  delete: (id: string) =>
+    api.delete(`/sanctions/${id}`),
   acknowledge: (id: string) =>
     api.post(`/sanctions/${id}/acknowledge`),
 };

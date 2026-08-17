@@ -98,7 +98,7 @@ class Equipment(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
     created_by_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=False
     )
 
     transaction_items: Mapped[list["BorrowTransactionItem"]] = relationship(
@@ -150,14 +150,14 @@ class BorrowTransaction(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
     borrowing_id_record_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("borrowing_ids.id"), nullable=False
+        UUID(as_uuid=True), ForeignKey("borrowing_ids.id", ondelete="CASCADE"), nullable=False
     )
     instructor_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=False
     )
 
     processed_by_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
     status: Mapped[TransactionStatus] = mapped_column(
@@ -212,7 +212,7 @@ class BorrowTransactionItem(Base):
         nullable=False
     )
     equipment_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("equipment.id"), nullable=False
+        UUID(as_uuid=True), ForeignKey("equipment.id", ondelete="RESTRICT"), nullable=False
     )
     quantity: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     is_returned: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -238,7 +238,7 @@ class EquipmentRequest(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     requester_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=False
     )
     status: Mapped[RequestStatus] = mapped_column(
         Enum(RequestStatus, name="request_status_enum"),
@@ -252,7 +252,7 @@ class EquipmentRequest(Base):
     )
 
     approved_by_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -281,7 +281,7 @@ class EquipmentRequestItem(Base):
         nullable=False
     )
     equipment_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("equipment.id"), nullable=False
+        UUID(as_uuid=True), ForeignKey("equipment.id", ondelete="RESTRICT"), nullable=False
     )
     quantity: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
 

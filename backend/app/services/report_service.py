@@ -1,3 +1,4 @@
+import html as _html
 import io
 from calendar import monthrange
 from datetime import UTC, datetime
@@ -248,14 +249,14 @@ class ReportService:
             duration = f"{r['duration_minutes']} min" if r["duration_minutes"] else "-"
             rows_html += f"""
             <tr style="background:{bg}">
-                <td>{r['student_name']}</td>
-                <td>{r['student_id'] or '-'}</td>
-                <td>{r['session_name']}</td>
-                <td>{r['sport_or_art'] or '-'}</td>
-                <td>{r['activity_type']}</td>
-                <td>{time_in}</td>
-                <td>{time_out}</td>
-                <td>{duration}</td>
+                <td>{_html.escape(str(r['student_name']))}</td>
+                <td>{_html.escape(str(r['student_id'] or '-'))}</td>
+                <td>{_html.escape(str(r['session_name']))}</td>
+                <td>{_html.escape(str(r['sport_or_art'] or '-'))}</td>
+                <td>{_html.escape(str(r['activity_type']))}</td>
+                <td>{_html.escape(str(time_in))}</td>
+                <td>{_html.escape(str(time_out))}</td>
+                <td>{_html.escape(str(duration))}</td>
                 <td>{'✓' if r['is_complete'] else '⏳'}</td>
             </tr>"""
 
@@ -292,10 +293,10 @@ class ReportService:
             bg = "#EBF0F7" if i % 2 == 0 else "#FFFFFF"
             rows_html += f"""
             <tr style="background:{bg}">
-                <td>{e['name']}</td><td>{e['category']}</td><td>{e['condition']}</td>
-                <td>{e['qr_code']}</td><td>{e['total_quantity']}</td>
-                <td>{e['available_quantity']}</td><td>{e['borrowed_quantity']}</td>
-                <td>{e['storage_location'] or '-'}</td><td>{e['sport_or_art'] or '-'}</td>
+                <td>{_html.escape(str(e['name']))}</td><td>{_html.escape(str(e['category']))}</td><td>{_html.escape(str(e['condition']))}</td>
+                <td>{_html.escape(str(e['qr_code']))}</td><td>{_html.escape(str(e['total_quantity']))}</td>
+                <td>{_html.escape(str(e['available_quantity']))}</td><td>{_html.escape(str(e['borrowed_quantity']))}</td>
+                <td>{_html.escape(str(e['storage_location'] or '-'))}</td><td>{_html.escape(str(e['sport_or_art'] or '-'))}</td>
             </tr>"""
 
         return f"""
@@ -326,11 +327,11 @@ class ReportService:
         top_rows = ""
         for i, e in enumerate(report["top_5_borrowed"]):
             bg = "#EBF0F7" if i % 2 == 0 else "#FFFFFF"
-            top_rows += f'<tr style="background:{bg}"><td>{e["name"]}</td><td>{e["borrow_count"]}</td></tr>'
+            top_rows += f'<tr style="background:{bg}"><td>{_html.escape(str(e["name"]))}</td><td>{_html.escape(str(e["borrow_count"]))}</td></tr>'
 
         condition_rows = ""
         for cond, count in report["condition_breakdown"].items():
-            condition_rows += f"<tr><td>{cond.title()}</td><td>{count}</td></tr>"
+            condition_rows += f"<tr><td>{_html.escape(str(cond.title()))}</td><td>{_html.escape(str(count))}</td></tr>"
 
         generated_raw = report.get("generated_at") or ""
         generated_label = generated_raw

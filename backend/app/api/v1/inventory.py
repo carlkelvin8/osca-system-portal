@@ -59,6 +59,17 @@ _REQUEST_ROLES = {UserRole.COACH, UserRole.PE_INSTRUCTOR}
 _APPROVAL_ROLES = {UserRole.ADMIN, UserRole.DIRECTOR, UserRole.STAFF}
 
 
+async def _lock_equipment(db: AsyncSession, eq_id: uuid.UUID) -> Equipment:
+    """Load an Equipment row with SELECT ... FOR UPDATE to prevent quantity race conditions."""
+    result = await db.execute(
+        select(Equipment).where(Equipment.id == eq_id).with_for_update()
+    )
+    eq = result.scalar_one_or_none()
+    if not eq:
+        raise NotFoundError("Equipment", str(eq_id))
+    return eq
+
+
 @router.post(
     "/equipment",
     response_model=EquipmentRead,
@@ -474,8 +485,8 @@ async def approve_equipment_request(
         )
         req_items = items_result.scalars().all()
         for ri in req_items:
-            eq = await db.get(Equipment, ri.equipment_id)
-            if not eq or not eq.is_active:
+            eq = await _lock_equipment(db, ri.equipment_id)
+            if not eq.is_active:
                 raise NotFoundError("Equipment", str(ri.equipment_id))
             if eq.available_quantity < ri.quantity:
                 raise ConflictError(f"Insufficient stock for {eq.name}. Available: {eq.available_quantity}")
@@ -569,8 +580,8 @@ async def release_equipment_request(
     )
     req_items = items_result.scalars().all()
     for ri in req_items:
-        eq = await db.get(Equipment, ri.equipment_id)
-        if not eq or not eq.is_active:
+        eq = await _lock_equipment(db, ri.equipment_id)
+        if not eq.is_active:
             raise NotFoundError("Equipment", str(ri.equipment_id))
         if eq.available_quantity < ri.quantity:
             raise ConflictError(f"Insufficient stock for {eq.name}. Available: {eq.available_quantity}")
@@ -796,7 +807,7 @@ async def borrow_equipment(
 
     for item_req in body.items:
         eq_result = await db.execute(
-            select(Equipment).where(Equipment.qr_code == item_req.equipment_qr, Equipment.is_active == True)
+            select(Equipment).where(Equipment.qr_code == item_req.equipment_qr, Equipment.is_active == True).with_for_update()
         )
         eq = eq_result.scalar_one_or_none()
         if not eq:
@@ -858,7 +869,7 @@ async def return_equipment(
 
     for item_req in body.items:
         eq_result = await db.execute(
-            select(Equipment).where(Equipment.qr_code == item_req.equipment_qr)
+            select(Equipment).where(Equipment.qr_code == item_req.equipment_qr).with_for_update()
         )
         eq = eq_result.scalar_one_or_none()
         if not eq:
@@ -1077,8 +1088,8 @@ async def staff_borrow(
     await db.flush()
 
     for item_req in body.items:
-        eq = await db.get(Equipment, item_req.equipment_id)
-        if not eq or not eq.is_active:
+        eq = await _lock_equipment(db, item_req.equipment_id)
+        if not eq.is_active:
             raise NotFoundError("Equipment", str(item_req.equipment_id))
         if eq.available_quantity < item_req.quantity:
             raise ConflictError(f"Insufficient quantity for {eq.name}. Available: {eq.available_quantity}")
@@ -1250,7 +1261,10 @@ async def complete_transaction(
         if not item.is_returned:
             item.is_returned = True
             item.returned_at = now
-            eq = await db.get(Equipment, item.equipment_id)
+            eq_lock_result = await db.execute(
+                select(Equipment).where(Equipment.id == item.equipment_id).with_for_update()
+            )
+            eq = eq_lock_result.scalar_one_or_none()
             if eq:
                 eq.available_quantity += item.quantity
 

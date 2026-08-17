@@ -58,7 +58,8 @@ export function useFacialRecognition({
         onFailure?.(result);
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Scan failed. Try again.";
+      const axiosErr = err as { response?: { data?: { detail?: string } }; message?: string };
+      const message = axiosErr?.response?.data?.detail || axiosErr?.message || "Scan failed. Try again.";
       setState({ isScanning: false, lastResult: null, error: message });
     }
   }, [sessionId, scanType, state.isScanning, onSuccess, onFailure]);

@@ -1,3 +1,9 @@
+function escapeHtml(str: string): string {
+  const el = document.createElement("span");
+  el.textContent = str;
+  return el.innerHTML;
+}
+
 export function exportToCSV(data: Record<string, unknown>[], filename: string) {
   if (data.length === 0) return;
   const headers = Object.keys(data[0]);
@@ -10,7 +16,7 @@ export function exportToCSV(data: Record<string, unknown>[], filename: string) {
       }).join(",")
     ),
   ];
-  const blob = new Blob([csvRows.join("\n")], { type: "text/csv" });
+  const blob = new Blob(["\uFEFF" + csvRows.join("\n")], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -24,8 +30,10 @@ export function exportToPrintPDF(title: string) {
   if (!printWindow) return;
   const tableEl = document.querySelector("[data-export-table]");
   if (!tableEl) return;
+  const safeTitle = escapeHtml(title);
+  const safeTable = tableEl.outerHTML.replace(/on\w+="[^"]*"/g, "");
   printWindow.document.write(`
-    <html><head><title>${title}</title>
+    <html><head><title>${safeTitle}</title>
     <style>
       body { font-family: system-ui, sans-serif; padding: 20px; }
       h1 { font-size: 18px; margin-bottom: 16px; }
@@ -34,8 +42,8 @@ export function exportToPrintPDF(title: string) {
       th { background: #1E3A5F; color: white; }
       tr:nth-child(even) { background: #f9f9f9; }
     </style></head><body>
-    <h1>${title}</h1>
-    ${tableEl.outerHTML}
+    <h1>${safeTitle}</h1>
+    ${safeTable}
     <script>window.print();window.close();</script>
     </body></html>
   `);

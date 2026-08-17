@@ -56,7 +56,7 @@ class Session(Base):
     scheduled_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     scheduled_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_by_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=False
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(default=True, nullable=False)
@@ -85,7 +85,7 @@ class AttendanceRecord(Base):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     session_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("sessions.id"), nullable=False
+        UUID(as_uuid=True), ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False
     )
 
     time_in: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

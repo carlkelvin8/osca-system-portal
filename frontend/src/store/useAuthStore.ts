@@ -54,7 +54,7 @@ export const useAuthStore = create<AuthState>()(
         } finally {
           Cookies.remove("access_token");
           Cookies.remove("refresh_token");
-          set({ user: null, isAuthenticated: false });
+          set({ user: null, isAuthenticated: false, isLoading: false });
         }
       },
 

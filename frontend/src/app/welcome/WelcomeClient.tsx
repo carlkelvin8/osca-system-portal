@@ -1,10 +1,15 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import Image from "next/image";
 import { motion } from "framer-motion";
-import { UserPlus, Calendar, Trophy, Building2, Palette, Users, ExternalLink, ArrowRight } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { format } from "date-fns";
+import { UserPlus, Calendar, Trophy, Building2, Palette, Users, ExternalLink, ArrowRight, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { announcementsApi } from "@/lib/api";
+import type { Announcement, PaginatedResponse } from "@/types";
 
 const HERO_SLIDES = [
   { src: "/osca_pic.jpg", alt: "OSCA Sports and Cultural Affairs" },
@@ -12,16 +17,25 @@ const HERO_SLIDES = [
   { src: "/osca_pic3.jpg", alt: "OSCA Cultural Performances" },
 ];
 
-const NEWS_ITEMS = [
-  {
-    title: "Community Outreach: Supporting Assoc. Prof. Joselito N. Bacani",
-    date: "July 2026",
-    excerpt:
-"The OSCA community is raising support for Assoc. Prof. Joselito N. Bacani, who is currently undergoing medical treatment. Please see the donation poster for details on how you can help.",
-    image: "/bacani-fundraiser.jpg",
-    href: "https://www.facebook.com/share/p/1ET8EMjQvw/",
-  },
-];
+interface NewsItem {
+  title: string;
+  date: string;
+  excerpt: string;
+  image: string;
+  href: string | null;
+  images: string[];
+}
+
+function announcementImages(ann: Announcement): string[] {
+  if (ann.image_urls && ann.image_urls.length) return ann.image_urls;
+  return ann.image_url ? [ann.image_url] : [];
+}
+
+function announcementDateLabel(ann: Announcement, style: "card" | "carousel"): string {
+  const d = ann.event_date ? new Date(ann.event_date) : new Date(ann.created_at);
+  if (isNaN(d.getTime())) return "";
+  return format(d, style === "card" ? "MMMM yyyy" : "MMMM d, yyyy");
+}
 
 const NAV_LINKS = [
   { label: "Home", section: "home" },
@@ -35,7 +49,35 @@ export default function WelcomeClient() {
   const [active, setActive] = useState("Home");
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+  const [lightbox, setLightbox] = useState<{ images: string[]; index: number } | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const { data: publicData } = useQuery<PaginatedResponse<Announcement>>({
+    queryKey: ["announcements", "public"],
+    queryFn: async () => (await announcementsApi.publicList({ page_size: 50 })).data,
+    staleTime: 60_000,
+  });
+
+  const dbNews: NewsItem[] = (publicData?.items ?? []).map((ann) => {
+    const images = announcementImages(ann);
+    return {
+      title: ann.title,
+      date: announcementDateLabel(ann, "card"),
+      excerpt: ann.content,
+      image: images[0] ?? "/osca_pic.jpg",
+      href: ann.link_url || null,
+      images,
+    };
+  });
+  const newsItems = dbNews;
+  const carouselItems =
+    dbNews.length && publicData
+      ? publicData.items.map((ann) => ({
+          title: ann.title,
+          date: announcementDateLabel(ann, "carousel"),
+          excerpt: ann.content,
+        }))
+      : [];
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -288,7 +330,7 @@ export default function WelcomeClient() {
 
           <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
 
-            <AnnouncementsCarousel />
+            <AnnouncementsCarousel items={carouselItems} />
 
             <div style={{ borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
               <div style={{ borderTop: "3px solid #C9A84C", padding: 20, background: "#fff" }}>
@@ -406,36 +448,11 @@ export default function WelcomeClient() {
           <h2 style={{ fontSize: "clamp(22px, 3.5vw, 32px)", fontWeight: 800, color: "#0d1f3c" }}>News & Announcements</h2>
         </motion.div>
 
-        {NEWS_ITEMS.length === 0 ? (
+        {newsItems.length === 0 ? (
           <p style={{ textAlign: "center", fontSize: 14, color: "#5b6472", padding: "40px 0" }}>No announcements available.</p>
         ) : (
           <>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 20 }}>
-              {NEWS_ITEMS.map((item, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: i * 0.1 }}
-                >
-                  <a href={item.href} target="_blank" rel="noopener noreferrer"
-                    style={{ display: "block", borderRadius: 10, overflow: "hidden", background: "#fff", border: "1px solid #e7eaf0", textDecoration: "none", transition: "box-shadow 0.2s, transform 0.2s", cursor: "pointer" }}
-                    onMouseEnter={(e) => { const el = e.currentTarget; el.style.boxShadow = "0 4px 20px rgba(0,0,0,0.08)"; el.style.transform = "translateY(-2px)"; }}
-                    onMouseLeave={(e) => { const el = e.currentTarget; el.style.boxShadow = "none"; el.style.transform = "none"; }}
-                  >
-                    <div style={{ position: "relative", height: 160, overflow: "hidden", background: "#e7eaf0" }}>
-                      <Image src={item.image} alt={item.title} fill style={{ objectFit: "cover" }} />
-                    </div>
-                    <div style={{ padding: "16px 18px 18px" }}>
-                      <span style={{ display: "inline-block", fontSize: 10, fontWeight: 700, color: "#C9A84C", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>{item.date}</span>
-                      <h3 style={{ fontSize: 14, fontWeight: 800, color: "#0d1f3c", lineHeight: 1.4, marginBottom: 8 }}>{item.title}</h3>
-                      <p style={{ fontSize: 12, color: "#5b6472", lineHeight: 1.7 }}>{item.excerpt}</p>
-                    </div>
-                  </a>
-                </motion.div>
-              ))}
-            </div>
+            <NewsCarousel items={newsItems} onOpenLightbox={(images) => setLightbox({ images, index: 0 })} />
 
             <motion.div initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} style={{ textAlign: "center", marginTop: 32 }}>
               <Link href="/login" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "12px 28px", fontSize: 12, fontWeight: 700, color: "#fff", background: "#1d4ed8", borderRadius: 6, textDecoration: "none", textTransform: "uppercase" }}>
@@ -566,25 +583,23 @@ export default function WelcomeClient() {
           </div>
         </div>
       </footer>
+
+      {lightbox && (
+        <PublicImageViewer images={lightbox.images} initialIndex={lightbox.index} onClose={() => setLightbox(null)} />
+      )}
     </div>
   );
 }
 
-const ANNOUNCEMENTS = [
-  { title: "Basketball & Volleyball Tryouts", date: "March 15, 2026", excerpt: "Tryouts for the NAAP men's and women's basketball and volleyball teams are now open for all students." },
-  { title: "OSCA Choir Auditions", date: "March 22, 2026", excerpt: "Showcase your vocal talent! Auditions for the OSCA Chorale are open to all grade levels." },
-  { title: "Annual Sports Fest Schedule", date: "April 5–12, 2026", excerpt: "The week-long annual sports festival featuring inter-department competitions in various disciplines." },
-];
-
-function AnnouncementsCarousel() {
+function AnnouncementsCarousel({ items }: { items: { title: string; date: string; excerpt: string }[] }) {
   const [idx, setIdx] = useState(0);
 
   useEffect(() => {
-    const t = setInterval(() => setIdx((p) => (p + 1) % ANNOUNCEMENTS.length), 4500);
+    const t = setInterval(() => setIdx((p) => (p + 1) % Math.max(items.length, 1)), 4500);
     return () => clearInterval(t);
-  }, []);
+  }, [items.length]);
 
-  const a = ANNOUNCEMENTS[idx];
+  const a = items.length ? items[Math.min(idx, items.length - 1)] : null;
 
   return (
     <div style={{ borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
@@ -592,16 +607,233 @@ function AnnouncementsCarousel() {
         <h3 style={{ fontSize: 12, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: "0.08em" }}>Announcements</h3>
       </div>
       <div style={{ padding: 20, background: "#fff", minHeight: 120 }}>
-        <p style={{ fontSize: 13, fontWeight: 700, color: "#0d1f3c", marginBottom: 4 }}>{a.title}</p>
-        <p style={{ fontSize: 11, color: "#C9A84C", fontWeight: 600, marginBottom: 8 }}>{a.date}</p>
-        <p style={{ fontSize: 12, color: "#5b6472", lineHeight: 1.6 }}>{a.excerpt}</p>
+        {a ? (
+          <>
+            <p style={{ fontSize: 13, fontWeight: 700, color: "#0d1f3c", marginBottom: 4 }}>{a.title}</p>
+            <p style={{ fontSize: 11, color: "#C9A84C", fontWeight: 600, marginBottom: 8 }}>{a.date}</p>
+            <p style={{ fontSize: 12, color: "#5b6472", lineHeight: 1.6 }}>{a.excerpt}</p>
+          </>
+        ) : (
+          <p style={{ fontSize: 12, color: "#5b6472", lineHeight: 1.6 }}>No announcements at the moment. Check back soon.</p>
+        )}
       </div>
-      <div style={{ display: "flex", justifyContent: "center", gap: 8, padding: "0 20px 14px", background: "#fff" }}>
-        {ANNOUNCEMENTS.map((_, i) => (
-          <button key={i} onClick={() => setIdx(i)} aria-label={`Announcement ${i + 1}`}
-            style={{ width: i === idx ? 20 : 8, height: 8, borderRadius: 4, border: "none", background: i === idx ? "#C9A84C" : "#d9dce2", cursor: "pointer", padding: 0, transition: "all 0.3s ease" }} />
-        ))}
-      </div>
+      {items.length > 0 && (
+        <div style={{ display: "flex", justifyContent: "center", gap: 8, padding: "0 20px 14px", background: "#fff" }}>
+          {items.map((_, i) => (
+            <button key={i} onClick={() => setIdx(i)} aria-label={`Announcement ${i + 1}`}
+              style={{ width: i === idx ? 20 : 8, height: 8, borderRadius: 4, border: "none", background: i === idx ? "#C9A84C" : "#d9dce2", cursor: "pointer", padding: 0, transition: "all 0.3s ease" }} />
+          ))}
+        </div>
+      )}
     </div>
+  );
+}
+
+function NewsCarousel({ items, onOpenLightbox }: { items: NewsItem[]; onOpenLightbox: (images: string[]) => void }) {
+  const n = items.length;
+  const [active, setActive] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const [winW, setWinW] = useState(0);
+
+  useEffect(() => {
+    const update = () => setWinW(window.innerWidth);
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+
+  const isMobile = winW > 0 && winW < 640;
+  const isTablet = winW >= 640 && winW < 1024;
+
+  const next = useCallback(() => setActive((p) => (p + 1) % n), [n]);
+
+  useEffect(() => {
+    if (n <= 1 || paused) return;
+    const t = setInterval(next, 6000);
+    return () => clearInterval(t);
+  }, [n, paused, next]);
+
+  if (n === 0) return null;
+
+  const cardW = isMobile ? Math.min(360, Math.max(280, winW * 0.86)) : isTablet ? 280 : 320;
+  const centerW = Math.round(cardW * (isMobile ? 1 : 1.28));
+  const sideScale = 0.9;
+  const sideHalf = (cardW * sideScale) / 2;
+  const sideOpacity = 0.55;
+  const sideBlur = 3.5;
+  const overlap = 22;
+  const offset = isMobile ? 0 : Math.round(centerW / 2 + sideHalf - overlap);
+  const containerW = isMobile
+    ? cardW
+    : Math.min(Math.round(2 * (offset + sideHalf) + 12), Math.max(600, (winW || 900) - 40));
+  const cardH = isMobile ? 400 : 366;
+
+  return (
+    <div
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      style={{ position: "relative" }}
+    >
+      <div style={{ position: "relative", width: containerW, height: cardH, margin: "0 auto", overflow: "hidden", borderRadius: 14 }}>
+        {items.map((item, i) => {
+          let delta = i - active;
+          if (delta > n / 2) delta -= n;
+          if (delta < -n / 2) delta += n;
+          const focused = delta === 0;
+          const adjacent = Math.abs(delta) === 1;
+          const x = delta * offset;
+          return (
+            <div
+              key={i}
+              onClick={adjacent ? () => setActive(i) : undefined}
+              style={{
+                position: "absolute",
+                left: "50%",
+                top: 0,
+                width: focused ? centerW : cardW,
+                height: cardH,
+                transform: `translateX(calc(-50% + ${x}px)) scale(${focused ? 1 : sideScale})`,
+                opacity: focused ? 1 : isMobile || !adjacent ? 0 : sideOpacity,
+                filter: focused ? "none" : `blur(${adjacent ? sideBlur : 5}px)`,
+                zIndex: focused ? 3 : 1,
+                transition: "transform 0.7s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.6s ease, filter 0.6s ease",
+                pointerEvents: focused || adjacent ? "auto" : "none",
+                cursor: adjacent ? "pointer" : "default",
+              }}
+            >
+              <div style={{ width: "100%", height: "100%", pointerEvents: adjacent ? "none" : "auto" }}>
+                <CarouselCard item={item} onOpenLightbox={() => onOpenLightbox(item.images)} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {n > 1 && (
+        <div style={{ display: "flex", justifyContent: "center", gap: 8, marginTop: 18 }}>
+          {items.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => setActive(i)}
+              aria-label={`Go to announcement ${i + 1}`}
+              style={{ width: i === active ? 24 : 8, height: 8, borderRadius: 4, border: "none", background: i === active ? "#C9A84C" : "#d9dce2", cursor: "pointer", padding: 0, transition: "all 0.3s ease" }}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CarouselCard({ item, onOpenLightbox }: { item: NewsItem; onOpenLightbox: () => void }) {
+  const hasImages = item.images.length > 0;
+  const body = (
+    <>
+      <span style={{ display: "inline-block", fontSize: 10, fontWeight: 700, color: "#C9A84C", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>{item.date}</span>
+      <h3 style={{ fontSize: 15, fontWeight: 800, color: "#0d1f3c", lineHeight: 1.4, marginBottom: 8, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{item.title}</h3>
+      <p style={{ fontSize: 12, color: "#5b6472", lineHeight: 1.7, margin: 0, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical" }}>{item.excerpt}</p>
+      {item.href && (
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 10, fontSize: 11, fontWeight: 700, color: "#1d4ed8", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+          <ExternalLink size={12} /> View Link
+        </span>
+      )}
+    </>
+  );
+  return (
+    <div style={{ width: "100%", height: "100%", borderRadius: 14, overflow: "hidden", background: "#fff", border: "1px solid #e7eaf0", boxShadow: "0 10px 30px rgba(13,31,60,0.12)", display: "flex", flexDirection: "column" }}>
+      <div
+        onClick={() => hasImages && onOpenLightbox()}
+        title={item.images.length > 1 ? "View images" : "View image"}
+        style={{ position: "relative", height: 180, overflow: "hidden", background: "#e7eaf0", cursor: hasImages ? "zoom-in" : "default", flexShrink: 0 }}
+      >
+        <img src={item.image} alt={item.title} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+        {item.images.length > 1 && (
+          <span style={{ position: "absolute", bottom: 10, right: 10, background: "rgba(13,31,60,0.75)", color: "#fff", fontSize: 10, fontWeight: 700, padding: "4px 10px", borderRadius: 50, letterSpacing: "0.03em" }}>
+            +{item.images.length - 1} more
+          </span>
+        )}
+      </div>
+      {item.href ? (
+        <a href={item.href} target="_blank" rel="noopener noreferrer" style={{ display: "flex", flexDirection: "column", flexGrow: 1, padding: "16px 18px 18px", textDecoration: "none" }}>{body}</a>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", flexGrow: 1, padding: "16px 18px 18px" }}>{body}</div>
+      )}
+    </div>
+  );
+}
+
+function PublicImageViewer({ images, initialIndex, onClose }: { images: string[]; initialIndex: number; onClose: () => void }) {
+  const [index, setIndex] = useState(initialIndex);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+      else if (e.key === "ArrowLeft") setIndex((i) => Math.max(0, i - 1));
+      else if (e.key === "ArrowRight") setIndex((i) => Math.min(images.length - 1, i + 1));
+    };
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [onClose, images.length]);
+
+  return createPortal(
+    <div
+      style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.92)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px" }}
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Photo viewer"
+    >
+      <button
+        onClick={onClose}
+        aria-label="Close"
+        style={{ position: "absolute", top: 16, right: 16, display: "flex", alignItems: "center", justifyContent: "center", width: 40, height: 40, border: "none", borderRadius: "50%", background: "rgba(255,255,255,0.12)", color: "#fff", cursor: "pointer", transition: "background 0.2s" }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.25)"; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.12)"; }}
+      >
+        <X size={20} />
+      </button>
+
+      {images.length > 1 && (
+        <>
+          <button
+            onClick={(e) => { e.stopPropagation(); setIndex((i) => Math.max(0, i - 1)); }}
+            disabled={index === 0}
+            aria-label="Previous image"
+            style={{ position: "absolute", left: 16, top: "50%", transform: "translateY(-50%)", display: "flex", alignItems: "center", justifyContent: "center", width: 44, height: 44, border: "none", borderRadius: "50%", background: "rgba(255,255,255,0.12)", color: "#fff", cursor: "pointer", transition: "background 0.2s", opacity: index === 0 ? 0.35 : 1 }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.25)"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.12)"; }}
+          >
+            <ChevronLeft size={24} />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); setIndex((i) => Math.min(images.length - 1, i + 1)); }}
+            disabled={index === images.length - 1}
+            aria-label="Next image"
+            style={{ position: "absolute", right: 16, top: "50%", transform: "translateY(-50%)", display: "flex", alignItems: "center", justifyContent: "center", width: 44, height: 44, border: "none", borderRadius: "50%", background: "rgba(255,255,255,0.12)", color: "#fff", cursor: "pointer", transition: "background 0.2s", opacity: index === images.length - 1 ? 0.35 : 1 }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.25)"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.12)"; }}
+          >
+            <ChevronRight size={24} />
+          </button>
+        </>
+      )}
+
+      <img
+        src={images[index] ?? ""}
+        alt="Announcement"
+        onClick={(e) => e.stopPropagation()}
+        style={{ maxWidth: "92%", maxHeight: "88%", objectFit: "contain", borderRadius: 8 }}
+      />
+
+      <span style={{ position: "absolute", bottom: 20, left: "50%", transform: "translateX(-50%)", color: "#fff", fontSize: 13, background: "rgba(255,255,255,0.15)", padding: "6px 14px", borderRadius: 50 }}>
+        {index + 1} / {images.length}
+      </span>
+    </div>,
+    document.body
   );
 }

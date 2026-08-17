@@ -327,7 +327,10 @@ export interface Announcement {
   event_date: string | null;
   tag: string | null;
   pinned: boolean;
+  visibility?: string;
+  link_url?: string | null;
   is_active: boolean;
+  deleted_at?: string | null;
   created_by_id: string;
   created_by_name: string;
   created_at: string;

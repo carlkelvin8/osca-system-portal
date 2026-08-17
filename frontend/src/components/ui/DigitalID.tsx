@@ -17,6 +17,7 @@ const DigitalID = forwardRef<HTMLDivElement, DigitalIDProps>(
     const roleLabel: Record<string, string> = {
       admin: "System Administrator",
       director: "OSCA Director",
+      staff: "OSCA Staff",
       coach: "Coach",
       pe_instructor: "PE Instructor",
       student: "Student",
