@@ -13,8 +13,12 @@ import type { Announcement, PaginatedResponse } from "@/types";
 
 const HERO_SLIDES = [
   { src: "/osca_pic.jpg", alt: "OSCA Sports and Cultural Affairs" },
-  { src: "/osca_pic2.jpg", alt: "OSCA Athletic Events" },
-  { src: "/osca_pic3.jpg", alt: "OSCA Cultural Performances" },
+  { src: "/osca_pic2.png", alt: "OSCA Athletic Events" },
+  { src: "/osca_pic3.jpg", alt: "OSCA PASUC" },
+  { src: "/osca_pic4.jpg", alt: "OSCA Cultural Performances" },
+  { src: "/osca_pic5.jpg", alt: "OSCA HHDC" },
+  { src: "/osca_pic6.jpg", alt: "OSCA MH" },
+  { src: "/osca_pic7.jpg", alt: "OSCA MHd" },
 ];
 
 interface NewsItem {
@@ -344,6 +348,41 @@ export default function WelcomeClient() {
                 </Link>
               </div>
             </div>
+
+            <div style={{ borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+              <div style={{ background: "#0d1f3c", padding: "14px 20px" }}>
+                <h3 style={{ fontSize: 12, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: "0.08em" }}>Follow Our Artist Groups</h3>
+              </div>
+              <div style={{ padding: "12px 0", background: "#fff", display: "flex", flexDirection: "column" }}>
+                {[
+                  { name: "Hataw Himpapawid Dance Group", img: "/logo/HHDC.png", url: "https://www.facebook.com/HHDCOfficial" },
+                  { name: "Himig Himpapawid Chorale", img: "/logo/HH.png", url: "https://www.facebook.com/profile.php?id=61584638812694" },
+                  { name: "Musikang Himpapawid Live Band", img: "/logo/MH.png", url: "https://www.facebook.com/MHLBphilscavab" },
+                ].map((org, i) => (
+                  <a
+                    key={i}
+                    href={org.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`Visit ${org.name} on Facebook`}
+                    style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 20px", textDecoration: "none", color: "inherit", transition: "background 0.2s, box-shadow 0.2s" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "#f8f9fb"; e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.06)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.boxShadow = "none"; }}
+                  >
+                    <div style={{ width: 42, height: 42, borderRadius: "50%", overflow: "hidden", flexShrink: 0, border: "2px solid #e7eaf0", background: "#f0f0f0" }}>
+                      <img src={org.img} alt={org.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: 12, fontWeight: 700, color: "#0d1f3c", lineHeight: 1.3, margin: 0 }}>{org.name}</p>
+                      <p style={{ fontSize: 10, color: "#8a8f98", marginTop: 2, margin: "2px 0 0" }}>Official Facebook Page</p>
+                    </div>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="#1877F2" style={{ flexShrink: 0, transition: "fill 0.2s" }} onMouseEnter={(e) => { (e.currentTarget as SVGSVGElement).style.fill = "#1565C0"; }} onMouseLeave={(e) => { (e.currentTarget as SVGSVGElement).style.fill = "#1877F2"; }}>
+                      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                    </svg>
+                  </a>
+                ))}
+              </div>
+            </div>
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
@@ -593,11 +632,14 @@ export default function WelcomeClient() {
 
 function AnnouncementsCarousel({ items }: { items: { title: string; date: string; excerpt: string }[] }) {
   const [idx, setIdx] = useState(0);
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     const t = setInterval(() => setIdx((p) => (p + 1) % Math.max(items.length, 1)), 4500);
     return () => clearInterval(t);
   }, [items.length]);
+
+  useEffect(() => { setExpanded(false); }, [idx]);
 
   const a = items.length ? items[Math.min(idx, items.length - 1)] : null;
 
@@ -608,13 +650,23 @@ function AnnouncementsCarousel({ items }: { items: { title: string; date: string
       </div>
       <div style={{ padding: 20, background: "#fff", minHeight: 120 }}>
         {a ? (
-          <>
+          <div style={{ maxHeight: expanded ? 500 : 130, overflow: "hidden", transition: "max-height 0.4s ease" }}>
             <p style={{ fontSize: 13, fontWeight: 700, color: "#0d1f3c", marginBottom: 4 }}>{a.title}</p>
             <p style={{ fontSize: 11, color: "#C9A84C", fontWeight: 600, marginBottom: 8 }}>{a.date}</p>
             <p style={{ fontSize: 12, color: "#5b6472", lineHeight: 1.6 }}>{a.excerpt}</p>
-          </>
+          </div>
         ) : (
           <p style={{ fontSize: 12, color: "#5b6472", lineHeight: 1.6 }}>No announcements at the moment. Check back soon.</p>
+        )}
+        {a && a.excerpt && (
+          <button
+            onClick={() => setExpanded((p) => !p)}
+            style={{ display: "block", margin: "8px auto 0", padding: "4px 12px", fontSize: 10, fontWeight: 700, color: "#1d4ed8", background: "none", border: "none", cursor: "pointer", letterSpacing: "0.03em", transition: "color 0.2s" }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#0d1f3c"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#1d4ed8"; }}
+          >
+            {expanded ? "View Less" : "View More"}
+          </button>
         )}
       </div>
       {items.length > 0 && (
