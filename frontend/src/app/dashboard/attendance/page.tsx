@@ -729,7 +729,7 @@ export default function AttendancePage() {
 
         {!isStudent && (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm hover:shadow-md transition">
+            <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Total Sessions</p>
@@ -738,7 +738,7 @@ export default function AttendancePage() {
                 <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center"><CalendarCheck size={20} className="text-blue-600" /></div>
               </div>
             </div>
-            <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm hover:shadow-md transition">
+            <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Active Now</p>
@@ -747,7 +747,7 @@ export default function AttendancePage() {
                 <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center"><CheckCircle2 size={20} className="text-emerald-600" /></div>
               </div>
             </div>
-            <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm hover:shadow-md transition">
+            <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Total Scans</p>
@@ -813,7 +813,7 @@ export default function AttendancePage() {
                       </td>
                     </tr>
                   ) : (data?.items ?? []).map((session) => (
-                    <tr key={session.id} className="hover:bg-gray-50">
+                    <tr key={session.id}>
                       <td className="px-4 py-3 font-medium text-gray-900">
                         <div className="flex items-center gap-2">
                           <CalendarCheck size={16} className="text-gray-400" />
@@ -949,7 +949,7 @@ export default function AttendancePage() {
                       </td>
                     </tr>
                   ) : filteredHistory.map((record) => (
-                    <tr key={record.id} className="hover:bg-gray-50">
+                    <tr key={record.id}>
                       <td className="px-4 py-3 text-gray-600 text-xs">
                         {record.time_in ? format(new Date(record.time_in), "MMM d, yyyy") : "—"}
                       </td>

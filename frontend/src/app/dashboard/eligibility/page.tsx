@@ -267,7 +267,7 @@ export default function EligibilityPage() {
             </thead>
             <tbody>
               {items.map((r) => (
-                <tr key={r.id} className={`border-b last:border-0 hover:bg-gray-50 ${selected.has(r.id) ? "bg-blue-50" : ""}`}>
+                <tr key={r.id} className={`border-b last:border-0 ${selected.has(r.id) ? "bg-blue-50" : ""}`}>
                   {isStaff && <td className="px-3 py-3"><input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} className="rounded" /></td>}
                   <td className="px-4 py-3">
                     <div className="font-medium text-gray-800">{r.student_full_name ?? "Unknown student"}</div>

@@ -746,7 +746,7 @@ export default function InventoryPage() {
                 </tr>
               ) : (
                 (data?.items ?? []).map((eq) => (
-                  <tr key={eq.id} className="hover:bg-gray-50">
+                  <tr key={eq.id}>
                     <td className="px-4 py-3 font-medium">
                       <div className="flex items-center gap-2">
                         <Package size={16} className="text-gray-400" />

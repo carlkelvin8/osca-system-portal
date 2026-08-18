@@ -281,7 +281,7 @@ export default function AnnouncementManagementPage() {
                 </tr>
               ) : (
                 rows.map((ann) => (
-                  <tr key={ann.id} className="transition hover:bg-gray-50/60">
+                  <tr key={ann.id}>
                     <td className="px-5 py-3">
                       <p className="font-semibold text-gray-900">{ann.title}</p>
                       <p className="mt-0.5 line-clamp-2 max-w-[24rem] whitespace-pre-line text-xs text-gray-500">{ann.content}</p>

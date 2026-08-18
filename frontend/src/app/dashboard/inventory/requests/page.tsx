@@ -659,7 +659,7 @@ function NewRequestModal({ onClose }: NewRequestModalProps) {
               ) : availableEquipment.map((eq) => {
                 const added = items.find((i) => i.equipment_id === eq.id);
                 return (
-                  <div key={eq.id} className="flex items-center justify-between px-3 py-2 hover:bg-gray-50">
+                  <div key={eq.id} className="flex items-center justify-between px-3 py-2">
                     <div>
                       <p className="text-sm font-medium text-gray-800">{eq.name}</p>
                       <p className="text-xs text-gray-400">{eq.category} · Available: {eq.available_quantity}</p>
@@ -1253,7 +1253,7 @@ export default function EquipmentRequestsPage() {
                 const displayStatus = getRequestStatus(req);
                 const { label, className, icon: StatusIcon } = statusConfig[displayStatus];
                 return (
-                  <tr key={req.id} className="hover:bg-gray-50">
+                  <tr key={req.id}>
                     <td className="px-4 py-3 font-medium text-gray-900">{req.requester_name}</td>
                     <td className="px-4 py-3 text-gray-600">
                       <ul className="space-y-0.5">

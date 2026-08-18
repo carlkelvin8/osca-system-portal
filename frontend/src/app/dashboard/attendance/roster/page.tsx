@@ -165,7 +165,7 @@ export default function PlayerRosterPage() {
                 const stats = getAttendanceStats(student.id);
                 const lastSeen = getLastSeen(student.id);
                 return (
-                  <tr key={student.id} className="hover:bg-gray-50">
+                  <tr key={student.id}>
                     <td className="px-4 py-3 font-medium text-gray-900">
                       {student.last_name}, {student.first_name}
                     </td>

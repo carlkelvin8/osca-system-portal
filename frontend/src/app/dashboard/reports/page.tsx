@@ -190,7 +190,7 @@ function ReportCard({
   };
 
   return (
-    <div className="flex flex-col h-full bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+    <div className="flex flex-col h-full bg-white rounded-xl border border-gray-100 shadow-sm transition-all duration-200">
       <div className="flex items-start justify-between gap-3 p-5 pb-3">
         <div className="flex items-start gap-3">
           <span className={`shrink-0 p-2.5 rounded-lg ${accent}`}>
@@ -299,7 +299,7 @@ function MonthlySummaryCard({
   };
 
   return (
-    <div className="flex flex-col h-full bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+    <div className="flex flex-col h-full bg-white rounded-xl border border-gray-100 shadow-sm transition-all duration-200">
       <div className="flex items-start gap-3 p-5 pb-3">
         <span className="shrink-0 p-2.5 rounded-lg bg-violet-50 text-violet-600">
           <BarChart3 size={18} />

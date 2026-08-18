@@ -161,7 +161,7 @@ export default function FacilityReservationsPage() {
                 {rows.map((r) => {
                   const st = RES_STATUS[r.status] ?? RES_STATUS.pending;
                   return (
-                    <tr key={r.id} className="border-b last:border-0 border-gray-100 hover:bg-[#fafbfc] transition-colors">
+                    <tr key={r.id} className="border-b last:border-0 border-gray-100">
                       <td className="px-4 py-3">
                         <p className="font-medium text-[#111827]">{r.requester_name ?? "—"}</p>
                         <p className="text-xs text-gray-400 capitalize">{r.requester_role?.replace("_", " ") ?? ""}</p>

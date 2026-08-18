@@ -274,7 +274,7 @@ export default function FacilitiesPage() {
             return (
               <div
                 key={fac.id}
-                className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-200 flex flex-col"
+                className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm flex flex-col"
               >
                 <div className="relative aspect-video">
                   <VenueImage src={fac.image_url ?? venueImageOf(fac.name)} alt={fac.name} />
