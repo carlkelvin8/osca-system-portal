@@ -425,9 +425,16 @@ body {
     visibility: visible;
   }
   #digital-id-card {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 360px;
+    max-width: none;
+    margin: 0;
+    transform: none;
+    box-shadow: none;
+    border-radius: 0;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 }

@@ -22,6 +22,7 @@ from app.schemas.announcement import (
 )
 from app.schemas.common import PaginatedResponse
 from app.services.audit_service import audit_log
+from app.services.notification_service import notify_announcement_recipients
 from app.services.storage_service import StorageService
 
 router = APIRouter()
@@ -245,6 +246,14 @@ async def create_announcement(
         current_user=current_user,
     )
     await db.commit()
+    await notify_announcement_recipients(
+        db,
+        announcement_id=ann.id,
+        title=body.title,
+        visibility=body.visibility,
+        created_by_id=current_user.id,
+    )
+    await db.commit()
     r = AnnouncementRead.model_validate(ann)
     r.created_by_name = current_user.full_name
     return r
@@ -291,6 +300,15 @@ async def update_announcement(
     )
     await db.commit()
     await db.refresh(ann)
+    if ann.is_active and ann.visibility in _DASHBOARD_VISIBILITY:
+        await notify_announcement_recipients(
+            db,
+            announcement_id=ann.id,
+            title=ann.title,
+            visibility=ann.visibility,
+            created_by_id=current_user.id,
+        )
+        await db.commit()
     logger.info("announcement_update_success", announcement_id=str(announcement_id))
     r = AnnouncementRead.model_validate(ann)
     creator = await db.get(type(ann).created_by.property.mapper.class_, ann.created_by_id)

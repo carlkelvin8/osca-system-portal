@@ -599,7 +599,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       notifications.slice(0, 10).map((n) => (
                         <button
                           key={n.id}
-                          onClick={() => markRead(n.id)}
+                          onClick={() => {
+                            markRead(n.id);
+                            if (n.reference_type === "announcement") {
+                              router.push("/dashboard/announcements");
+                              setNotifOpen(false);
+                            }
+                          }}
                           className={`w-full text-left px-4 py-3 border-b last:border-0 transition-colors ${!n.read ? (isDark ? "bg-blue-900/10" : "bg-blue-50/50") : ""} ${isDark ? "border-[#334155] hover:bg-white/5" : "border-gray-50 hover:bg-gray-50"}`}
                         >
                           <p className={`text-sm font-medium ${isDark ? "text-white" : "text-gray-900"}`}>{n.title}</p>

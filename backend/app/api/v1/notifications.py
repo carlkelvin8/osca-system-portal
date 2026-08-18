@@ -21,6 +21,8 @@ def _to_item(n: Notification) -> NotificationItem:
         type=n.type,
         read=n.is_read,
         createdAt=n.created_at.isoformat() if n.created_at else datetime.now().isoformat(),
+        reference_type=n.reference_type,
+        reference_id=str(n.reference_id) if n.reference_id else None,
     )
 
 

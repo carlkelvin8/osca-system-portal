@@ -489,6 +489,8 @@ export interface NotificationItem {
   type: string;
   read: boolean;
   createdAt: string;
+  reference_type?: string | null;
+  reference_id?: string | null;
 }
 
 export interface NotificationListRead {

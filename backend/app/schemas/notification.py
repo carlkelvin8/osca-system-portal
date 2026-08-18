@@ -8,6 +8,8 @@ class NotificationItem(BaseModel):
     type: str
     read: bool
     createdAt: str
+    reference_type: str | None = None
+    reference_id: str | None = None
 
 
 class NotificationListRead(BaseModel):
