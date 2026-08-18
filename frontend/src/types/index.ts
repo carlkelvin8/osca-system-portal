@@ -345,6 +345,7 @@ export interface AnnouncementComment {
   announcement_id: string;
   user_id: string;
   author_name: string;
+  author_picture_url: string | null;
   content: string;
   created_at: string;
 }

@@ -37,6 +37,7 @@ import { useThemeStore } from "@/store/useThemeStore";
 import { useSidebarStore } from "@/store/useSidebarStore";
 import { useNotificationStore } from "@/store/useNotificationStore";
 import { OfflineBanner } from "@/components/ui/OfflineBanner";
+import { Avatar } from "@/components/ui/Avatar";
 import type { UserRole } from "@/types";
 
 
@@ -325,9 +326,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     router.push("/login");
   };
 
-  const initials =
-    (user.first_name?.[0] ?? "") + (user.last_name?.[0] ?? "");
-
   return (
     <div className={`flex h-screen ${isDark ? "dark bg-[#0F172A]" : "bg-[#f2f5f9]"}`}>
       {mobileMenuOpen && (
@@ -453,9 +451,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             onMouseLeave={hideNavTip}
             className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors hover:bg-white/6 ${collapsed ? "lg:justify-center lg:gap-0" : ""}`}
           >
-            <div className="w-7 h-7 rounded-full bg-[#2563eb] flex items-center justify-center text-white text-xs font-semibold shrink-0">
-              {initials.toUpperCase() || "?"}
-            </div>
+            <Avatar
+              src={user.profile_picture_url}
+              name={user.full_name}
+              size="sm"
+              className="bg-white/10 ring-1 ring-white/10"
+            />
             <div className={`min-w-0 overflow-hidden whitespace-nowrap transition-all duration-300 ${collapsed ? "lg:opacity-0 lg:max-w-0" : ""}`}>
               <p className="text-[13px] font-medium text-[#f1f5f9] truncate leading-tight">
                 {user.full_name}
@@ -560,24 +561,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 flex-1 justify-end">
+          <div className="flex items-center gap-2 flex-1 justify-end">
             <button
               onClick={toggleTheme}
-              className={`w-9 h-9 flex items-center justify-center rounded-full transition-colors ${isDark ? "text-yellow-400 hover:bg-white/5" : "text-gray-500 hover:bg-gray-100"}`}
+              className={`h-9 px-3 flex items-center justify-center gap-1.5 rounded-full text-sm font-medium transition-all ${isDark ? "bg-white/5 text-yellow-400 hover:bg-white/10 border border-white/10" : "bg-gray-100 text-gray-500 hover:bg-gray-200 border border-gray-200"}`}
               title={isDark ? "Light mode" : "Dark mode"}
             >
-              {isDark ? <Sun size={17} /> : <Moon size={17} />}
+              {isDark ? <Sun size={15} /> : <Moon size={15} />}
             </button>
 
             <div className="relative">
               <button
                 onClick={() => setNotifOpen(!notifOpen)}
-                className={`relative w-9 h-9 flex items-center justify-center rounded-full transition-colors ${isDark ? "text-gray-400 hover:bg-white/5" : "text-gray-500 hover:bg-gray-100"}`}
+                className={`relative h-9 px-3 flex items-center justify-center gap-1.5 rounded-full text-sm font-medium transition-all ${isDark ? "bg-white/5 text-gray-400 hover:bg-white/10 border border-white/10" : "bg-gray-100 text-gray-500 hover:bg-gray-200 border border-gray-200"}`}
                 title="Notifications"
               >
-                <Bell size={17} />
+                <Bell size={15} />
                 {unreadCount > 0 && (
-                  <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center ring-2 ring-inset ring-white dark:ring-[#0F172A]">
                     {unreadCount > 9 ? "9+" : unreadCount}
                   </span>
                 )}
@@ -614,9 +615,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <Link
               href="/dashboard/profile"
               title={user.full_name}
-              className="ml-1 w-9 h-9 rounded-full bg-[#2563eb] flex items-center justify-center text-white text-xs font-semibold hover:ring-2 hover:ring-[#2563eb]/40 transition-shadow shrink-0"
+              className={`h-10 pl-2 pr-3 flex items-center gap-2.5 rounded-full transition-all shrink-0 ${isDark ? "bg-white/5 hover:bg-white/10 border border-white/10" : "bg-gray-100 hover:bg-gray-200 border border-gray-200"}`}
             >
-              {initials.toUpperCase() || "?"}
+              <Avatar
+                src={user.profile_picture_url}
+                name={user.full_name}
+                size="xs"
+              />
+              <div className="hidden xl:flex flex-col min-w-0">
+                <span className={`text-[11px] font-semibold leading-tight truncate ${isDark ? "text-gray-200" : "text-gray-700"}`}>
+                  {user.first_name} {user.last_name}
+                </span>
+                <span className={`text-[10px] leading-tight capitalize ${isDark ? "text-gray-500" : "text-gray-400"}`}>
+                  {roleLabel[user.role]}
+                </span>
+              </div>
             </Link>
           </div>
         </header>

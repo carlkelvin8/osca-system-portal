@@ -123,11 +123,12 @@ async def list_students(
 
     items = []
     for u in users:
+        summary = UserSummary.model_validate(u)
         try:
-            u.profile_picture_url = _storage.resolve_profile_picture_url(u.profile_picture_url)
+            summary.profile_picture_url = _storage.resolve_profile_picture_url(u.profile_picture_url)
         except Exception:
             pass
-        items.append(UserSummary.model_validate(u))
+        items.append(summary)
 
     return PaginatedResponse(items=items, total=total, page=page, page_size=page_size, pages=(total + page_size - 1) // page_size)
 

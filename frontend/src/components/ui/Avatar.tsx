@@ -31,6 +31,7 @@ export function Avatar({ src, name, size = "md", className = "" }: AvatarProps) 
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
+        key={src}
         src={src}
         alt={name}
         className={`${imgSizeClasses[size]} rounded-full object-cover shrink-0 ${className}`}

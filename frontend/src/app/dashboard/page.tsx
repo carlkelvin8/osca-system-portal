@@ -46,6 +46,7 @@ import {
 import type { User, UserSummary } from "@/types";
 import type { DashboardSummary, Announcement, AnnouncementComment, AttendanceRecord, PaginatedResponse, UserRole, AthleteEligibility } from "@/types";
 import { useAuthStore } from "@/store/useAuthStore";
+import { Avatar } from "@/components/ui/Avatar";
 import { AnnouncementFormModal, announcementImages, tagConfig } from "@/components/announcements/AnnouncementFormModal";
 import { useThemeStore } from "@/store/useThemeStore";
 import { format, formatDistanceToNow } from "date-fns";
@@ -455,9 +456,11 @@ function CommentSection({ actions, autoFocus }: { actions: AnnouncementActions; 
         )}
         {(commentsQuery.data ?? []).map((c) => (
           <div key={c.id} className="flex items-start gap-2.5">
-            <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 text-xs font-semibold shrink-0">
-              {(c.author_name || "U").charAt(0).toUpperCase()}
-            </div>
+            <Avatar
+              src={c.author_picture_url}
+              name={c.author_name || "U"}
+              size="sm"
+            />
             <div className="flex-1 min-w-0">
               <div className="flex items-baseline gap-2">
                 <p className="text-xs font-semibold text-gray-800">{c.author_name || "User"}</p>

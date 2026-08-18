@@ -28,11 +28,11 @@ logger = structlog.get_logger(__name__)
 _storage = StorageService()
 
 
-def _resolve_user_profile_urls(user: User) -> None:
+def _resolved_profile_url(user: User) -> str | None:
     try:
-        user.profile_picture_url = _storage.resolve_profile_picture_url(user.profile_picture_url)
+        return _storage.resolve_profile_picture_url(user.profile_picture_url)
     except Exception:
-        pass
+        return None
 
 
 @router.post(
@@ -200,8 +200,8 @@ async def list_users(
 
     summaries = []
     for u in users:
-        _resolve_user_profile_urls(u)
         summary = UserSummary.model_validate(u)
+        summary.profile_picture_url = _resolved_profile_url(u)
         if u.face_embedding:
             try:
                 summary.face_image_url = _storage.resolve_face_image_url(u.face_embedding.minio_image_keys)
@@ -237,23 +237,23 @@ async def get_user(
     user = result.scalar_one_or_none()
     if not user:
         raise NotFoundError("User", str(user_id))
-    _resolve_user_profile_urls(user)
     if user.face_embedding:
         try:
             user.face_image_url = _storage.resolve_face_image_url(user.face_embedding.minio_image_keys)
         except Exception:
             pass
-    result = UserRead.model_validate(user)
+    read = UserRead.model_validate(user)
+    read.profile_picture_url = _resolved_profile_url(user)
     if user.face_embedding:
-        result.face_enrolled_at = user.face_embedding.enrolled_at
-    result.last_logout_at = user.last_logout_at
+        read.face_enrolled_at = user.face_embedding.enrolled_at
+    read.last_logout_at = user.last_logout_at
     if current_user.role in (UserRole.ADMIN, UserRole.DIRECTOR, UserRole.STAFF):
         try:
             online_key = await redis.get(f"online:{user.id}")
-            result.is_online = online_key is not None
+            read.is_online = online_key is not None
         except Exception:
             pass
-    return result
+    return read
 
 
 @router.patch("/{user_id}", response_model=UserRead, summary="Update user profile (Admin)")
@@ -289,8 +289,9 @@ async def update_user(
     )
     await db.commit()
     await db.refresh(user)
-    _resolve_user_profile_urls(user)
-    return UserRead.model_validate(user)
+    read = UserRead.model_validate(user)
+    read.profile_picture_url = _resolved_profile_url(user)
+    return read
 
 
 @router.delete("/{user_id}", response_model=MessageResponse, summary="Deactivate user (Admin)")
@@ -398,5 +399,6 @@ async def upload_profile_picture(
     )
     await db.commit()
     await db.refresh(user)
-    _resolve_user_profile_urls(user)
-    return UserRead.model_validate(user)
+    read = UserRead.model_validate(user)
+    read.profile_picture_url = _resolved_profile_url(user)
+    return read

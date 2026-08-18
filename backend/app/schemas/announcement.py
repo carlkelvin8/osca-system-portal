@@ -81,5 +81,6 @@ class CommentRead(OSCABaseModel):
     announcement_id: uuid.UUID
     user_id: uuid.UUID
     author_name: str = ""
+    author_picture_url: str | None = None
     content: str
     created_at: datetime

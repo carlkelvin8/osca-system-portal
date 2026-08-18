@@ -199,11 +199,12 @@ async def me(
 ) -> UserRead:
     online_ttl = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
     await redis.setex(f"online:{current_user.id}", online_ttl, "1")
+    read = UserRead.model_validate(current_user)
     try:
-        current_user.profile_picture_url = _storage.resolve_profile_picture_url(current_user.profile_picture_url)
+        read.profile_picture_url = _storage.resolve_profile_picture_url(current_user.profile_picture_url)
     except Exception:
         pass
-    return UserRead.model_validate(current_user)
+    return read
 
 
 @router.put("/me/password", response_model=MessageResponse, summary="Change own password")

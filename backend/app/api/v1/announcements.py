@@ -92,6 +92,8 @@ async def _build_announcement_page(
             )
             my_acked = set(my_rows.scalars().all())
 
+    storage = StorageService()
+
     items = []
     for ann in rows:
         r = AnnouncementRead.model_validate(ann)
@@ -99,6 +101,9 @@ async def _build_announcement_page(
         r.acknowledged_by_me = ann.id in my_acked
         r.acknowledgement_count = ack_counts.get(ann.id, 0)
         r.comment_count = comment_counts.get(ann.id, 0)
+        r.image_url = storage.resolve_venue_image_url(ann.image_url) if ann.image_url else None
+        if ann.image_urls:
+            r.image_urls = [u for u in (storage.resolve_venue_image_url(u) for u in ann.image_urls) if u]
         items.append(r)
 
     return PaginatedResponse(items=items, total=total, page=page, page_size=page_size,
@@ -450,7 +455,7 @@ async def upload_announcement_image(
         content_type=file.content_type,
     )
 
-    image_url = storage.get_presigned_url("osca-reports", key, expires_in=86400)
+    image_url = key
 
     urls = list(ann.image_urls or [])
     urls.append(image_url)
@@ -502,12 +507,15 @@ async def remove_announcement_image(
 
     try:
         storage = StorageService()
-        from urllib.parse import urlparse
-        parsed = urlparse(removed_url)
-        path = parsed.path.lstrip("/")
-        bucket_prefix = "osca-reports/"
-        if path.startswith(bucket_prefix):
-            await storage.delete_object("osca-reports", path[len(bucket_prefix):])
+        if removed_url.startswith("http"):
+            from urllib.parse import urlparse
+            parsed = urlparse(removed_url)
+            path = parsed.path.lstrip("/")
+            bucket_prefix = "osca-reports/"
+            if path.startswith(bucket_prefix):
+                await storage.delete_object("osca-reports", path[len(bucket_prefix):])
+        else:
+            await storage.delete_object("osca-reports", removed_url)
     except Exception:
         pass
 
@@ -634,19 +642,24 @@ async def list_comments(
     rows = (await db.execute(query)).scalars().all()
 
     user_ids = {c.user_id for c in rows}
-    names: dict[uuid.UUID, str] = {}
+    user_map: dict[uuid.UUID, User] = {}
     if user_ids:
         name_rows = await db.execute(
             select(User).where(User.id.in_(user_ids))
         )
-        names = {u.id: u.full_name for u in name_rows.scalars()}
+        user_map = {u.id: u for u in name_rows.scalars()}
+
+    storage = StorageService()
 
     items = [
         CommentRead(
             id=c.id,
             announcement_id=c.announcement_id,
             user_id=c.user_id,
-            author_name=names.get(c.user_id, ""),
+            author_name=user_map.get(c.user_id, User(full_name="")).full_name,
+            author_picture_url=storage.resolve_profile_picture_url(
+                user_map.get(c.user_id, User()).profile_picture_url
+            ) if c.user_id in user_map else None,
             content=c.content,
             created_at=c.created_at,
         )
@@ -693,11 +706,13 @@ async def create_comment(
     await db.commit()
     await db.refresh(comment)
 
+    storage = StorageService()
     return CommentRead(
         id=comment.id,
         announcement_id=comment.announcement_id,
         user_id=comment.user_id,
         author_name=current_user.full_name,
+        author_picture_url=storage.resolve_profile_picture_url(current_user.profile_picture_url),
         content=comment.content,
         created_at=comment.created_at,
     )

@@ -67,12 +67,12 @@ const DigitalID = forwardRef<HTMLDivElement, DigitalIDProps>(
       <div
         ref={ref}
         id="digital-id-card"
-        className="w-full max-w-[540px] rounded-2xl overflow-hidden shadow-xl bg-[#0d1f3c] text-white"
-        style={{ fontFamily: "Inter, system-ui, sans-serif" }}
+        className="w-full max-w-[360px] rounded-2xl overflow-hidden shadow-xl bg-[#0d1f3c] text-white"
+        style={{ fontFamily: "Inter, system-ui, sans-serif", aspectRatio: "3.375 / 2.125" }}
       >
         <div className="h-[3px] bg-[#C9A84C]" />
 
-        <div className="flex items-center gap-3 px-5 pt-4 pb-2">
+        <div className="flex items-center gap-3 px-5 pt-3.5 pb-2">
           <img
             src="/osca-logo.png"
             alt="OSCA"
@@ -93,9 +93,9 @@ const DigitalID = forwardRef<HTMLDivElement, DigitalIDProps>(
 
         <div className="mx-5 border-t border-white/10" />
 
-        <div className="flex items-stretch gap-4 px-5 py-3 min-h-[130px]">
+        <div className="flex items-stretch gap-4 px-5 py-3.5 flex-1">
           <div className="flex items-center gap-3 flex-1 min-w-0">
-            <div className="w-[52px] h-[52px] rounded-full border-2 border-[#C9A84C] overflow-hidden shrink-0 bg-white/10 flex items-center justify-center">
+            <div className="w-[56px] h-[56px] rounded-full border-2 border-[#C9A84C] overflow-hidden shrink-0 bg-white/10 flex items-center justify-center">
               {user.profile_picture_url ? (
                 <img
                   src={user.profile_picture_url}
@@ -114,7 +114,7 @@ const DigitalID = forwardRef<HTMLDivElement, DigitalIDProps>(
               )}
             </div>
             <div className="min-w-0 space-y-0.5">
-              <p className="font-bold text-sm leading-tight truncate">
+              <p className="font-bold text-[13px] leading-tight truncate">
                 {user.full_name}
               </p>
               <p className="text-[11px] text-[#C9A84C] font-medium leading-tight">
@@ -142,14 +142,14 @@ const DigitalID = forwardRef<HTMLDivElement, DigitalIDProps>(
               className="flex flex-col items-center justify-center shrink-0 cursor-pointer"
               onClick={() => setQrZoom(true)}
             >
-              <div className="bg-white rounded-xl p-1.5 shadow-sm hover:shadow-md transition-shadow">
+              <div className="bg-white rounded-xl p-2 shadow-sm hover:shadow-md transition-shadow">
                 <img
                   src={qrDataUrl}
                   alt="Static QR Code"
-                  className="w-[90px] h-[90px] rounded-lg"
+                  className="w-[110px] h-[110px] rounded-lg"
                 />
               </div>
-              <p className="text-[8px] text-white/40 mt-1 uppercase tracking-widest font-medium">
+              <p className="text-[8px] text-white/40 mt-1.5 uppercase tracking-widest font-medium">
                 Static QR Code
               </p>
             </div>
@@ -161,7 +161,7 @@ const DigitalID = forwardRef<HTMLDivElement, DigitalIDProps>(
         <div className="flex items-center px-5 py-2.5 gap-4">
           <div className="flex-1">
             <p className="text-[8px] text-white/40 uppercase tracking-wider">
-              {user.role === "coach" ? "Coach ID" : "Employee ID"}
+              {user.role === "coach" ? "Coach ID" : user.role === "student" ? "Student ID" : "Employee ID"}
             </p>
             <p className="font-mono text-[11px] font-medium leading-tight">
               {user.employee_id || user.student_id || "—"}

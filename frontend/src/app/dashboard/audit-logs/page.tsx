@@ -557,7 +557,7 @@ export default function AuditLogsPage() {
                     <tr
                       key={log.id}
                       onClick={() => viewDetail(log)}
-                      className={`border-b cursor-pointer transition-colors ${isDark ? "border-[#334155]/50 hover:bg-white/[0.02]" : "border-gray-50 hover:bg-gray-50/50"}`}
+                      className={`border-b cursor-pointer transition-all duration-200 ${isDark ? "border-[#334155]/50 hover:bg-white/[0.04]" : "border-gray-50 hover:bg-blue-50/40"}`}
                     >
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2.5">

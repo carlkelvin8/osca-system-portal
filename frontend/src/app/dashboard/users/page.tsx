@@ -1260,7 +1260,7 @@ function UserRow({
 }) {
   return (
     <tr
-      className="hover:bg-[#f9fafb] transition-colors cursor-pointer"
+      className="cursor-pointer transition-all duration-200 hover:bg-blue-50/40"
       onClick={() => onView(user)}
     >
       <td className="px-4 py-3">

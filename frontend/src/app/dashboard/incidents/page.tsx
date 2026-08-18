@@ -422,7 +422,7 @@ export default function IncidentsPage() {
             <div
               key={inc.id}
               onClick={() => setViewTarget(inc)}
-              className={`bg-white border border-gray-200 rounded-xl p-5 cursor-pointer hover:shadow-md hover:border-gray-300 transition-all duration-150 ${selected.has(inc.id) ? "ring-2 ring-blue-300" : ""}`}
+              className={`bg-white border border-gray-200 rounded-xl p-5 cursor-pointer hover:shadow-md hover:border-gray-300 transition-all duration-200 ${selected.has(inc.id) ? "ring-2 ring-blue-300" : ""}`}
             >
               <div className="flex items-start gap-4">
                 {isStaff && (
