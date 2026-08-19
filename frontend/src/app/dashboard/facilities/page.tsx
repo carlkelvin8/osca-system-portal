@@ -30,12 +30,12 @@ const RES_STATUS: Record<string, { label: string; className: string }> = {
 };
 
 const VENUES: VenueDef[] = [
-  { name: "Covered Court", image: "/covered_court.png" },
-  { name: "Upper Gym", image: "/upper_gym.png" },
-  { name: "Band Room", image: "/band_room.jpg" },
-  { name: "CAU Studio", image: "/cau_studio.png" },
-  { name: "Open Ground", image: "/open_ground.png" },
-  { name: "Weights Room", image: "/weights_room.jpg" },
+  { name: "Covered Court", image: "/facilities/covered_court.png" },
+  { name: "Upper Gym", image: "/facilities/upper_gym.png" },
+  { name: "Band Room", image: "/facilities/band_room.jpg" },
+  { name: "CAU Studio", image: "/facilities/cau_studio.png" },
+  { name: "Open Ground", image: "/facilities/open_ground.png" },
+  { name: "Weights Room", image: "/facilities/weights_room.jpg" },
 ];
 
 const STATUS_CONFIG: Record<string, { label: string; className: string; dot: string }> = {
@@ -237,7 +237,7 @@ export default function FacilitiesPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <Building2 size={22} className="text-[#1E3A5F]" />
           <div>

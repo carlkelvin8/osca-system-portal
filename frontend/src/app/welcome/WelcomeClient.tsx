@@ -12,13 +12,13 @@ import { announcementsApi } from "@/lib/api";
 import type { Announcement, PaginatedResponse } from "@/types";
 
 const HERO_SLIDES = [
-  { src: "/osca_pic.jpg", alt: "OSCA Sports and Cultural Affairs" },
-  { src: "/osca_pic2.png", alt: "OSCA Athletic Events" },
-  { src: "/osca_pic3.jpg", alt: "OSCA PASUC" },
-  { src: "/osca_pic4.jpg", alt: "OSCA Cultural Performances" },
-  { src: "/osca_pic5.jpg", alt: "OSCA HHDC" },
-  { src: "/osca_pic6.jpg", alt: "OSCA MH" },
-  { src: "/osca_pic7.jpg", alt: "OSCA MHd" },
+  { src: "/osca_pics/osca_pic2.jpg", alt: "OSCA Sports and Cultural Affairs" },
+  { src: "/osca_pics/osca_pic2.jpg", alt: "OSCA Athletic Events" },
+  { src: "/osca_pics/osca_pic3.jpg", alt: "OSCA PASUC" },
+  { src: "/osca_pics/osca_pic4.jpg", alt: "OSCA Cultural Performances" },
+  { src: "/osca_pics/osca_pic5.jpg", alt: "OSCA HHDC" },
+  { src: "/osca_pics/osca_pic6.jpg", alt: "OSCA MH" },
+  { src: "/osca_pics/osca_pic7.jpg", alt: "OSCA MHd" },
 ];
 
 interface NewsItem {
@@ -54,7 +54,15 @@ export default function WelcomeClient() {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [lightbox, setLightbox] = useState<{ images: string[]; index: number } | null>(null);
+  const [winW, setWinW] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    const update = () => setWinW(window.innerWidth);
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
 
   const { data: publicData } = useQuery<PaginatedResponse<Announcement>>({
     queryKey: ["announcements", "public"],
@@ -68,7 +76,7 @@ export default function WelcomeClient() {
       title: ann.title,
       date: announcementDateLabel(ann, "card"),
       excerpt: ann.content,
-      image: images[0] ?? "/osca_pic.jpg",
+      image: images[0] ?? "/osca_pics/osca_pic2.jpg",
       href: ann.link_url || null,
       images,
     };
@@ -135,10 +143,10 @@ export default function WelcomeClient() {
   return (
     <div style={{ fontFamily: "'Inter', system-ui, sans-serif", background: "#ffffff", color: "#0f1b2d", minHeight: "100vh" }}>
      <nav style={{ background: "#0d1f3c", borderTop: "3px solid #C9A84C", borderBottom: "3px solid #C9A84C", position: "sticky", top: 0, zIndex: 100 }}>
-  <div style={{ maxWidth: 1280, margin: "0 auto", padding: "10px 24px 10px 8px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+  <div style={{ width: "94%", maxWidth: 1600, margin: "0 auto", padding: "10px 24px 10px 8px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
     <Link href="/" style={{ display: "flex", alignItems: "center", gap: 6, textDecoration: "none" }}>
       <div style={{ width: 44, height: 44, borderRadius: "50%", border: "2px solid #C9A84C", overflow: "hidden", background: "#132a4d", flexShrink: 0 }}>
-        <Image src="/osca-logo.png" alt="OSCA Crest" width={44} height={44} style={{ objectFit: "cover", width: "100%", height: "100%" }} priority />
+        <Image src="/logo/logo/osca-logo.png" alt="OSCA Crest" width={44} height={44} style={{ objectFit: "cover", width: "100%", height: "100%" }} priority />
       </div>
       <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.25 }}>
         <span style={{ fontSize: 14, fontWeight: 800, color: "#fff" }}>OSCA Management System</span>
@@ -146,7 +154,7 @@ export default function WelcomeClient() {
       </div>
     </Link>
 
-    <div style={{ display: "flex", gap: 22, alignItems: "center" }}>
+    <div style={{ display: "flex", gap: winW < 480 ? 12 : 22, alignItems: "center", flexWrap: "wrap", justifyContent: winW < 480 ? "center" : "flex-end" }}>
       {NAV_LINKS.map((link) => (
         <button
           key={link.label}
@@ -172,7 +180,7 @@ export default function WelcomeClient() {
         onMouseLeave={() => setIsPaused(false)}
         style={{
           position: "relative",
-          minHeight: 440,
+          minHeight: winW < 480 ? 360 : 440,
           overflow: "hidden",
           display: "flex",
           alignItems: "flex-end",
@@ -299,7 +307,7 @@ export default function WelcomeClient() {
           ))}
         </div>
 
-        <div style={{ position: "relative", zIndex: 5, maxWidth: 1280, margin: "0 auto", padding: "0 24px", width: "100%" }}>
+        <div style={{ position: "relative", zIndex: 5, width: "94%", maxWidth: 1600, margin: "0 auto", padding: "0 24px" }}>
           <motion.h1
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}
             style={{ fontSize: "clamp(28px, 5vw, 46px)", fontWeight: 900, lineHeight: 1.15, color: "#fff", textShadow: "0 2px 12px rgba(0,0,0,0.4)", marginBottom: 10 }}
@@ -328,9 +336,9 @@ export default function WelcomeClient() {
         </div>
       </section>
 
-      <section style={{ maxWidth: 1280, margin: "0 auto", padding: "8px 24px 0" }}>
+      <section style={{ width: "94%", maxWidth: 1600, margin: "0 auto", padding: winW < 480 ? "8px 12px 0" : "8px 24px 0" }}>
         <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
-          style={{ display: "grid", gridTemplateColumns: "260px 1fr 260px", gap: 22, alignItems: "start" }}>
+          style={{ display: "grid", gridTemplateColumns: winW < 768 ? "1fr" : "260px 1fr 260px", gap: 22, alignItems: "start" }}>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
 
@@ -390,7 +398,7 @@ export default function WelcomeClient() {
               <div style={{ background: "#0d1f3c", padding: "14px 20px" }}>
                 <h3 style={{ fontSize: 12, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: "0.08em" }}>Quick Links</h3>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, padding: 16, background: "#fff" }}>
+              <div style={{ display: "grid", gridTemplateColumns: winW < 480 ? "1fr" : "1fr 1fr", gap: 10, padding: 16, background: "#fff" }}>
                 {[
                   { label: "Player Registration", icon: UserPlus, href: "/register" },
                   { label: "Event Calendar", icon: Calendar, href: "#" },
@@ -416,7 +424,7 @@ export default function WelcomeClient() {
 
             <div style={{ borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
               <div style={{ position: "relative", height: 180, overflow: "hidden", background: "#e7eaf0" }}>
-                <Image src="/osca_pic.jpg" alt="OSCA" fill style={{ objectFit: "cover" }} />
+                <Image src="/osca_pics/osca_pic2.jpg" alt="OSCA" fill style={{ objectFit: "cover" }} />
                 <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "50%", background: "linear-gradient(transparent, rgba(13,31,60,0.7))" }} />
                 <div style={{ position: "absolute", bottom: 12, left: 12, display: "inline-block", padding: "5px 14px", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#0d1f3c", background: "#C9A84C", borderRadius: 50 }}>
                   Message
@@ -438,7 +446,7 @@ export default function WelcomeClient() {
               <div style={{ padding: 20, background: "#fff", display: "flex", flexDirection: "column", gap: 12 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                   <div style={{ width: 56, height: 56, borderRadius: "50%", border: "2px solid #C9A84C", overflow: "hidden", background: "#132a4d", flexShrink: 0 }}>
-                    <Image src="/osca-logo.png" alt="OSCA" width={56} height={56} style={{ objectFit: "cover", width: "100%", height: "100%" }} />
+                    <Image src="/logo/osca-logo.png" alt="OSCA" width={56} height={56} style={{ objectFit: "cover", width: "100%", height: "100%" }} />
                   </div>
                   <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
                     <p style={{ fontSize: 10, fontWeight: 600, color: "#0d1f3c", lineHeight: 1.3 }}>NAAP- Office of Sports and Cultural Affairs</p>
@@ -481,7 +489,7 @@ export default function WelcomeClient() {
         </motion.div>
       </section>
 
-      <section id="news" style={{ padding: "60px 24px", maxWidth: 1100, margin: "0 auto" }}>
+      <section id="news" style={{ padding: "60px 24px", width: "94%", maxWidth: 1600, margin: "0 auto" }}>
         <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} style={{ textAlign: "center", marginBottom: 40 }}>
           <span style={{ display: "inline-block", padding: "5px 16px", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#0d1f3c", background: "rgba(201,168,76,0.15)", borderRadius: 50, marginBottom: 14 }}>Latest News</span>
           <h2 style={{ fontSize: "clamp(22px, 3.5vw, 32px)", fontWeight: 800, color: "#0d1f3c" }}>News & Announcements</h2>
@@ -502,7 +510,7 @@ export default function WelcomeClient() {
         )}
       </section>
 
-      <section id="about" style={{ padding: "60px 24px", maxWidth: 1100, margin: "0 auto" }}>
+      <section id="about" style={{ padding: "60px 24px", width: "94%", maxWidth: 1600, margin: "0 auto" }}>
         <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} style={{ textAlign: "center", marginBottom: 40 }}>
           <span style={{ display: "inline-block", padding: "5px 16px", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#0d1f3c", background: "rgba(201,168,76,0.15)", borderRadius: 50, marginBottom: 14 }}>About OSCA</span>
           <h2 style={{ fontSize: "clamp(22px, 3.5vw, 32px)", fontWeight: 800, color: "#0d1f3c" }}>Who We Are</h2>
@@ -526,7 +534,7 @@ export default function WelcomeClient() {
         </div>
       </section>
 
-      <section id="sports" style={{ padding: "60px 24px", maxWidth: 1100, margin: "0 auto", background: "#fafafa" }}>
+      <section id="sports" style={{ padding: "60px 24px", width: "94%", maxWidth: 1600, margin: "0 auto", background: "#fafafa" }}>
         <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} style={{ textAlign: "center", marginBottom: 40 }}>
           <span style={{ display: "inline-block", padding: "5px 16px", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#0d1f3c", background: "rgba(201,168,76,0.15)", borderRadius: 50, marginBottom: 14 }}>OSCA Personnel</span>
           <h2 style={{ fontSize: "clamp(22px, 3.5vw, 32px)", fontWeight: 800, color: "#0d1f3c" }}>Our Team</h2>
@@ -610,9 +618,9 @@ export default function WelcomeClient() {
       </section>
 
       <footer style={{ background: "#0d1f3c", borderTop: "3px solid #C9A84C", padding: "24px" }}>
-        <div style={{ maxWidth: 1100, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+        <div style={{ width: "94%", maxWidth: 1600, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <Image src="/osca-logo.png" alt="OSCA" width={28} height={28} style={{ borderRadius: "50%" }} />
+            <Image src="/logo/osca-logo.png" alt="OSCA" width={28} height={28} style={{ borderRadius: "50%" }} />
             <span style={{ fontSize: 12, fontWeight: 600, color: "#C9A84C" }}>OSCA Management System</span>
           </div>
           <p style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>© {new Date().getFullYear()} Office of Sports and Cultural Affairs — National Aviation Academy of the Philippines</p>

@@ -131,7 +131,7 @@ export default function PlayerRosterPage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-[#1E3A5F] text-white">
             <tr>

@@ -644,7 +644,7 @@ export default function RegisterPage() {
         <div className="relative z-10 flex flex-col items-center text-center px-10">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/osca-logo.png"
+            src="/logo/osca-logo.png"
             alt="OSCA Crest"
             className="w-56 h-56 object-contain drop-shadow-[0_10px_50px_rgba(201,168,76,0.35)] mb-8"
           />
@@ -676,7 +676,7 @@ export default function RegisterPage() {
             <div className="w-9 h-9 rounded-full bg-[#132a4d] border-2 border-[#C9A84C] overflow-hidden flex items-center justify-center shrink-0">
   {/* eslint-disable-next-line @next/next/no-img-element */}
   <img
-    src="/osca-logo.png"
+    src="/logo/osca-logo.png"
     alt="OSCA Logo"
     className="w-full h-full object-cover"
   />

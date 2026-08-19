@@ -55,7 +55,7 @@ export default function LoginPage() {
         <div className="relative z-10 flex flex-col items-center text-center px-10">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/osca-logo.png"
+            src="/logo/osca-logo.png"
             alt="OSCA Crest"
             className="w-56 h-56 object-contain mb-8"
           />
@@ -87,7 +87,7 @@ export default function LoginPage() {
             <div className="flex items-center gap-3 px-8 pt-7 pb-6 border-b border-white/[0.06]">
               <div className="w-10 h-10 rounded-full bg-[#132a4d] border-2 border-[#C9A84C] overflow-hidden flex items-center justify-center shrink-0">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/osca-logo.png" alt="OSCA Logo" className="w-full h-full object-cover" />
+                <img src="/logo/osca-logo.png" alt="OSCA Logo" className="w-full h-full object-cover" />
               </div>
               <div>
                 <h1 className="text-lg font-bold text-white leading-tight">

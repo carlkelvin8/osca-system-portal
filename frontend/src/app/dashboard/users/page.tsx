@@ -463,7 +463,7 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
       <form onSubmit={handleSubmit(onSubmit)} className="px-6 py-5 space-y-4">
         {isCoach || isPE ? (
           <>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="First Name" error={errors.first_name?.message} required>
                 <input {...register("first_name")} className={inputCls} placeholder="Juan" />
               </Field>
@@ -471,7 +471,7 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
                 <input {...register("middle_name")} className={inputCls} placeholder="Middle name" />
               </Field>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Last Name" error={errors.last_name?.message} required>
                 <input {...register("last_name")} className={inputCls} placeholder="Dela Cruz" />
               </Field>
@@ -481,7 +481,7 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
             </div>
           </>
         ) : (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="First Name" error={errors.first_name?.message} required>
               <input {...register("first_name")} className={inputCls} placeholder="Juan" />
             </Field>
@@ -498,7 +498,7 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
             placeholder="user@naap.edu.ph"
           />
         </Field>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label="Password" error={errors.password?.message} required>
             <div className="relative">
               <input
@@ -548,7 +548,7 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
             <p className="text-xs font-semibold text-[#6b7280] uppercase tracking-wide">
               Student Details
             </p>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Student ID" error={errors.student_id?.message}>
                 <input
                   {...register("student_id")}
@@ -624,7 +624,7 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
             <p className="text-xs font-semibold text-[#6b7280] uppercase tracking-wide">
               Emergency Contact
             </p>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Contact Name" error={errors.emergency_contact_name?.message} required>
                 <input {...register("emergency_contact_name")} className={inputCls} placeholder="Full name" />
               </Field>
@@ -641,7 +641,7 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
               {isCoach ? "Coach Profile" : "PE Instructor Profile"}
             </p>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Contact Number" error={errors.contact_number?.message}>
                 <input {...register("contact_number")} type="tel" className={inputCls} placeholder="+63 9XX XXX XXXX" />
               </Field>
@@ -656,7 +656,7 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
               </Field>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Date of Birth" error={errors.date_of_birth?.message}>
                 <input {...register("date_of_birth")} type="date" className={inputCls} />
               </Field>
@@ -1438,7 +1438,7 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-[22px] font-bold text-[#111827]">Users</h1>
           <p className="text-sm text-[#6b7280] mt-0.5">

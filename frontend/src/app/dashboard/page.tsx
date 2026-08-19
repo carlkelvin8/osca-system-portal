@@ -619,7 +619,7 @@ function AnnouncementCard({ ann, isEditor, onEdit, onDelete }: AnnouncementCardP
             <p className="text-xs text-gray-400">{formatDistanceToNow(new Date(ann.created_at), { addSuffix: true })}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-2 flex-wrap justify-end" onClick={(e) => e.stopPropagation()}>
           {ann.pinned && (
             <span className="flex items-center gap-1 text-xs font-medium text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full">
               <Pin size={10} /> Pinned
@@ -962,7 +962,7 @@ function OSCABanner() {
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
         style={{
-          backgroundImage: "url('/NAAP.png')",
+          backgroundImage: "url('/logo/NAAP.png')",
           backgroundSize: "cover",
           backgroundPosition: "center",
         }}
@@ -990,7 +990,7 @@ function OSCABanner() {
       <div className="relative z-10 flex h-[150px] flex-col justify-center gap-4 px-6 py-6 md:h-[165px] md:flex-row md:items-center md:justify-between md:gap-5 md:px-10">
         <div className="flex items-center gap-3 md:gap-4">
           <Image
-            src="/osca-logo.png"
+            src="/logo/osca-logo.png"
             alt="OSCA Logo"
             width={64}
             height={64}

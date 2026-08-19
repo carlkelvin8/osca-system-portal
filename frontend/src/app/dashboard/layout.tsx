@@ -327,14 +327,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   };
 
   return (
-    <div className={`flex h-screen ${isDark ? "dark bg-[#0F172A]" : "bg-[#f2f5f9]"}`}>
+    <div className={`flex h-screen overflow-x-hidden ${isDark ? "dark bg-[#0F172A]" : "bg-[#f2f5f9]"}`}>
       {mobileMenuOpen && (
         <div className="fixed inset-0 z-50 lg:hidden" onClick={() => setMobileMenuOpen(false)}>
           <div className="absolute inset-0 bg-black/50" />
         </div>
       )}
 
-      <aside className={`${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0 fixed lg:static relative inset-y-0 left-0 z-50 w-52 bg-[#0f172a] text-white flex flex-col shrink-0 transition-[width,transform] duration-500 ease-[cubic-bezier(.16,1,.3,1)] ${collapsed ? "lg:w-[72px]" : "lg:w-52"}`}>
+      <aside className={`${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0 fixed lg:static lg:relative inset-y-0 left-0 z-[100] w-[280px] lg:w-52 bg-[#0f172a] text-white flex flex-col shrink-0 overflow-hidden transition-[width,transform] duration-500 ease-[cubic-bezier(.16,1,.3,1)] ${collapsed ? "lg:w-[72px]" : ""}`}>
         <button
           onClick={toggleCollapsed}
           title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
@@ -352,7 +352,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <div className="w-9 h-9 rounded-full bg-white overflow-hidden flex items-center justify-center shrink-0">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="/osca-logo.png"
+                src="/logo/osca-logo.png"
                 alt="OSCA Logo"
                 className="w-full h-full object-cover"
               />
@@ -508,7 +508,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       )}
 
       <div className="flex-1 flex flex-col overflow-hidden">
-        <header className={`h-16 ${isDark ? "bg-[#1E293B] border-[#334155]" : "bg-white border-[#e5e7eb]"} border-b flex items-center gap-4 px-4 lg:px-6 shrink-0`}>
+        <header className={`h-16 ${isDark ? "bg-[#1E293B] border-[#334155]" : "bg-white border-[#e5e7eb]"} border-b flex items-center gap-2 px-3 md:gap-4 md:px-4 lg:px-6 shrink-0`}>
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <button onClick={() => setMobileMenuOpen(true)} className="lg:hidden p-2 -ml-1 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 text-gray-600 dark:text-gray-300 shrink-0">
               <Menu size={20} />
@@ -516,7 +516,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <TopbarBreadcrumb pageTitle={pageTitle} />
           </div>
 
-          <div className="flex-1 flex justify-center">
+          <div className="hidden md:flex flex-1 justify-center">
             <div className="relative w-full max-w-md">
               <Search size={15} className={`absolute left-3.5 top-1/2 -translate-y-1/2 ${isDark ? "text-gray-500" : "text-gray-400"}`} />
               <input
@@ -564,7 +564,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="flex items-center gap-2 flex-1 justify-end">
             <button
               onClick={toggleTheme}
-              className={`h-9 px-3 flex items-center justify-center gap-1.5 rounded-full text-sm font-medium transition-all ${isDark ? "bg-white/5 text-yellow-400 hover:bg-white/10 border border-white/10" : "bg-gray-100 text-gray-500 hover:bg-gray-200 border border-gray-200"}`}
+              className={`h-9 px-2 md:px-3 flex items-center justify-center gap-1.5 rounded-full text-sm font-medium transition-all ${isDark ? "bg-white/5 text-yellow-400 hover:bg-white/10 border border-white/10" : "bg-gray-100 text-gray-500 hover:bg-gray-200 border border-gray-200"}`}
               title={isDark ? "Light mode" : "Dark mode"}
             >
               {isDark ? <Sun size={15} /> : <Moon size={15} />}
@@ -573,7 +573,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <div className="relative">
               <button
                 onClick={() => setNotifOpen(!notifOpen)}
-                className={`relative h-9 px-3 flex items-center justify-center gap-1.5 rounded-full text-sm font-medium transition-all ${isDark ? "bg-white/5 text-gray-400 hover:bg-white/10 border border-white/10" : "bg-gray-100 text-gray-500 hover:bg-gray-200 border border-gray-200"}`}
+                className={`relative h-9 px-2 md:px-3 flex items-center justify-center gap-1.5 rounded-full text-sm font-medium transition-all ${isDark ? "bg-white/5 text-gray-400 hover:bg-white/10 border border-white/10" : "bg-gray-100 text-gray-500 hover:bg-gray-200 border border-gray-200"}`}
                 title="Notifications"
               >
                 <Bell size={15} />
@@ -585,7 +585,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </button>
 
               {notifOpen && (
-                <div className={`absolute right-0 top-12 w-80 rounded-xl shadow-xl border z-50 ${isDark ? "bg-[#1E293B] border-[#334155]" : "bg-white border-gray-200"}`}>
+                <div className={`absolute right-0 top-12 w-[calc(100vw-2rem)] max-w-80 rounded-xl shadow-xl border z-50 ${isDark ? "bg-[#1E293B] border-[#334155]" : "bg-white border-gray-200"}`}>
                   <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                     <span className={`text-sm font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>Notifications</span>
                     {unreadCount > 0 && (

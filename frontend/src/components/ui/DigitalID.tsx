@@ -74,7 +74,7 @@ const DigitalID = forwardRef<HTMLDivElement, DigitalIDProps>(
 
         <div className="flex items-center gap-3 px-5 pt-3.5 pb-2">
           <img
-            src="/osca-logo.png"
+            src="/logo/osca-logo.png"
             alt="OSCA"
             className="w-9 h-9 rounded-full border-2 border-[#C9A84C] object-cover shrink-0"
           />

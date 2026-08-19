@@ -239,7 +239,7 @@ function NewSessionModal({ onClose, defaultSport }: NewSessionModalProps) {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Activity Type <span className="text-red-500">*</span>
@@ -310,7 +310,7 @@ function NewSessionModal({ onClose, defaultSport }: NewSessionModalProps) {
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Attendance Start <span className="text-red-500">*</span>
@@ -490,7 +490,7 @@ function EditSessionModal({ session, onClose, isCoach = false }: EditSessionModa
             <input type="text" value={form.name} onChange={set("name")} placeholder="e.g. Morning Practice — Basketball" className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]/30 focus:border-[#1E3A5F]" />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Activity Type <span className="text-red-500">*</span></label>
               <select value={form.activity_type} onChange={set("activity_type")} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]/30 focus:border-[#1E3A5F] bg-white">
@@ -519,7 +519,7 @@ function EditSessionModal({ session, onClose, isCoach = false }: EditSessionModa
             <input type="text" value={form.venue} onChange={set("venue")} placeholder="e.g. NAAP Gymnasium" className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]/30 focus:border-[#1E3A5F]" />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Attendance Start <span className="text-red-500">*</span></label>
               <input type="datetime-local" value={form.scheduled_start} onChange={set("scheduled_start")} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]/30 focus:border-[#1E3A5F]" />
@@ -693,7 +693,7 @@ export default function AttendancePage() {
       )}
 
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2.5">
               <div className="w-9 h-9 bg-[#1E3A5F]/10 rounded-xl flex items-center justify-center">
@@ -782,7 +782,7 @@ export default function AttendancePage() {
 
         {(!isStudent || activeTab === "sessions") && (
           <>
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gradient-to-r from-[#1E3A5F] to-[#2d4a73] text-white">
@@ -923,7 +923,7 @@ export default function AttendancePage() {
               />
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+            <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-[#1E3A5F] text-white">
                   <tr>

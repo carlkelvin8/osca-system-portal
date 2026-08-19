@@ -113,7 +113,7 @@ export default function FacilityReservationsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <CalendarDays size={22} className="text-[#1E3A5F]" />
           <div>

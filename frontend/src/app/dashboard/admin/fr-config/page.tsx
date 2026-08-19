@@ -66,7 +66,7 @@ export default function FRConfigPage() {
       <div className="flex items-center gap-4">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/osca-logo.png"
+          src="/logo/osca-logo.png"
           alt="OSCA Logo"
           className="w-14 h-14 rounded-full object-cover shadow ring-2 ring-[#C9A84C]/30 shrink-0"
         />

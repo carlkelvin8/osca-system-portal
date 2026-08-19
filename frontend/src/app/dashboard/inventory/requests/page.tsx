@@ -937,7 +937,7 @@ function ViewDetailsModal({
         </div>
 
         <div className="space-y-3 text-sm">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <p className="text-xs text-gray-400">Request Number</p>
               <p className="font-mono font-medium text-gray-800">REQ-{request.id.slice(0, 8).toUpperCase()}</p>
@@ -1020,7 +1020,7 @@ function ViewDetailsModal({
             </table>
           </div>
 
-          <div className="border-t border-gray-100 pt-3 grid grid-cols-2 gap-3">
+          <div className="border-t border-gray-100 pt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <p className="text-xs text-gray-400">Request Date</p>
               <p className="text-gray-700">{format(new Date(request.requested_at), "MMM d, yyyy · h:mm a")}</p>
@@ -1165,7 +1165,7 @@ export default function EquipmentRequestsPage() {
       {deletingId && <DeleteConfirmModal requestId={deletingId} onClose={() => setDeletingId(null)} />}
 
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Equipment Requests</h1>
             <p className="text-sm text-gray-500">

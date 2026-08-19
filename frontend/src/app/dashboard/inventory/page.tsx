@@ -231,7 +231,7 @@ function AddEquipmentModal({ onClose, onSuccess }: { onClose: () => void; onSucc
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>Category <span className="text-red-500">*</span></label>
               <select
@@ -425,7 +425,7 @@ function EditEquipmentModal({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>Category <span className="text-red-500">*</span></label>
               <select
@@ -452,7 +452,7 @@ function EditEquipmentModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>Total Quantity <span className="text-red-500">*</span></label>
               <input
@@ -656,7 +656,7 @@ export default function InventoryPage() {
           </div>
         )}
 
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Equipment Inventory</h1>
             <p className="text-sm text-gray-500">Manage OSCA sports and cultural equipment</p>
@@ -717,7 +717,7 @@ export default function InventoryPage() {
           </p>
         )}
 
-        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+        <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-[#1E3A5F] text-white">
               <tr>

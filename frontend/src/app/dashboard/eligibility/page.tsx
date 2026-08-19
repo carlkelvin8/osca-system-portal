@@ -252,7 +252,7 @@ export default function EligibilityPage() {
       {isLoading ? (
         <div className="flex justify-center py-12"><Loader2 className="animate-spin text-gray-400" size={24} /></div>
       ) : (
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
           <table className="w-full text-sm" data-export-table>
             <thead className="bg-gray-50 border-b">
               <tr>

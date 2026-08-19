@@ -422,7 +422,7 @@ export default function AuditLogsPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className={`text-xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>
             Audit Logs

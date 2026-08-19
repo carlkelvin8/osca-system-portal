@@ -60,7 +60,7 @@ function KioskBanner() {
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
         style={{
-          backgroundImage: "url('/NAAP.png')",
+          backgroundImage: "url('/logo/NAAP.png')",
           backgroundSize: "cover",
           backgroundPosition: "center",
         }}
@@ -77,7 +77,7 @@ function KioskBanner() {
       <div className="relative z-10 flex h-[150px] flex-col justify-center gap-4 px-6 py-6 md:h-[165px] md:flex-row md:items-center md:justify-between md:gap-5 md:px-10">
         <div className="flex items-center gap-3 md:gap-4">
           <Image
-            src="/osca-logo.png"
+            src="/logo/osca-logo.png"
             alt="OSCA Logo"
             width={64}
             height={64}
@@ -295,7 +295,7 @@ export default function KioskPage() {
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#1557C0] to-[#071A3A] shadow-lg">
               <ScanFace className="text-white" size={30} />
             </div>
-            <h1 className="mt-4 text-3xl font-bold tracking-tight text-[#0c1c33]">
+            <h1 className="mt-4 text-2xl sm:text-3xl font-bold tracking-tight text-[#0c1c33]">
               Select Active Attendance Session
             </h1>
             <p className="mt-1.5 text-sm font-semibold text-[#1557C0]">
@@ -406,7 +406,7 @@ export default function KioskPage() {
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#1557C0] to-[#071A3A] shadow-lg">
             <ScanFace className="text-white" size={30} />
           </div>
-          <h1 className="mt-4 text-3xl font-bold tracking-tight text-[#0c1c33]">OSCA Attendance Scan</h1>
+          <h1 className="mt-4 text-2xl sm:text-3xl font-bold tracking-tight text-[#0c1c33]">OSCA Attendance Scan</h1>
           <p className="mt-1.5 text-sm font-semibold text-[#1557C0]">Kiosk Mode – Facial Recognition</p>
           <p className="mt-1 text-xs text-gray-500">
             Position your face in the camera frame. Students record attendance; OSCA
