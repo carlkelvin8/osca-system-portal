@@ -146,7 +146,7 @@ export default function WelcomeClient() {
   <div style={{ width: "94%", maxWidth: 1600, margin: "0 auto", padding: "10px 24px 10px 8px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
     <Link href="/" style={{ display: "flex", alignItems: "center", gap: 6, textDecoration: "none" }}>
       <div style={{ width: 44, height: 44, borderRadius: "50%", border: "2px solid #C9A84C", overflow: "hidden", background: "#132a4d", flexShrink: 0 }}>
-        <Image src="/logo/logo/osca-logo.png" alt="OSCA Crest" width={44} height={44} style={{ objectFit: "cover", width: "100%", height: "100%" }} priority />
+        <Image src="/logo/osca-logo.png" alt="OSCA Crest" width={44} height={44} style={{ objectFit: "cover", width: "100%", height: "100%" }} priority />
       </div>
       <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.25 }}>
         <span style={{ fontSize: 14, fontWeight: 800, color: "#fff" }}>OSCA Management System</span>
