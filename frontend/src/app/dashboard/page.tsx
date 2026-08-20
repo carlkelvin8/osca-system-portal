@@ -312,7 +312,7 @@ function useAnnouncementActions(ann: Announcement) {
   const [ackCount, setAckCount] = useState(ann.acknowledgement_count ?? 0);
   const [commentCount, setCommentCount] = useState(ann.comment_count ?? 0);
   const [ackLoading, setAckLoading] = useState(false);
-  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [commentsOpen, setCommentsOpen] = useState((ann.comment_count ?? 0) > 0);
   const [commentText, setCommentText] = useState("");
   const [commentLoading, setCommentLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -423,29 +423,7 @@ function CommentSection({ actions, autoFocus }: { actions: AnnouncementActions; 
   const { commentText, setCommentText, commentLoading, error, commentsQuery, handleCommentSubmit } = actions;
   return (
     <div>
-      <form onSubmit={handleCommentSubmit} className="flex items-center gap-2">
-        <input
-          value={commentText}
-          onChange={(e) => setCommentText(e.target.value)}
-          placeholder="Write a comment…"
-          autoFocus={autoFocus}
-          className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]/30 focus:border-[#1E3A5F]"
-        />
-        <button
-          type="submit"
-          disabled={commentLoading || !commentText.trim()}
-          className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-white bg-[#1E3A5F] rounded-lg hover:bg-[#16304f] transition disabled:opacity-50"
-        >
-          {commentLoading ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
-          {commentLoading ? "Posting…" : "Post"}
-        </button>
-      </form>
-
-      {error && (
-        <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mt-2">{error}</p>
-      )}
-
-      <div className="mt-3 space-y-2.5">
+      <div className="space-y-2.5">
         {commentsQuery.isLoading && (
           <p className="text-xs text-gray-400 flex items-center gap-1.5">
             <Loader2 size={12} className="animate-spin" /> Loading comments…
@@ -471,6 +449,28 @@ function CommentSection({ actions, autoFocus }: { actions: AnnouncementActions; 
           </div>
         ))}
       </div>
+
+      {error && (
+        <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mt-2">{error}</p>
+      )}
+
+      <form onSubmit={handleCommentSubmit} className="flex items-center gap-2 mt-3">
+        <input
+          value={commentText}
+          onChange={(e) => setCommentText(e.target.value)}
+          placeholder="Write a comment…"
+          autoFocus={autoFocus}
+          className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]/30 focus:border-[#1E3A5F]"
+        />
+        <button
+          type="submit"
+          disabled={commentLoading || !commentText.trim()}
+          className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-white bg-[#1E3A5F] rounded-lg hover:bg-[#16304f] transition disabled:opacity-50"
+        >
+          {commentLoading ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+          {commentLoading ? "Posting…" : "Post"}
+        </button>
+      </form>
     </div>
   );
 }
@@ -592,7 +592,6 @@ function AnnouncementCard({ ann, isEditor, onEdit, onDelete }: AnnouncementCardP
   const images = announcementImages(ann);
 
   const openViewer = (index = 0) => {
-    actions.setCommentsOpen(true);
     setViewerIndex(index);
     setViewerOpen(true);
   };

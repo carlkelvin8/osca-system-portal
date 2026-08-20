@@ -674,10 +674,10 @@ async def list_comments(
             id=c.id,
             announcement_id=c.announcement_id,
             user_id=c.user_id,
-            author_name=user_map.get(c.user_id, User(full_name="")).full_name,
+            author_name=(u.full_name if (u := user_map.get(c.user_id)) else ""),
             author_picture_url=storage.resolve_profile_picture_url(
-                user_map.get(c.user_id, User()).profile_picture_url
-            ) if c.user_id in user_map else None,
+                u.profile_picture_url
+            ) if (u := user_map.get(c.user_id)) else None,
             content=c.content,
             created_at=c.created_at,
         )
