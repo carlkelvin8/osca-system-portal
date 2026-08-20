@@ -33,7 +33,7 @@ import type { LucideIcon } from "lucide-react";
 import { reportsApi, type ReportFormat } from "@/lib/api";
 import { useAuthStore } from "@/store/useAuthStore";
 import type { MonthlyInventoryReport } from "@/types";
-import { SPORTS_OPTIONS } from "../attendance/page";
+import { SPORTS_OPTIONS } from "@/lib/constants";
 
 const EXPORT_FORMATS: { fmt: ReportFormat; label: string; icon: LucideIcon; cls: string }[] = [
   { fmt: "pdf", label: "PDF", icon: FileText, cls: "text-red-600 border-red-200 hover:bg-red-50" },

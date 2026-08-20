@@ -9,31 +9,7 @@ import { CalendarCheck, Plus, X, Loader2, Users, ClipboardList, CheckCircle2, XC
 import Link from "next/link";
 import type { Session, ActivityType, AttendanceRecord, PaginatedResponse, Facility } from "@/types";
 import { format } from "date-fns";
-
-
-export const SPORTS_OPTIONS: { group: string; items: string[] }[] = [
-  {
-    group: "Sports",
-    items: [
-      "Arnis",
-      "Badminton",
-      "Basketball",
-      "Sepak Takraw",
-      "Table Tennis",
-      "Taekwondo",
-      "Volleyball Men",
-      "Volleyball Women",
-    ],
-  },
-  {
-    group: "Cultural Affairs",
-    items: [
-      "Hataw Himpapawid Dance Group",
-      "Himig Himpapawid Chorale",
-      "Musikang Himpapawid Live Band",
-    ],
-  },
-];
+import { SPORTS_OPTIONS } from "@/lib/constants";
 
 
 function SportArtCombobox({
