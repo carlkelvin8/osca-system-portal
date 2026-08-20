@@ -12,7 +12,7 @@ import { announcementsApi } from "@/lib/api";
 import type { Announcement, PaginatedResponse } from "@/types";
 
 const HERO_SLIDES = [
-  { src: "/osca_pics/osca_pic2.jpg", alt: "OSCA Sports and Cultural Affairs" },
+  { src: "/osca_pics/osca_pic.jpg", alt: "OSCA Sports and Cultural Affairs" },
   { src: "/osca_pics/osca_pic2.jpg", alt: "OSCA Athletic Events" },
   { src: "/osca_pics/osca_pic3.jpg", alt: "OSCA PASUC" },
   { src: "/osca_pics/osca_pic4.jpg", alt: "OSCA Cultural Performances" },
