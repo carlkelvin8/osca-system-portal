@@ -32,6 +32,7 @@ export interface User {
   department: string | null;
   assigned_sport: string | null;
   sport_or_art: string | null;
+  medical_info: string | null;
   emergency_contact_name: string | null;
   emergency_contact_number: string | null;
   is_active: boolean;

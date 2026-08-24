@@ -209,6 +209,25 @@ export default function KioskPage() {
   });
 
   const queryClient = useQueryClient();
+
+  // Local clock for real-time session expiry detection (5 s tick)
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 5_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const activeSession = activeSessions.find((s) => s.id === selectedSessionId) ?? null;
+  const selectedSessionNotStarted = (() => {
+    if (!activeSession) return false;
+    return now < new Date(activeSession.scheduled_start).getTime();
+  })();
+  const selectedSessionEnded = (() => {
+    if (!activeSession) return false;
+    return now >= new Date(activeSession.scheduled_end).getTime();
+  })();
+  const selectedSessionActive = selectedSessionId !== null && activeSession !== null && !selectedSessionNotStarted && !selectedSessionEnded;
+
   const { data: latestAttendance } = useQuery<LatestAttendance | null>({
     queryKey: ["kiosk-latest-attendance", selectedSessionId],
     queryFn: async () => {
@@ -349,8 +368,6 @@ export default function KioskPage() {
     );
   }
 
-  const activeSession = activeSessions.find((s) => s.id === selectedSessionId);
-
   const feedbackOverlay = feedback
     ? feedback.type === "success"
       ? { cls: "bg-green-600/95 text-white", Icon: CheckCircle2 }
@@ -423,16 +440,40 @@ export default function KioskPage() {
                   <Calendar size={15} /> Active attendance session
                 </h2>
                 <div className="flex flex-col items-end">
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700">
-                    <span className="relative flex h-2 w-2">
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
-                      <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
-                    </span>
-                    ACTIVE
-                  </span>
-                  <p className="mt-1 text-[11px] text-gray-400">
-                    Session is now accepting attendance.
-                  </p>
+                  {selectedSessionNotStarted ? (
+                    <>
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700">
+                        <Clock size={12} />
+                        NOT YET STARTED
+                      </span>
+                      <p className="mt-1 text-[11px] text-gray-400">
+                        Attendance opens at {activeSession ? format(new Date(activeSession.scheduled_start), "h:mm a") : ""}.
+                      </p>
+                    </>
+                  ) : selectedSessionEnded ? (
+                    <>
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-500">
+                        <Clock size={12} />
+                        TIME EXPIRED
+                      </span>
+                      <p className="mt-1 text-[11px] text-gray-400">
+                        Attendance period has ended.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700">
+                        <span className="relative flex h-2 w-2">
+                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
+                          <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
+                        </span>
+                        ACTIVE
+                      </span>
+                      <p className="mt-1 text-[11px] text-gray-400">
+                        Session is now accepting attendance.
+                      </p>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -557,7 +598,7 @@ export default function KioskPage() {
 
               <button
                 onClick={captureAndScan}
-                disabled={isScanning || !selectedSessionId}
+                disabled={isScanning || !selectedSessionId || selectedSessionEnded || selectedSessionNotStarted}
                 className="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-[#1557C0] px-6 py-3.5 text-base font-bold text-white shadow-lg shadow-[#1557C0]/20 transition hover:bg-[#123D78] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isScanning ? (
@@ -570,6 +611,18 @@ export default function KioskPage() {
                   </>
                 )}
               </button>
+
+              {selectedSessionNotStarted && (
+                <p className="mt-2 text-center text-xs font-medium text-amber-300">
+                  Attendance has not started yet. Please wait.
+                </p>
+              )}
+
+              {selectedSessionEnded && (
+                <p className="mt-2 text-center text-xs font-medium text-amber-600">
+                  Attendance period has ended. Scanning is disabled.
+                </p>
+              )}
 
               <p className="mt-2 text-center text-xs text-gray-400">
                 Look directly at the camera and press the button

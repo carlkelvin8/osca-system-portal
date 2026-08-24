@@ -557,6 +557,13 @@ export default function AttendancePage() {
   const [historySearch, setHistorySearch] = useState("");
   const [historyFilter, setHistoryFilter] = useState<"all" | "daily" | "weekly" | "monthly">("all");
 
+  // Real-time clock for session state detection (5 s tick)
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 5_000);
+    return () => clearInterval(id);
+  }, []);
+
   const { data, isLoading } = useQuery<PaginatedResponse<Session>>({
     queryKey: ["sessions", page, userSport, isStudent],
     queryFn: async () => {
@@ -814,19 +821,62 @@ export default function AttendancePage() {
                         {session.attendance_count}
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold ${session.is_active ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-gray-50 text-gray-500 border border-gray-200"}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${session.is_active ? "bg-emerald-500" : "bg-gray-400"}`} />
-                          {session.is_active ? "Active" : "Closed"}
-                        </span>
+                        {(() => {
+                          const sessStart = new Date(session.scheduled_start).getTime();
+                          const sessEnd = new Date(session.scheduled_end).getTime();
+                          const effectiveEnded = !session.is_active || now >= sessEnd;
+                          const effectiveNotStarted = session.is_active && now < sessStart;
+                          const effectiveActive = session.is_active && now >= sessStart && now < sessEnd;
+                          return (
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold ${
+                              effectiveActive
+                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                : effectiveNotStarted
+                                ? "bg-amber-50 text-amber-700 border border-amber-200"
+                                : "bg-gray-50 text-gray-500 border border-gray-200"
+                            }`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${
+                                effectiveActive
+                                  ? "bg-emerald-500"
+                                  : effectiveNotStarted
+                                  ? "bg-amber-500"
+                                  : "bg-gray-400"
+                              }`} />
+                              {effectiveActive ? "Active" : effectiveNotStarted ? "Not Started" : "Closed"}
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="px-4 py-3 text-center">
                         {isStudent ? (
-                          <button
-                            onClick={() => router.push(`/dashboard/attendance/${session.id}/scan`)}
-                            className="px-3 py-1 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
-                          >
-                            Scan In
-                          </button>
+                          (() => {
+                            const sessStart = new Date(session.scheduled_start).getTime();
+                            const sessEnd = new Date(session.scheduled_end).getTime();
+                            const notStarted = now < sessStart;
+                            const ended = now >= sessEnd || !session.is_active;
+                            if (!session.is_active || ended) {
+                              return (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-gray-400 bg-gray-50 rounded-lg border border-gray-200 cursor-not-allowed">
+                                  Attendance Closed
+                                </span>
+                              );
+                            }
+                            if (notStarted) {
+                              return (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-amber-600 bg-amber-50 rounded-lg border border-amber-200 cursor-not-allowed">
+                                  Not Started
+                                </span>
+                              );
+                            }
+                            return (
+                              <button
+                                onClick={() => router.push(`/dashboard/attendance/${session.id}/scan`)}
+                                className="px-3 py-1 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+                              >
+                                Scan In
+                              </button>
+                            );
+                          })()
                         ) : (
                           <div className="flex items-center justify-center gap-1.5">
                             <button
@@ -841,7 +891,7 @@ export default function AttendancePage() {
                             >
                               Edit
                             </button>
-                            {session.is_active && (
+                            {session.is_active && now < new Date(session.scheduled_end).getTime() && (
                               <button
                                 onClick={() => setEndingSession(session)}
                                 className="px-3 py-1 text-xs bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition"

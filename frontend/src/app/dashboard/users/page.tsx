@@ -1066,6 +1066,24 @@ function DetailRow({ icon, label, value }: { icon: React.ReactNode; label: strin
   );
 }
 
+function EditRow({ icon, label, value, onChange, placeholder }: { icon: React.ReactNode; label: string; value: string; onChange: (v: string) => void; placeholder?: string }) {
+  return (
+    <div className="flex items-start gap-3 py-2.5">
+      <span className="text-[#9ca3af] mt-0.5 shrink-0">{icon}</span>
+      <div className="min-w-0 flex-1">
+        <p className="text-[11px] font-semibold text-[#9ca3af] uppercase tracking-wide">{label}</p>
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder || "—"}
+          className="mt-0.5 w-full border border-[#d1d5db] rounded-lg px-3 py-1.5 text-sm text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#2563eb] focus:border-transparent placeholder:text-[#9ca3af]"
+        />
+      </div>
+    </div>
+  );
+}
+
 function UserDetailsModal({
   userId,
   onClose,
@@ -1074,8 +1092,13 @@ function UserDetailsModal({
   onClose: () => void;
 }) {
   const [fullPreview, setFullPreview] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
   const { user: currentUser } = useAuthStore();
-  const canViewActivity = currentUser && ["admin", "director", "staff"].includes(currentUser.role);
+  const queryClient = useQueryClient();
+  const canEdit = currentUser && ["admin", "director", "staff"].includes(currentUser.role);
+  const canViewActivity = canEdit;
 
   const { data: user, isLoading } = useQuery<User>({
     queryKey: ["user", userId],
@@ -1084,6 +1107,66 @@ function UserDetailsModal({
       return res.data;
     },
   });
+
+  const startEditing = () => {
+    if (!user) return;
+    setEditForm({
+      first_name: user.first_name || "",
+      last_name: user.last_name || "",
+      middle_name: user.middle_name || "",
+      suffix: user.suffix || "",
+      course: user.course || "",
+      year_level: user.year_level || "",
+      contact_number: user.contact_number || "",
+      address: user.address || "",
+      date_of_birth: user.date_of_birth || "",
+      gender: user.gender || "",
+      employee_id: user.employee_id || "",
+      department: user.department || "",
+      sport_or_art: user.sport_or_art || "",
+      medical_info: user.medical_info || "",
+      emergency_contact_name: user.emergency_contact_name || "",
+      emergency_contact_number: user.emergency_contact_number || "",
+      assigned_sport: user.assigned_sport || "",
+    });
+    setIsEditing(true);
+  };
+
+  const cancelEditing = () => {
+    setIsEditing(false);
+    setEditForm({});
+  };
+
+  const saveEditing = async () => {
+    if (!user) return;
+    setSaving(true);
+    try {
+      const payload: Record<string, unknown> = {};
+      const userAny = user as unknown as Record<string, unknown>;
+      for (const [key, val] of Object.entries(editForm)) {
+        if (val !== (userAny[key] ?? "")) {
+          payload[key] = val || null;
+        }
+      }
+      if (Object.keys(payload).length === 0) {
+        setIsEditing(false);
+        return;
+      }
+      await usersApi.update(user.id, payload);
+      await queryClient.invalidateQueries({ queryKey: ["user", userId] });
+      await queryClient.invalidateQueries({ queryKey: ["users"] });
+      setIsEditing(false);
+      setEditForm({});
+    } catch {
+      // error handled silently
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateField = (field: string, value: string) => {
+    setEditForm((prev) => ({ ...prev, [field]: value }));
+  };
 
   return (
     <>
@@ -1125,16 +1208,42 @@ function UserDetailsModal({
               {user.role === "student" && (
                 <>
                   <DetailRow icon={<UserCheck size={15} />} label="Student ID" value={user.student_id} />
-                  <DetailRow icon={<span className="text-sm">📚</span>} label="Course" value={user.course} />
-                  <DetailRow icon={<span className="text-sm">🎓</span>} label="Year Level" value={user.year_level} />
+                  {isEditing ? (
+                    <>
+                      <EditRow icon={<span className="text-sm">📚</span>} label="Course" value={editForm.course} onChange={(v) => updateField("course", v)} />
+                      <EditRow icon={<span className="text-sm">🎓</span>} label="Year Level" value={editForm.year_level} onChange={(v) => updateField("year_level", v)} />
+                      <EditRow icon={<span className="text-sm">🏅</span>} label="Sport/Art" value={editForm.sport_or_art} onChange={(v) => updateField("sport_or_art", v)} placeholder="Not Assigned" />
+                    </>
+                  ) : (
+                    <>
+                      <DetailRow icon={<span className="text-sm">📚</span>} label="Course" value={user.course} />
+                      <DetailRow icon={<span className="text-sm">🎓</span>} label="Year Level" value={user.year_level} />
+                      <DetailRow icon={<span className="text-sm">🏅</span>} label="Sport/Art" value={user.sport_or_art || "Not Assigned"} />
+                    </>
+                  )}
                 </>
               )}
-              {(user.role === "coach" || user.role === "pe_instructor") && user.sport_or_art && (
-                <DetailRow icon={<span className="text-sm">🏅</span>} label="Assigned Sport" value={user.sport_or_art} />
+              {(user.role === "coach" || user.role === "pe_instructor") && (
+                isEditing ? (
+                  <EditRow icon={<span className="text-sm">🏅</span>} label="Assigned Sport" value={editForm.sport_or_art} onChange={(v) => updateField("sport_or_art", v)} />
+                ) : (
+                  <DetailRow icon={<span className="text-sm">🏅</span>} label="Assigned Sport" value={user.sport_or_art} />
+                )
               )}
-              <DetailRow icon={<Phone size={15} />} label="Phone Number" value={user.contact_number} />
-              <DetailRow icon={<Phone size={15} />} label="Emergency Contact" value={user.emergency_contact_name} />
-              <DetailRow icon={<Phone size={15} />} label="Emergency Number" value={user.emergency_contact_number} />
+              {isEditing ? (
+                <>
+                  <EditRow icon={<Phone size={15} />} label="Phone Number" value={editForm.contact_number} onChange={(v) => updateField("contact_number", v)} />
+                  <EditRow icon={<Phone size={15} />} label="Emergency Contact" value={editForm.emergency_contact_name} onChange={(v) => updateField("emergency_contact_name", v)} />
+                  <EditRow icon={<Phone size={15} />} label="Emergency Number" value={editForm.emergency_contact_number} onChange={(v) => updateField("emergency_contact_number", v)} />
+                  <EditRow icon={<span className="text-sm">🏥</span>} label="Medical Info" value={editForm.medical_info} onChange={(v) => updateField("medical_info", v)} />
+                </>
+              ) : (
+                <>
+                  <DetailRow icon={<Phone size={15} />} label="Phone Number" value={user.contact_number} />
+                  <DetailRow icon={<Phone size={15} />} label="Emergency Contact" value={user.emergency_contact_name} />
+                  <DetailRow icon={<Phone size={15} />} label="Emergency Number" value={user.emergency_contact_number} />
+                </>
+              )}
               <DetailRow icon={<Calendar size={15} />} label="Date Registered" value={formatDate(user.created_at)} />
               <DetailRow icon={<Clock size={15} />} label="Last Login" value={formatDateTime(user.last_login_at)} />
             </div>
@@ -1208,10 +1317,29 @@ function UserDetailsModal({
               </div>
             </div>
 
-            <div className="flex justify-end pt-1 pb-1">
-              <button onClick={onClose} className={btnSecondary}>
-                Close
-              </button>
+            <div className="flex justify-end gap-2 pt-1 pb-1">
+              {isEditing ? (
+                <>
+                  <button onClick={cancelEditing} className={btnSecondary} disabled={saving}>
+                    Cancel
+                  </button>
+                  <button onClick={saveEditing} className={btnPrimary} disabled={saving}>
+                    {saving ? <Loader2 size={15} className="animate-spin" /> : null}
+                    {saving ? "Saving..." : "Save"}
+                  </button>
+                </>
+              ) : (
+                <>
+                  {canEdit && (
+                    <button onClick={startEditing} className={btnSecondary}>
+                      Edit
+                    </button>
+                  )}
+                  <button onClick={onClose} className={btnSecondary}>
+                    Close
+                  </button>
+                </>
+              )}
             </div>
           </div>
         )}

@@ -1120,6 +1120,34 @@ async def face_scan(
             message="Face Recognized",
         )
 
+    if matched_user.sport_or_art and session.sport_or_art and matched_user.sport_or_art != session.sport_or_art:
+        await _attendance_audit(
+            db=db,
+            action="ATTENDANCE_ATTEMPT_INELIGIBLE",
+            description=(
+                f"Attendance blocked for {matched_user.full_name}: session '{session.name}' "
+                f"is '{session.sport_or_art}' but student is assigned to '{matched_user.sport_or_art}'"
+            ),
+            status="failure",
+            method="facial_recognition",
+            result="blocked",
+            failure_reason="Student not assigned to this sport/art",
+            student=matched_user,
+            session=session,
+            scan_type=body.scan_type,
+            performer=current_staff,
+        )
+        await db.commit()
+        return FaceScanResponse(
+            result=ScanResult.FAILED_RECOGNITION,
+            matched_user_id=user_id,
+            matched_user_name=matched_user.full_name,
+            confidence_score=match_result.confidence,
+            liveness_score=match_result.liveness_score,
+            processing_time_ms=processing_ms,
+            message="You are not assigned to this Sport/Art",
+        )
+
     active_sanction_result = await db.execute(
         select(Sanction)
         .where(
@@ -1195,19 +1223,21 @@ async def face_scan(
                 message="Already timed in for this session",
             )
         now = datetime.now(UTC)
-        hard_cutoff = session.scheduled_end + timedelta(minutes=session.grace_period_minutes)
-        if now > hard_cutoff:
+        sess_start = session.scheduled_start if session.scheduled_start.tzinfo else session.scheduled_start.replace(tzinfo=UTC)
+        sess_end = session.scheduled_end if session.scheduled_end.tzinfo else session.scheduled_end.replace(tzinfo=UTC)
+
+        if now < sess_start:
             await _attendance_audit(
                 db=db,
-                action="ATTENDANCE_ATTEMPT_OUTSIDE_ALLOWED_TIME",
+                action="ATTENDANCE_ATTEMPT_BEFORE_SESSION",
                 description=(
-                    f"Time-in attempt outside allowed window for {matched_user.full_name} "
-                    f"(session scheduled to end {session.scheduled_end.isoformat()})"
+                    f"Time-in attempt before session start for {matched_user.full_name} "
+                    f"(session '{session.name}' starts {sess_start.isoformat()})"
                 ),
                 status="failure",
                 method="facial_recognition",
                 result="blocked",
-                failure_reason="Check-in window has closed",
+                failure_reason="Attendance has not started yet",
                 student=matched_user,
                 session=session,
                 scan_type=body.scan_type,
@@ -1221,9 +1251,38 @@ async def face_scan(
                 confidence_score=match_result.confidence,
                 liveness_score=match_result.liveness_score,
                 processing_time_ms=processing_ms,
-                message="Attendance attempt outside allowed time",
+                message="Attendance has not started yet",
             )
-        grace_deadline = session.scheduled_start + timedelta(minutes=session.grace_period_minutes)
+
+        if now >= sess_end:
+            await _attendance_audit(
+                db=db,
+                action="ATTENDANCE_ATTEMPT_AFTER_SESSION_CLOSED",
+                description=(
+                    f"Time-in attempt after session end for {matched_user.full_name} "
+                    f"(session '{session.name}' ended {sess_end.isoformat()})"
+                ),
+                status="failure",
+                method="facial_recognition",
+                result="blocked",
+                failure_reason="Attendance period has ended",
+                student=matched_user,
+                session=session,
+                scan_type=body.scan_type,
+                performer=current_staff,
+            )
+            await db.commit()
+            return FaceScanResponse(
+                result=ScanResult.FAILED_RECOGNITION,
+                matched_user_id=user_id,
+                matched_user_name=matched_user.full_name,
+                confidence_score=match_result.confidence,
+                liveness_score=match_result.liveness_score,
+                processing_time_ms=processing_ms,
+                message="Attendance period has ended",
+            )
+
+        grace_deadline = sess_start + timedelta(minutes=session.grace_period_minutes)
         att_status = "present" if now <= grace_deadline else "late"
         record = AttendanceRecord(
             student_id=user_id,
@@ -1914,24 +1973,42 @@ async def qr_check_in(
         return _record_to_read(existing, session, student)
 
     now = datetime.now(UTC)
-    hard_cutoff = session.scheduled_end + timedelta(minutes=session.grace_period_minutes)
-    if now > hard_cutoff:
+    sess_start_qr = session.scheduled_start if session.scheduled_start.tzinfo else session.scheduled_start.replace(tzinfo=UTC)
+    sess_end_qr = session.scheduled_end if session.scheduled_end.tzinfo else session.scheduled_end.replace(tzinfo=UTC)
+
+    if now < sess_start_qr:
         await _attendance_audit(
             db=db,
-            action="ATTENDANCE_ATTEMPT_OUTSIDE_ALLOWED_TIME",
-            description=f"QR check-in blocked for {student.full_name}: outside allowed window for session '{session.name}'",
+            action="ATTENDANCE_ATTEMPT_BEFORE_SESSION",
+            description=f"QR check-in before session start for {student.full_name}: session '{session.name}' starts {sess_start_qr.isoformat()}",
             status="failure",
             method="qr_code",
             result="blocked",
-            failure_reason="Check-in window has closed",
+            failure_reason="Attendance has not started yet",
             student=student,
             session=session,
             performer=current_user,
         )
         await db.commit()
-        raise HTTPException(status_code=400, detail="Attendance attempt outside allowed time")
+        raise HTTPException(status_code=400, detail="Attendance has not started yet")
 
-    grace_deadline = session.scheduled_start + timedelta(minutes=session.grace_period_minutes)
+    if now >= sess_end_qr:
+        await _attendance_audit(
+            db=db,
+            action="ATTENDANCE_ATTEMPT_AFTER_SESSION_CLOSED",
+            description=f"QR check-in after session end for {student.full_name}: session '{session.name}' ended {sess_end_qr.isoformat()}",
+            status="failure",
+            method="qr_code",
+            result="blocked",
+            failure_reason="Attendance period has ended",
+            student=student,
+            session=session,
+            performer=current_user,
+        )
+        await db.commit()
+        raise HTTPException(status_code=400, detail="Attendance period has ended")
+
+    grace_deadline = sess_start_qr + timedelta(minutes=session.grace_period_minutes)
     att_status = "present" if now <= grace_deadline else "late"
     record = AttendanceRecord(
         student_id=student.id,

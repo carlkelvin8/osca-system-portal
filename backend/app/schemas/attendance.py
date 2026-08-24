@@ -1,7 +1,7 @@
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
-from pydantic import Base64Bytes, Field, field_validator
+from pydantic import Base64Bytes, Field, field_validator, model_validator
 
 from app.models.attendance import ActivityType, AttendanceScanType, ScanResult
 from app.schemas.common import OSCABaseModel
@@ -49,6 +49,15 @@ class SessionRead(OSCABaseModel):
     is_active: bool
     created_at: datetime
     attendance_count: int = 0
+
+    @model_validator(mode="after")
+    def _effective_active(self):
+        if self.is_active:
+            now = datetime.now(UTC)
+            end = self.scheduled_end if self.scheduled_end.tzinfo else self.scheduled_end.replace(tzinfo=UTC)
+            if now >= end:
+                self.is_active = False
+        return self
 
 
 class SessionStatsRead(OSCABaseModel):
