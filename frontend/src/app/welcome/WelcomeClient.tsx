@@ -198,13 +198,13 @@ export default function WelcomeClient() {
               pointerEvents: currentSlide === idx ? "auto" : "none",
             }}
           >
-            <Image
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
               src={slide.src}
               alt={slide.alt}
-              fill
-              style={{ objectFit: "cover" }}
-              priority={idx === 0}
-              sizes="100vw"
+              loading={idx === 0 ? "eager" : "eager"}
+              decoding="async"
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
             />
           </div>
         ))}
@@ -424,7 +424,8 @@ export default function WelcomeClient() {
 
             <div style={{ borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
               <div style={{ position: "relative", height: 180, overflow: "hidden", background: "#e7eaf0" }}>
-                <Image src="/osca_pics/osca_pic2.jpg" alt="OSCA" fill style={{ objectFit: "cover" }} />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/osca_pics/osca_pic2.jpg" alt="OSCA" loading="eager" decoding="async" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
                 <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "50%", background: "linear-gradient(transparent, rgba(13,31,60,0.7))" }} />
                 <div style={{ position: "absolute", bottom: 12, left: 12, display: "inline-block", padding: "5px 14px", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#0d1f3c", background: "#C9A84C", borderRadius: 50 }}>
                   Message

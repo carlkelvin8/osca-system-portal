@@ -2,7 +2,6 @@
 
 import { forwardRef, useState } from "react";
 import type { User } from "@/types";
-import { format, addYears } from "date-fns";
 
 interface DigitalIDProps {
   user: User;
@@ -23,14 +22,9 @@ const DigitalID = forwardRef<HTMLDivElement, DigitalIDProps>(
       student: "Student",
     };
 
-    const sportOrDept =
-      user.role === "pe_instructor"
-        ? user.department
-        : user.assigned_sport || user.sport_or_art;
-
-    const validThru = user.created_at
-      ? addYears(new Date(user.created_at), 1)
-      : addYears(new Date(), 1);
+    const idNumber = user.employee_id || user.student_id || "—";
+    const displayName = user.full_name;
+    const role = roleLabel[user.role] ?? user.role.replace("_", " ");
 
     return (
       <>
@@ -64,119 +58,96 @@ const DigitalID = forwardRef<HTMLDivElement, DigitalIDProps>(
           </div>
         )}
 
-      <div
-        ref={ref}
-        id="digital-id-card"
-        className="w-full max-w-[360px] rounded-2xl overflow-hidden shadow-xl bg-[#0d1f3c] text-white"
-        style={{ fontFamily: "Inter, system-ui, sans-serif", aspectRatio: "3.375 / 2.125" }}
-      >
-        <div className="h-[3px] bg-[#C9A84C]" />
-
-        <div className="flex items-center gap-3 px-5 pt-3.5 pb-2">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <div
+          ref={ref}
+          id="digital-id-card"
+          className="relative w-full max-w-[640px] overflow-hidden shadow-xl"
+          style={{
+            aspectRatio: "1011 / 638",
+            fontFamily: "Inter, system-ui, sans-serif",
+            containerType: "inline-size",
+          }}
+        >
+          {/* Full template background — never modified */}
           <img
-            src="/logo/osca-logo.png"
-            alt="OSCA"
-            className="w-9 h-9 rounded-full border-2 border-[#C9A84C] object-cover shrink-0"
+            src="/id_temp.png"
+            alt="OSCA Digital ID"
+            draggable={false}
+            className="absolute inset-0 w-full h-full object-cover select-none"
           />
-          <div className="min-w-0">
-            <p className="text-[11px] font-bold text-[#C9A84C] tracking-wider uppercase leading-tight">
-              OSCA Management System
-            </p>
-            <p className="text-[9px] text-white/50 leading-tight">
-              Office of Sports &amp; Cultural Affairs
-            </p>
-            <p className="text-[9px] text-white/40 leading-tight">
-              NAAP – Villamor Campus
-            </p>
+
+          {/* ROLE — x≈65, y≈220 on 1011×638 → 6.4%, 34.5% */}
+          <div
+            className="absolute font-bold uppercase"
+            style={{
+              left: "6.4%",
+              top: "34.5%",
+              color: "#FFFFFF",
+              fontSize: "3.3cqw",
+              letterSpacing: "0.06em",
+              lineHeight: 1.2,
+            }}
+          >
+            {role}
           </div>
-        </div>
 
-        <div className="mx-5 border-t border-white/10" />
+          {/* NAME — x≈65, y≈295 on 1011×638 → 6.4%, 46.2% */}
+          <div
+            className="absolute font-bold"
+            style={{
+              left: "6.4%",
+              top: "46.2%",
+              color: "#C9A84C",
+              fontSize: "4.75cqw",
+              lineHeight: 1.15,
+              maxWidth: "50%",
+              wordBreak: "break-word",
+            }}
+          >
+            {displayName}
+          </div>
 
-        <div className="flex items-stretch gap-4 px-5 py-3.5 flex-1">
-          <div className="flex items-center gap-3 flex-1 min-w-0">
-            <div className="w-[56px] h-[56px] rounded-full border-2 border-[#C9A84C] overflow-hidden shrink-0 bg-white/10 flex items-center justify-center">
-              {user.profile_picture_url ? (
-                <img
-                  src={user.profile_picture_url}
-                  alt={user.full_name}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <span className="text-lg font-bold text-[#C9A84C]">
-                  {user.full_name
-                    .split(" ")
-                    .map((w) => w[0])
-                    .join("")
-                    .slice(0, 2)
-                    .toUpperCase()}
-                </span>
-              )}
-            </div>
-            <div className="min-w-0 space-y-0.5">
-              <p className="font-bold text-[13px] leading-tight truncate">
-                {user.full_name}
-              </p>
-              <p className="text-[11px] text-[#C9A84C] font-medium leading-tight">
-                {roleLabel[user.role] ?? user.role.replace("_", " ")}
-              </p>
-              {sportOrDept && (
-                <p className="text-[10px] text-white/60 leading-tight truncate">
-                  {sportOrDept}
-                </p>
-              )}
-              <span
-                className={`inline-block mt-1 px-2 py-0.5 rounded-full text-[9px] font-semibold ${
-                  user.is_active
-                    ? "bg-green-500/20 text-green-300 border border-green-500/40"
-                    : "bg-red-500/20 text-red-300 border border-red-500/40"
-                }`}
-              >
-                {user.is_active ? "ACTIVE" : "INACTIVE"}
-              </span>
+          {/* ID NUMBER — x≈120, y≈485 → 11.9%, 76.0% */}
+          <div
+            className="absolute"
+            style={{ left: "11.9%", top: "76%" }}
+          >
+            <div
+              style={{
+                color: "rgba(255,255,255,0.7)",
+                fontSize: "2.37cqw",
+                lineHeight: 1.3,
+              }}
+            >
+              ID #: {idNumber}
             </div>
           </div>
 
+
+
+          {/* QR CODE — centered inside existing gold rounded rectangle on right */}
           {qrDataUrl && (
             <div
-              className="flex flex-col items-center justify-center shrink-0 cursor-pointer"
+              className="absolute flex items-center justify-center cursor-pointer"
+              style={{
+                left: "65.3%",
+                top: "31.3%",
+                width: "23.7%",
+                height: "37.6%",
+              }}
               onClick={() => setQrZoom(true)}
+              title="Click to enlarge QR code"
             >
-              <div className="bg-white rounded-xl p-2 shadow-sm hover:shadow-md transition-shadow">
-                <img
-                  src={qrDataUrl}
-                  alt="Static QR Code"
-                  className="w-[110px] h-[110px] rounded-lg"
-                />
-              </div>
-              <p className="text-[8px] text-white/40 mt-1.5 uppercase tracking-widest font-medium">
-                Static QR Code
-              </p>
+              <img
+                src={qrDataUrl}
+                alt="Static QR Code"
+                className="w-full h-full object-contain"
+                draggable={false}
+              />
             </div>
           )}
         </div>
-
-        <div className="mx-5 border-t border-white/10" />
-
-        <div className="flex items-center px-5 py-2.5 gap-4">
-          <div className="flex-1">
-            <p className="text-[8px] text-white/40 uppercase tracking-wider">
-              {user.role === "coach" ? "Coach ID" : user.role === "student" ? "Student ID" : "Employee ID"}
-            </p>
-            <p className="font-mono text-[11px] font-medium leading-tight">
-              {user.employee_id || user.student_id || "—"}
-            </p>
-          </div>
-          <div className="flex-1">
-            <p className="text-[8px] text-white/40 uppercase tracking-wider">
-              Valid Thru
-            </p>
-            <p className="font-mono text-[11px] font-medium leading-tight">
-              {format(validThru, "MMM d, yyyy")}
-            </p>
-          </div>
-        </div>
-      </div>
       </>
     );
   }

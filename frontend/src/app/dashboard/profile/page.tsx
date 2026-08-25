@@ -118,7 +118,7 @@ export default function ProfilePage() {
   const visibleRows = infoRows.filter((r) => r.value);
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="max-w-4xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">My Profile</h1>
         <p className="text-sm text-gray-500">Your account information</p>
@@ -166,50 +166,35 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {hasBorrowingQR && (
-        <div className="flex flex-col items-center gap-4">
-          {qrDataUrl && borrowingId ? (
-            <>
-              <DigitalID
-                ref={digitalIdRef}
-                user={user}
-                qrDataUrl={qrDataUrl}
-                borrowingQrCode={borrowingId.qr_code}
-              />
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={handleDownload}
-                  disabled={downloading}
-                  className="flex items-center gap-2 px-4 py-2 text-sm bg-[#0d1f3c] text-white rounded-lg hover:bg-[#16304f] transition disabled:opacity-50 font-medium"
-                >
-                  {downloading ? (
-                    <Loader2 size={14} className="animate-spin" />
-                  ) : (
-                    <Download size={14} />
-                  )}
-                  Download Digital ID
-                </button>
-                <button
-                  onClick={handlePrint}
-                  className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium"
-                >
-                  <Printer size={14} />
-                  Print Digital ID
-                </button>
-              </div>
-            </>
-          ) : loadingBid ? (
-            <div className="flex flex-col items-center gap-2 py-8">
-              <Loader2 size={24} className="animate-spin text-gray-400" />
-              <p className="text-sm text-gray-400">Generating your Digital ID&hellip;</p>
-            </div>
-          ) : (
-            <p className="text-sm text-gray-400 text-center py-4">
-              Unable to load Digital ID. Please try again later.
-            </p>
-          )}
+      <div className="flex flex-col items-center gap-4">
+        <DigitalID
+          ref={digitalIdRef}
+          user={user}
+          qrDataUrl={qrDataUrl}
+          borrowingQrCode={borrowingId?.qr_code ?? ""}
+        />
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleDownload}
+            disabled={downloading}
+            className="flex items-center gap-2 px-4 py-2 text-sm bg-[#0d1f3c] text-white rounded-lg hover:bg-[#16304f] transition disabled:opacity-50 font-medium"
+          >
+            {downloading ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Download size={14} />
+            )}
+            Download Digital ID
+          </button>
+          <button
+            onClick={handlePrint}
+            className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium"
+          >
+            <Printer size={14} />
+            Print Digital ID
+          </button>
         </div>
-      )}
+      </div>
 
       <div className="bg-white rounded-xl shadow-sm divide-y divide-gray-100">
         {visibleRows.map((row) => {
