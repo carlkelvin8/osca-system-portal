@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Standalone output for Docker
+  // Standalone output for Docker (Vercel handles this automatically)
   output: "standalone",
 
   // API URL from environment

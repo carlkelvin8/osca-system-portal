@@ -1,70 +1,86 @@
-# OSCA System — Railway Deploy Guide (Beginner-Friendly)
+# OSCA System — Deploy Guide (Vercel + Railway)
 
-> Free tier: **$5/month credit** — covers API + Frontend + Celery + MinIO + Postgres + Redis
-
----
-
-## PRE-REQUISITES
-- [ ] GitHub account (push this repo there)
-- [ ] Railway account (sign up free at https://railway.app)
-- [ ] Railway CLI installed: `npm i -g @railway/cli`
+> **Frontend** → Vercel (free, optimized for Next.js)
+> **Backend** → Railway ($5/month credit covers API + Celery + MinIO + Postgres + Redis)
 
 ---
 
-## STEP 1: Push to GitHub
+## OVERVIEW
 
-```bash
-cd /path/to/osca-management-system
-git add -A
-git commit -m "Add Railway deployment configs"
-git push origin main
+```
+┌─────────────────────────────────────────────────┐
+│  VERCEL (Frontend)                               │
+│  https://osca-system-portal.vercel.app           │
+│  Next.js 15 — auto-deploy on git push            │
+└───────────────────┬─────────────────────────────┘
+                    │ API calls
+┌───────────────────▼─────────────────────────────┐
+│  RAILWAY (Backend)                               │
+│  ┌─────┐ ┌──────┐ ┌───────┐ ┌───────┐ ┌─────┐ │
+│  │ API │ │Redis │ │Postgres│ │ MinIO │ │Celery│ │
+│  └─────┘ └──────┘ └───────┘ └───────┘ └─────┘ │
+└─────────────────────────────────────────────────┘
 ```
 
 ---
 
-## STEP 2: Create Railway Project
+## PART A: Deploy Frontend on VERCEL
+
+### A1. Go to Vercel
+
+1. Go to **https://vercel.com**
+2. Click **"Add New..."** → **"Project"**
+3. Import **`carlkelvin8/osca-system-portal`** from GitHub
+4. Configure:
+   - **Framework Preset**: Next.js
+   - **Root Directory**: `frontend`
+   - **Build Command**: `npm run build`
+   - **Output Directory**: `.next`
+5. Click **"Environment Variables"** and add:
+
+```
+NEXT_PUBLIC_API_URL = https://YOUR_API_URL.up.railway.app/api/v1
+```
+
+> ⚠️ Replace `YOUR_API_URL` with the actual Railway API URL (set this AFTER creating the Railway API service in Part B)
+
+6. Click **"Deploy"**
+7. Done! Your frontend is live at `https://osca-system-portal.vercel.app`
+
+> **Auto-deploy**: Every push to `main` auto-deploys to Vercel
+
+---
+
+## PART B: Deploy Backend on RAILWAY
+
+### B1. Create Railway Project
 
 1. Go to **https://railway.app/dashboard**
-2. Click **"New Project"**
-3. Select **"Empty Project"**
-4. Name it: **osca-system**
+2. Click **"+ New"** → **"Empty Project"**
+3. Name: **osca-system**
 
----
+### B2. Add PostgreSQL
 
-## STEP 3: Add PostgreSQL
+1. Click **"+ New"** → **"Database"** → **"PostgreSQL"**
+2. Go to PostgreSQL service → **Variables** tab → copy these values:
+   - `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`, `DATABASE_URL`
 
-1. In your project, click **"+ New"** → **"Database"** → **"PostgreSQL"**
-2. Railway auto-creates it
-3. Go to the PostgreSQL service → **Variables** tab → note these:
-   - `PGHOST`
-   - `PGPORT`
-   - `PGDATABASE`
-   - `PGUSER`
-   - `PGPASSWORD`
-   - `DATABASE_URL`
-
----
-
-## STEP 4: Add Redis
+### B3. Add Redis
 
 1. Click **"+ New"** → **"Database"** → **"Redis"**
-2. Go to Redis service → **Variables** tab → note these:
-   - `REDISHOST`
-   - `REDISPORT`
-   - `REDISPASSWORD`
-   - `REDIS_URL`
+2. Go to Redis service → **Variables** tab → copy:
+   - `REDISHOST`, `REDISPORT`, `REDISPASSWORD`, `REDIS_URL`
 
----
+### B4. Create API Service
 
-## STEP 5: Create API Service
-
-1. Click **"+ New"** → **"GitHub Repo"** → select your `osca-management-system` repo
-2. Name it: **api**
-3. Go to **Settings**:
-   - **Root Directory**: `backend`
-   - **Dockerfile Path**: `Dockerfile`
-   - **Watch Patterns**: leave default
-4. Go to **Variables** tab and paste these:
+1. Click **"+ New"** → **"GitHub Repo"** → select `osca-system-portal`
+2. Name: **api**
+3. **Settings** → Root Directory: `backend`
+4. **Settings** → Start Command:
+   ```
+   gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --workers 2 --bind 0.0.0.0:$PORT --timeout 120 --keep-alive 5 --access-logfile - --error-logfile -
+   ```
+5. **Variables** tab → paste these:
 
 ```
 APP_ENV=production
@@ -97,149 +113,141 @@ EMAIL_PROVIDER=resend
 EMAIL_FROM=OSCA System <osca@naap.edu.ph>
 ```
 
-5. Then **add the database variables** (copy from PostgreSQL + Redis Variables tabs):
-   - `DATABASE_URL` = paste from PostgreSQL (change `postgresql://` to `postgresql+asyncpg://`)
-   - `POSTGRES_HOST` = PGHOST value
-   - `POSTGRES_PORT` = PGPORT value
-   - `POSTGRES_DB` = PGDATABASE value
-   - `POSTGRES_USER` = PGUSER value
-   - `POSTGRES_PASSWORD` = PGPASSWORD value
-   - `REDIS_URL` = paste from Redis
-   - `REDIS_PASSWORD` = REDISPASSWORD value
-   - `CELERY_BROKER_URL` = `redis://:PASSWORD@HOST:PORT/1` (use Redis values)
-   - `CELERY_RESULT_BACKEND` = `redis://:PASSWORD@HOST:PORT/2` (use Redis values)
+6. **Also add** (from your generated secrets + plugin values):
 
-6. Also generate and set:
-   - `SECRET_KEY` = run `openssl rand -hex 32` in your terminal
-   - `ALLOWED_ORIGINS` = `https://YOUR FRONTEND URL` (set after frontend is created)
+```
+SECRET_KEY=99211ce72835c8e2ef81e4c34c342c61ac09aa6f9706ac6e2612d0621d5c30e4
+MINIO_ACCESS_KEY=b8f6bf8822b18171dec7
+MINIO_SECRET_KEY=7e20f20bef0d74d01087e55ac421653e
+```
 
-7. **MinIO credentials** (generate these):
-   - `MINIO_ACCESS_KEY` = run `openssl rand -hex 10`
-   - `MINIO_SECRET_KEY` = run `openssl rand -hex 16`
+7. **Database vars** (copy from PostgreSQL Variables tab, modify DATABASE_URL):
 
-8. Go to **Settings** → set **Start Command**:
-   ```
-   gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --workers 2 --bind 0.0.0.0:$PORT --timeout 120 --keep-alive 5 --access-logfile - --error-logfile -
-   ```
+```
+DATABASE_URL=postgresql+asyncpg://USER:PASS@HOST:PORT/DBNAME
+POSTGRES_HOST=PGHOST_VALUE
+POSTGRES_PORT=PGPORT_VALUE
+POSTGRES_DB=PGDATABASE_VALUE
+POSTGRES_USER=PGUSER_VALUE
+POSTGRES_PASSWORD=PGPASSWORD_VALUE
+```
 
----
+> ⚠️ Change `postgresql://` to `postgresql+asyncpg://` in DATABASE_URL!
 
-## STEP 6: Create Frontend Service
+8. **Redis vars** (copy from Redis Variables tab):
 
-1. Click **"+ New"** → **"GitHub Repo"** → select same repo
-2. Name it: **frontend**
-3. Go to **Settings**:
-   - **Root Directory**: `frontend`
-   - **Dockerfile Path**: `Dockerfile`
-   - **Docker Build Target**: `runner`
-4. Go to **Variables** tab:
-   ```
-   NODE_ENV=production
-   NEXT_PUBLIC_API_URL=https://YOUR_API_URL.up.railway.app/api/v1
-   ```
-   (Replace YOUR_API_URL with the actual API service URL from Railway)
+```
+REDIS_URL=REDIS_URL_VALUE
+REDIS_PASSWORD=REDISPASSWORD_VALUE
+CELERY_BROKER_URL=redis://:PASSWORD@HOST:PORT/1
+CELERY_RESULT_BACKEND=redis://:PASSWORD@HOST:PORT/2
+```
 
----
-
-## STEP 7: Create Celery Worker
+### B5. Create Celery Worker
 
 1. Click **"+ New"** → **"GitHub Repo"** → same repo
-2. Name it: **celery-worker**
-3. Go to **Settings**:
-   - **Root Directory**: `backend`
-   - **Dockerfile Path**: `Dockerfile`
-4. Go to **Variables** tab → paste **ALL the same variables as API service** (copy from API Variables tab)
-5. Go to **Settings** → set **Start Command**:
+2. Name: **celery-worker**
+3. Settings → Root Directory: `backend`
+4. Variables → **copy ALL variables from API service**
+5. Settings → Start Command:
    ```
    celery -A app.workers.celery_app worker --loglevel=info --concurrency=2
    ```
 
----
-
-## STEP 8: Create Celery Beat
+### B6. Create Celery Beat
 
 1. Click **"+ New"** → **"GitHub Repo"** → same repo
-2. Name it: **celery-beat**
-3. Settings: same as Celery Worker (Root Directory: `backend`, Dockerfile: `Dockerfile`)
-4. Variables: same as API service (copy all)
-5. Start Command:
+2. Name: **celery-beat**
+3. Settings → Root Directory: `backend`
+4. Variables → **copy ALL variables from API service**
+5. Settings → Start Command:
    ```
    celery -A app.workers.celery_app beat --loglevel=info
    ```
 
----
-
-## STEP 9: Create MinIO Service
+### B7. Create MinIO Service
 
 1. Click **"+ New"** → **"GitHub Repo"** → same repo
-2. Name it: **minio**
-3. Settings:
-   - **Root Directory**: `.` (root of repo)
-   - **Dockerfile Path**: `Dockerfile.minio`
-4. Variables:
+2. Name: **minio**
+3. Settings → Root Directory: `.` (root)
+4. Settings → Dockerfile Path: `Dockerfile.minio`
+5. Variables:
    ```
-   MINIO_ROOT_USER=YOUR_MINIO_ACCESS_KEY (same as API's MINIO_ACCESS_KEY)
-   MINIO_ROOT_PASSWORD=YOUR_MINIO_SECRET_KEY (same as API's MINIO_SECRET_KEY)
+   MINIO_ROOT_USER=b8f6bf8822b18171dec7
+   MINIO_ROOT_PASSWORD=7e20f20bef0d74d01087e55ac421653e
    ```
-5. Start Command:
+6. Settings → Start Command:
    ```
    server /data --console-address :9001
    ```
 
----
+### B8. Update MinIO Public Endpoint
 
-## STEP 10: Update API MinIO_PUBLIC_ENDPOINT
+After MinIO deploys, copy its public URL (e.g., `minio.up.railway.app`).
 
-After MinIO service is deployed, it gets a public URL like `minio.up.railway.app`.
-
-Go back to **API service** → Variables → add:
+Go to **API service** → Variables → add:
 ```
 MINIO_PUBLIC_ENDPOINT=minio.up.railway.app
 ```
-(Replace with the actual MinIO Railway URL)
+
+Also add to Celery Worker variables.
+
+### B9. Deploy All Railway Services
+
+Click **"Deploy"** on each service, or they auto-deploy on git push.
 
 ---
 
-## STEP 11: Update Frontend API URL + CORS
+## PART C: Connect Vercel ↔ Railway
 
-1. **API service** → Variables → set `ALLOWED_ORIGINS` to:
-   ```
-   https://YOUR_FRONTEND.up.railway.app
-   ```
+### C1. Update Vercel env var
 
-2. **Frontend service** → Variables → set `NEXT_PUBLIC_API_URL` to:
+1. Go to **Vercel** → your project → **Settings** → **Environment Variables**
+2. Set `NEXT_PUBLIC_API_URL` to:
    ```
-   https://YOUR_API.up.railway.app/api/v1
+   https://api.up.railway.app/api/v1
    ```
+3. Click **"Redeploy"**
+
+### C2. Update Railway CORS
+
+1. Go to **Railway** → API service → **Variables**
+2. Set `ALLOWED_ORIGINS` to:
+   ```
+   https://osca-system-portal.vercel.app
+   ```
+3. Redeploy the API service
+
+### C3. Update Frontend image patterns
+
+Update `frontend/next.config.ts` to allow Railway MinIO images:
+
+```ts
+images: {
+  remotePatterns: [
+    { protocol: "http",  hostname: "localhost", port: "9000" },
+    { protocol: "https", hostname: "*.up.railway.app" },
+  ],
+},
+```
 
 ---
 
-## STEP 12: Deploy All Services
+## PART D: Run Migrations & Seed
 
-1. Go to each service → click **"Deploy"** button (or they auto-deploy on git push)
-2. Wait for all services to show "Deployed" (green)
-
----
-
-## STEP 13: Run Migrations
-
-In your terminal:
 ```bash
+# Install Railway CLI
+npm i -g @railway/cli
 railway login
-railway link  # select your osca-system project
+railway link  # select osca-system
 
 # Run migrations
 railway run --service api alembic upgrade head
 
 # Seed admin user
 railway run --service api python -m app.scripts.seed
-```
 
----
-
-## STEP 14: Seed MinIO Buckets
-
-```bash
+# Init MinIO buckets
 railway run --service api python -m app.scripts.init_storage
 ```
 
@@ -247,10 +255,22 @@ railway run --service api python -m app.scripts.init_storage
 
 ## DONE! 🎉
 
-- **Frontend**: `https://YOUR_FRONTEND.up.railway.app`
-- **API Health**: `https://YOUR_API.up.railway.app/health`
-- **MinIO Console**: `https://YOUR_MINIO.up.railway.app` (port 9001)
-- **Login**: admin / (whatever you set in seed)
+| Service | URL |
+|---------|-----|
+| **Frontend** | `https://osca-system-portal.vercel.app` |
+| **API** | `https://api.up.railway.app/health` |
+| **MinIO Console** | `https://minio.up.railway.app` |
+| **Login** | admin / (from seed) |
+
+---
+
+## Quick Reference — Generated Secrets
+
+```
+SECRET_KEY=99211ce72835c8e2ef81e4c34c342c61ac09aa6f9706ac6e2612d0621d5c30e4
+MINIO_ACCESS_KEY=b8f6bf8822b18171dec7
+MINIO_SECRET_KEY=7e20f20bef0d74d01087e55ac421653e
+```
 
 ---
 
@@ -258,9 +278,10 @@ railway run --service api python -m app.scripts.init_storage
 
 | Problem | Fix |
 |---------|-----|
-| API won't start | Check Logs tab. Usually missing env var. |
-| Database connection error | Make sure DATABASE_URL uses `postgresql+asyncpg://` |
-| Frontend can't reach API | Check NEXT_PUBLIC_API_URL and ALLOWED_ORIGINS |
-| Face recognition slow | Normal — insightface downloads ~300MB model on first start |
-| MinIO 403 on images | Set MINIO_PUBLIC_ENDPOINT to MinIO's Railway URL |
-| Out of free credit | Upgrade or move to Oracle Cloud Free Tier |
+| Frontend shows "Failed to fetch" | Check `NEXT_PUBLIC_API_URL` in Vercel env vars |
+| CORS error on API | Set `ALLOWED_ORIGINS` in Railway API vars |
+| API won't start | Check Logs tab — usually missing env var |
+| Database error | DATABASE_URL must use `postgresql+asyncpg://` |
+| Face recognition slow | Normal — downloads ~300MB model on first start |
+| MinIO images broken | Set `MINIO_PUBLIC_ENDPOINT` to MinIO Railway URL |
+| Vercel deploy fails | Check build logs — usually missing `NEXT_PUBLIC_API_URL` |
