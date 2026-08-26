@@ -87,7 +87,8 @@ class StorageService:
         )
 
     def get_presigned_url(self, bucket: str, key: str, expires_in: int = 3600) -> str:
-        if self._scheme != "https" and settings.MINIO_PUBLIC_ENDPOINT == settings.MINIO_ENDPOINT:
+        public_ep = settings.MINIO_PUBLIC_ENDPOINT or settings.MINIO_ENDPOINT
+        if self._scheme != "https" and public_ep == settings.MINIO_ENDPOINT:
             return self._client.generate_presigned_url(
                 "get_object",
                 Params={"Bucket": bucket, "Key": key},
@@ -96,7 +97,7 @@ class StorageService:
 
         public_client = boto3.client(
             "s3",
-            endpoint_url=f"{self._scheme}://{settings.MINIO_PUBLIC_ENDPOINT}",
+            endpoint_url=f"{self._scheme}://{public_ep}",
             aws_access_key_id=settings.MINIO_ACCESS_KEY,
             aws_secret_access_key=settings.MINIO_SECRET_KEY,
             config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
