@@ -60,12 +60,13 @@ COPY --chown=appuser:appuser . .
 
 EXPOSE 8000
 
-# Production: Gunicorn with multiple Uvicorn workers
+# Production: Gunicorn with a single Uvicorn worker + threads (insightface is memory-heavy)
 CMD ["gunicorn", "app.main:app", \
      "--worker-class", "uvicorn.workers.UvicornWorker", \
-     "--workers", "4", \
+     "--workers", "1", \
+     "--threads", "4", \
      "--bind", "0.0.0.0:8000", \
-     "--timeout", "120", \
+     "--timeout", "180", \
      "--keep-alive", "5", \
      "--access-logfile", "-", \
      "--error-logfile", "-"]
