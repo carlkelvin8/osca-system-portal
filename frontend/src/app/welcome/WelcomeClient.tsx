@@ -144,13 +144,13 @@ export default function WelcomeClient() {
     <div style={{ fontFamily: "'Inter', system-ui, sans-serif", background: "#ffffff", color: "#0f1b2d", minHeight: "100vh" }}>
      <nav style={{ background: "#0d1f3c", borderTop: "3px solid #C9A84C", borderBottom: "3px solid #C9A84C", position: "sticky", top: 0, zIndex: 100 }}>
   <div style={{ width: "94%", maxWidth: 1600, margin: "0 auto", padding: "10px 24px 10px 8px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-    <Link href="/" style={{ display: "flex", alignItems: "center", gap: 6, textDecoration: "none" }}>
-      <div style={{ width: 44, height: 44, borderRadius: "50%", border: "2px solid #C9A84C", overflow: "hidden", background: "#132a4d", flexShrink: 0 }}>
+    <Link href="/" style={{ display: "flex", alignItems: "center", gap: 6, textDecoration: "none", minWidth: 0 }}>
+      <div style={{ width: winW < 480 ? 32 : 44, height: winW < 480 ? 32 : 44, borderRadius: "50%", border: "2px solid #C9A84C", overflow: "hidden", background: "#132a4d", flexShrink: 0 }}>
         <Image src="/logo/osca-logo.png" alt="OSCA Crest" width={44} height={44} style={{ objectFit: "cover", width: "100%", height: "100%" }} priority />
       </div>
-      <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.25 }}>
-        <span style={{ fontSize: 14, fontWeight: 800, color: "#fff" }}>OSCA Management System</span>
-        <span style={{ fontSize: 10, fontWeight: 500, color: "#C9A84C" }}>NAAP · Villamor Campus</span>
+      <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.25, minWidth: 0 }}>
+        <span style={{ fontSize: winW < 480 ? 12 : 14, fontWeight: 800, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>OSCA Management System</span>
+        <span style={{ fontSize: winW < 480 ? 9 : 10, fontWeight: 500, color: "#C9A84C", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>NAAP · Villamor Campus</span>
       </div>
     </Link>
 
@@ -180,11 +180,12 @@ export default function WelcomeClient() {
         onMouseLeave={() => setIsPaused(false)}
         style={{
           position: "relative",
-          minHeight: winW < 480 ? 360 : 440,
+          minHeight: winW < 480 ? 480 : winW < 768 ? 460 : 440,
           overflow: "hidden",
           display: "flex",
           alignItems: "flex-end",
-          padding: "0 0 48px",
+          padding: "0 0 56px",
+          background: "#0d1f3c",
         }}
       >
         {HERO_SLIDES.map((slide, idx) => (
@@ -213,12 +214,15 @@ export default function WelcomeClient() {
           style={{
             position: "absolute",
             inset: 0,
-            background: "linear-gradient(180deg, rgba(13,31,60,0.3) 0%, rgba(13,31,60,0.8) 100%)",
+            background: winW < 480
+              ? "linear-gradient(180deg, rgba(6,14,28,0.45) 0%, rgba(6,14,28,0.5) 30%, rgba(6,14,28,0.82) 68%, rgba(6,14,28,0.92) 100%)"
+              : "linear-gradient(180deg, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.5) 40%, rgba(0,0,0,0.7) 100%)",
             pointerEvents: "none",
           }}
         />
 
-        <button
+          {winW >= 640 && (
+            <><button
           onClick={goPrev}
           aria-label="Previous slide"
           style={{
@@ -275,17 +279,22 @@ export default function WelcomeClient() {
           onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(0,0,0,0.35)"; }}
         >
           &#8250;
-        </button>
+        </button></>
+          )}
 
         <div
           style={{
             position: "absolute",
-            bottom: 16,
+            bottom: 24,
             left: "50%",
             transform: "translateX(-50%)",
             zIndex: 10,
             display: "flex",
             gap: 8,
+            padding: "6px 10px",
+            borderRadius: 50,
+            background: "rgba(0,0,0,0.25)",
+            backdropFilter: "blur(3px)",
           }}
         >
           {HERO_SLIDES.map((_, idx) => (
@@ -307,29 +316,29 @@ export default function WelcomeClient() {
           ))}
         </div>
 
-        <div style={{ position: "relative", zIndex: 5, width: "94%", maxWidth: 1600, margin: "0 auto", padding: "0 24px" }}>
+        <div style={{ position: "relative", zIndex: 5, width: "94%", maxWidth: 1600, margin: "0 auto", padding: winW < 480 ? "0 20px" : "0 24px" }}>
           <motion.h1
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}
-            style={{ fontSize: "clamp(28px, 5vw, 46px)", fontWeight: 900, lineHeight: 1.15, color: "#fff", textShadow: "0 2px 12px rgba(0,0,0,0.4)", marginBottom: 10 }}
+            style={{ fontSize: "clamp(20px, 4.6vw, 46px)", fontWeight: 900, lineHeight: 1.2, color: "#fff", textShadow: "0 2px 14px rgba(0,0,0,0.85), 0 1px 3px rgba(0,0,0,0.9)", marginBottom: 8 }}
           >
             WELCOME TO THE
           </motion.h1>
           <motion.h1
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.1 }}
-            style={{ fontSize: "clamp(28px, 5vw, 46px)", fontWeight: 900, lineHeight: 1.15, marginBottom: 24 }}
+            style={{ fontSize: "clamp(22px, 5vw, 46px)", fontWeight: 900, lineHeight: winW < 480 ? 1.25 : 1.15, marginBottom: 20 }}
           >
            <span style={{ color: "#C9A84C" }}>
-  OFFICE <span style={{ color: "#fff", textShadow: "0 2px 12px rgba(0,0,0,0.4)" }}>of</span> SPORTS <span style={{ color: "#fff", textShadow: "0 2px 12px rgba(0,0,0,0.4)" }}>AND</span> CULTURAL AFFAIRS
+  OFFICE <span style={{ color: "#fff", textShadow: "0 2px 14px rgba(0,0,0,0.85), 0 1px 3px rgba(0,0,0,0.9)" }}>of</span> SPORTS <span style={{ color: "#fff", textShadow: "0 2px 14px rgba(0,0,0,0.85), 0 1px 3px rgba(0,0,0,0.9)" }}>AND</span> CULTURAL AFFAIRS
 </span>
           </motion.h1>
           <motion.div
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.2 }}
-            style={{ display: "flex", gap: 12, flexWrap: "wrap" }}
+            style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 44 }}
           >
-            <Link href="/register" style={{ padding: "14px 28px", fontWeight: 700, fontSize: 13, letterSpacing: "0.02em", color: "#fff", background: "#1d4ed8", borderRadius: 6, textDecoration: "none", textTransform: "uppercase" }}>
+            <Link href="/register" style={{ padding: winW < 480 ? "12px 20px" : "14px 28px", fontWeight: 700, fontSize: 13, letterSpacing: "0.02em", color: "#fff", background: "#1d4ed8", borderRadius: 6, textDecoration: "none", textTransform: "uppercase" }}>
               Create Account
             </Link>
-            <Link href="/login" style={{ padding: "14px 28px", fontWeight: 700, fontSize: 13, letterSpacing: "0.02em", color: "#0d1f3c", background: "#C9A84C", borderRadius: 6, textDecoration: "none", textTransform: "uppercase" }}>
+            <Link href="/login" style={{ padding: winW < 480 ? "12px 20px" : "14px 28px", fontWeight: 700, fontSize: 13, letterSpacing: "0.02em", color: "#0d1f3c", background: "#C9A84C", borderRadius: 6, textDecoration: "none", textTransform: "uppercase" }}>
               Sign In
             </Link>
           </motion.div>
@@ -338,9 +347,9 @@ export default function WelcomeClient() {
 
       <section style={{ width: "94%", maxWidth: 1600, margin: "0 auto", padding: winW < 480 ? "8px 12px 0" : "8px 24px 0" }}>
         <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
-          style={{ display: "grid", gridTemplateColumns: winW < 768 ? "1fr" : "260px 1fr 260px", gap: 22, alignItems: "start" }}>
+          style={{ display: "grid", gridTemplateColumns: winW < 768 ? "1fr" : "260px 1fr 260px", gap: winW < 480 ? 16 : 22, alignItems: "start" }}>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: winW < 480 ? 16 : 22 }}>
 
             <AnnouncementsCarousel items={carouselItems} />
 
@@ -393,12 +402,12 @@ export default function WelcomeClient() {
             </div>
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: winW < 480 ? 16 : 22 }}>
             <div style={{ borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
               <div style={{ background: "#0d1f3c", padding: "14px 20px" }}>
                 <h3 style={{ fontSize: 12, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: "0.08em" }}>Quick Links</h3>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: winW < 480 ? "1fr" : "1fr 1fr", gap: 10, padding: 16, background: "#fff" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, padding: 16, background: "#fff" }}>
                 {[
                   { label: "Player Registration", icon: UserPlus, href: "/register" },
                   { label: "Event Calendar", icon: Calendar, href: "#" },
@@ -439,7 +448,7 @@ export default function WelcomeClient() {
             </div>
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: winW < 480 ? 16 : 22 }}>
             <div style={{ borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
               <div style={{ background: "#0d1f3c", padding: "14px 20px" }}>
                 <h3 style={{ fontSize: 12, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: "0.08em" }}>Follow Us</h3>
@@ -490,7 +499,7 @@ export default function WelcomeClient() {
         </motion.div>
       </section>
 
-      <section id="news" style={{ padding: "60px 24px", width: "94%", maxWidth: 1600, margin: "0 auto" }}>
+      <section id="news" style={{ padding: winW < 480 ? "36px 16px" : "60px 24px", width: "94%", maxWidth: 1600, margin: "0 auto" }}>
         <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} style={{ textAlign: "center", marginBottom: 40 }}>
           <span style={{ display: "inline-block", padding: "5px 16px", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#0d1f3c", background: "rgba(201,168,76,0.15)", borderRadius: 50, marginBottom: 14 }}>Latest News</span>
           <h2 style={{ fontSize: "clamp(22px, 3.5vw, 32px)", fontWeight: 800, color: "#0d1f3c" }}>News & Announcements</h2>
@@ -511,7 +520,7 @@ export default function WelcomeClient() {
         )}
       </section>
 
-      <section id="about" style={{ padding: "60px 24px", width: "94%", maxWidth: 1600, margin: "0 auto" }}>
+      <section id="about" style={{ padding: winW < 480 ? "36px 16px" : "60px 24px", width: "94%", maxWidth: 1600, margin: "0 auto" }}>
         <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} style={{ textAlign: "center", marginBottom: 40 }}>
           <span style={{ display: "inline-block", padding: "5px 16px", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#0d1f3c", background: "rgba(201,168,76,0.15)", borderRadius: 50, marginBottom: 14 }}>About OSCA</span>
           <h2 style={{ fontSize: "clamp(22px, 3.5vw, 32px)", fontWeight: 800, color: "#0d1f3c" }}>Who We Are</h2>
@@ -535,7 +544,7 @@ export default function WelcomeClient() {
         </div>
       </section>
 
-      <section id="sports" style={{ padding: "60px 24px", width: "94%", maxWidth: 1600, margin: "0 auto", background: "#fafafa" }}>
+      <section id="sports" style={{ padding: winW < 480 ? "36px 16px" : "60px 24px", width: "94%", maxWidth: 1600, margin: "0 auto", background: "#fafafa" }}>
         <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} style={{ textAlign: "center", marginBottom: 40 }}>
           <span style={{ display: "inline-block", padding: "5px 16px", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#0d1f3c", background: "rgba(201,168,76,0.15)", borderRadius: 50, marginBottom: 14 }}>OSCA Personnel</span>
           <h2 style={{ fontSize: "clamp(22px, 3.5vw, 32px)", fontWeight: 800, color: "#0d1f3c" }}>Our Team</h2>
@@ -607,7 +616,7 @@ export default function WelcomeClient() {
         </motion.div>
       </section>
 
-      <section id="contact" style={{ padding: "56px 24px", maxWidth: 600, margin: "0 auto", textAlign: "center" }}>
+      <section id="contact" style={{ padding: winW < 480 ? "32px 16px" : "56px 24px", maxWidth: 600, margin: "0 auto", textAlign: "center" }}>
         <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}>
           <span style={{ display: "inline-block", padding: "5px 16px", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#0d1f3c", background: "rgba(201,168,76,0.15)", borderRadius: 50, marginBottom: 16 }}>Contact</span>
           <h2 style={{ fontSize: 22, fontWeight: 800, color: "#0d1f3c", marginBottom: 20 }}>OFFICE INFORMATION</h2>
@@ -618,14 +627,14 @@ export default function WelcomeClient() {
         </motion.div>
       </section>
 
-      <footer style={{ background: "#0d1f3c", borderTop: "3px solid #C9A84C", padding: "24px" }}>
-        <div style={{ width: "94%", maxWidth: 1600, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <footer style={{ background: "#0d1f3c", borderTop: "3px solid #C9A84C", padding: winW < 480 ? "24px 16px" : "24px" }}>
+        <div style={{ width: "94%", maxWidth: 1600, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: winW < 480 ? 14 : 12, flexDirection: winW < 480 ? "column" : "row", textAlign: winW < 480 ? "center" : "left" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
             <Image src="/logo/osca-logo.png" alt="OSCA" width={28} height={28} style={{ borderRadius: "50%" }} />
             <span style={{ fontSize: 12, fontWeight: 600, color: "#C9A84C" }}>OSCA Management System</span>
           </div>
-          <p style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>© {new Date().getFullYear()} Office of Sports and Cultural Affairs — National Aviation Academy of the Philippines</p>
-          <div style={{ display: "flex", gap: 16 }}>
+          <p style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", margin: winW < 480 ? "0 auto" : 0 }}>© {new Date().getFullYear()} Office of Sports and Cultural Affairs — National Aviation Academy of the Philippines</p>
+          <div style={{ display: "flex", gap: 16, justifyContent: "center" }}>
             <a href="#" style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Privacy</a>
             <a href="#" style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Terms</a>
           </div>
@@ -694,6 +703,7 @@ function NewsCarousel({ items, onOpenLightbox }: { items: NewsItem[]; onOpenLigh
   const n = items.length;
   const [active, setActive] = useState(0);
   const [paused, setPaused] = useState(false);
+  const [touchPaused, setTouchPaused] = useState(false);
   const [winW, setWinW] = useState(0);
 
   useEffect(() => {
@@ -709,10 +719,27 @@ function NewsCarousel({ items, onOpenLightbox }: { items: NewsItem[]; onOpenLigh
   const next = useCallback(() => setActive((p) => (p + 1) % n), [n]);
 
   useEffect(() => {
-    if (n <= 1 || paused) return;
+    if (n <= 1 || paused || touchPaused) return;
     const t = setInterval(next, 6000);
     return () => clearInterval(t);
-  }, [n, paused, next]);
+  }, [n, paused, touchPaused, next]);
+
+  const resumeTouchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (resumeTouchTimer.current) clearTimeout(resumeTouchTimer.current);
+    };
+  }, []);
+
+  const handleTouchStart = useCallback(() => {
+    setTouchPaused(true);
+    if (resumeTouchTimer.current) clearTimeout(resumeTouchTimer.current);
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    if (resumeTouchTimer.current) clearTimeout(resumeTouchTimer.current);
+    resumeTouchTimer.current = setTimeout(() => setTouchPaused(false), 4000);
+  }, []);
 
   if (n === 0) return null;
 
@@ -733,6 +760,8 @@ function NewsCarousel({ items, onOpenLightbox }: { items: NewsItem[]; onOpenLigh
     <div
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
       style={{ position: "relative" }}
     >
       <div style={{ position: "relative", width: containerW, height: cardH, margin: "0 auto", overflow: "hidden", borderRadius: 14 }}>
@@ -746,7 +775,7 @@ function NewsCarousel({ items, onOpenLightbox }: { items: NewsItem[]; onOpenLigh
           return (
             <div
               key={i}
-              onClick={adjacent ? () => setActive(i) : undefined}
+              onClick={!isMobile && adjacent ? () => setActive(i) : undefined}
               style={{
                 position: "absolute",
                 left: "50%",
@@ -758,11 +787,11 @@ function NewsCarousel({ items, onOpenLightbox }: { items: NewsItem[]; onOpenLigh
                 filter: focused ? "none" : `blur(${adjacent ? sideBlur : 5}px)`,
                 zIndex: focused ? 3 : 1,
                 transition: "transform 0.7s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.6s ease, filter 0.6s ease",
-                pointerEvents: focused || adjacent ? "auto" : "none",
-                cursor: adjacent ? "pointer" : "default",
+                pointerEvents: isMobile ? (focused ? "auto" : "none") : focused || adjacent ? "auto" : "none",
+                cursor: !isMobile && adjacent ? "pointer" : "default",
               }}
             >
-              <div style={{ width: "100%", height: "100%", pointerEvents: adjacent ? "none" : "auto" }}>
+              <div style={{ width: "100%", height: "100%", pointerEvents: isMobile ? "auto" : adjacent ? "none" : "auto" }}>
                 <CarouselCard item={item} onOpenLightbox={() => onOpenLightbox(item.images)} />
               </div>
             </div>
