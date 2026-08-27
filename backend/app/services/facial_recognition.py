@@ -32,14 +32,32 @@ class FacialRecognitionService:
         self._app: Any | None = None
         self._liveness_model: Any | None = None
         self._initialized = False
+        self._load_lock = asyncio.Lock()
         self._storage = StorageService()
 
+    @property
+    def initialized(self) -> bool:
+        return self._initialized
+
+    @property
+    def model_family(self) -> str:
+        return "insightface_arcface_buffalo_l"
+
     async def initialize(self) -> None:
+        # Lazy: models load on first FR use so the app can boot and serve
+        # (login, reports, admin) without holding the memory-heavy face model.
+        # Kept as a no-op hook for compatibility.
+        pass
+
+    async def _ensure_models(self) -> None:
         if self._initialized:
             return
-        await asyncio.get_event_loop().run_in_executor(None, self._load_models)
-        self._initialized = True
-        logger.info("fr_initialized", model=settings.FR_MODEL, gpu=settings.FR_GPU_ENABLED)
+        async with self._load_lock:
+            if self._initialized:
+                return
+            await asyncio.get_event_loop().run_in_executor(None, self._load_models)
+            self._initialized = True
+            logger.info("fr_initialized", model=settings.FR_MODEL, gpu=settings.FR_GPU_ENABLED)
 
     def _load_models(self) -> None:
         import insightface
@@ -102,6 +120,8 @@ class FacialRecognitionService:
     ) -> tuple[list[float], str, list[str]]:
         loop = asyncio.get_event_loop()
 
+        await self._ensure_models()
+
         def _compute():
             embeddings = []
             for img_bytes in images_bytes:
@@ -134,7 +154,7 @@ class FacialRecognitionService:
             )
             minio_keys.append(key)
 
-        return embedding, "insightface_arcface_buffalo_l", minio_keys
+        return embedding, self.model_family, minio_keys
 
     async def identify_face(
         self,
@@ -149,6 +169,8 @@ class FacialRecognitionService:
         _sim_threshold = similarity_threshold if similarity_threshold is not None else settings.FACE_SIMILARITY_THRESHOLD
         _live_threshold = liveness_threshold if liveness_threshold is not None else settings.FR_LIVENESS_THRESHOLD
         _live_enabled = liveness_enabled if liveness_enabled is not None else settings.FR_LIVENESS_ENABLED
+
+        await self._ensure_models()
 
         def _run():
             try:
