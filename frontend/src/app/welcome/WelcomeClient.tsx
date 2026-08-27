@@ -205,7 +205,7 @@ export default function WelcomeClient() {
               alt={slide.alt}
               loading={idx === 0 ? "eager" : "eager"}
               decoding="async"
-              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain" }}
             />
           </div>
         ))}
@@ -215,8 +215,8 @@ export default function WelcomeClient() {
             position: "absolute",
             inset: 0,
             background: winW < 480
-              ? "linear-gradient(180deg, rgba(6,14,28,0.45) 0%, rgba(6,14,28,0.5) 30%, rgba(6,14,28,0.82) 68%, rgba(6,14,28,0.92) 100%)"
-              : "linear-gradient(180deg, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.5) 40%, rgba(0,0,0,0.7) 100%)",
+              ? "linear-gradient(180deg, rgba(6,14,28,0.28) 0%, rgba(6,14,28,0.32) 30%, rgba(6,14,28,0.62) 68%, rgba(6,14,28,0.85) 100%)"
+              : "linear-gradient(180deg, rgba(6,14,28,0.22) 0%, rgba(6,14,28,0.3) 40%, rgba(6,14,28,0.55) 100%)",
             pointerEvents: "none",
           }}
         />
