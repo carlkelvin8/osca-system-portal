@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import AnyHttpUrl, Field, field_validator
+from pydantic import AnyHttpUrl, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -24,18 +24,18 @@ class Settings(BaseSettings):
     API_PREFIX: str = "/api/v1"
     ALLOWED_ORIGINS: list[str] = ["http://localhost:3000"]
 
-    @field_validator("ALLOWED_ORIGINS", mode="before")
+    @model_validator(mode="before")
     @classmethod
-    def parse_origins(cls, v: str | list) -> list[str]:
-        if isinstance(v, list):
-            return v
+    def parse_origins(cls, data: dict) -> dict:
+        v = data.get("ALLOWED_ORIGINS")
         if isinstance(v, str):
             stripped = v.strip()
             if stripped.startswith("["):
                 import json
-                return json.loads(stripped)
-            return [origin.strip() for origin in stripped.split(",") if origin.strip()]
-        return v
+                data["ALLOWED_ORIGINS"] = json.loads(stripped)
+            else:
+                data["ALLOWED_ORIGINS"] = [o.strip() for o in stripped.split(",") if o.strip()]
+        return data
 
     SECRET_KEY: str = Field(min_length=32)
     ALGORITHM: str = "HS256"
