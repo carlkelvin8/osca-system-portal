@@ -1,8 +1,6 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Standalone output for Docker (Vercel handles this automatically)
-  output: "standalone",
 
   // API URL from environment
   env: {
@@ -29,7 +27,11 @@ const nextConfig: NextConfig = {
       {
         protocol: "http",
         hostname: "localhost",
-        port: "9000",  // MinIO
+        port: "9000",
+      },
+      {
+        protocol: "https",
+        hostname: "**.up.railway.app",
       },
     ],
   },
