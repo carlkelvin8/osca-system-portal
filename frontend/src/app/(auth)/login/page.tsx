@@ -40,7 +40,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-[#081428] relative overflow-hidden">
-      <div className="flex w-full md:w-[42%] shrink-0 relative items-center justify-center py-12 md:py-0 bg-[#0d1f3c] border-b-4 md:border-b-0 md:border-r-4 border-[#C9A84C] overflow-hidden">
+      <div className="flex w-full md:w-[42%] shrink-0 relative items-center justify-center pt-12 pb-6 md:py-0 bg-[#0d1f3c] border-b-4 md:border-b-0 md:border-r-4 border-[#C9A84C] overflow-hidden">
         <div className="absolute -top-[15%] -left-[15%] w-[60%] h-[60%] rounded-full opacity-20 animate-pulse" style={{ background: "radial-gradient(circle, #C9A84C, transparent 70%)", filter: "blur(90px)" }} />
         <div className="absolute -bottom-[15%] -right-[10%] w-[55%] h-[55%] rounded-full opacity-15 animate-pulse" style={{ background: "radial-gradient(circle, #1d4ed8, transparent 70%)", filter: "blur(90px)" }} />
 
@@ -67,7 +67,7 @@ export default function LoginPage() {
           <p className="text-sm text-[#C9A84C] font-semibold mt-3 tracking-[0.2em] uppercase">
             NAAP · Villamor Campus
           </p>
-          <div className="w-16 h-1 bg-[#C9A84C] rounded-full mt-6" />
+          <div className="hidden md:block w-16 h-1 bg-[#C9A84C] rounded-full mt-6" />
           <p className="text-xs text-white/50 mt-6 max-w-xs leading-relaxed">
             Empowering student athletes and artists through excellence,
             discipline, and creativity.
