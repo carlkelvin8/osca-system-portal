@@ -39,8 +39,8 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex bg-[#081428] relative overflow-hidden">
-      <div className="hidden md:flex w-[42%] shrink-0 relative items-center justify-center bg-[#0d1f3c] border-r-4 border-[#C9A84C] overflow-hidden">
+    <div className="min-h-screen flex flex-col md:flex-row bg-[#081428] relative overflow-hidden">
+      <div className="flex w-full md:w-[42%] shrink-0 relative items-center justify-center py-12 md:py-0 bg-[#0d1f3c] border-b-4 md:border-b-0 md:border-r-4 border-[#C9A84C] overflow-hidden">
         <div className="absolute -top-[15%] -left-[15%] w-[60%] h-[60%] rounded-full opacity-20 animate-pulse" style={{ background: "radial-gradient(circle, #C9A84C, transparent 70%)", filter: "blur(90px)" }} />
         <div className="absolute -bottom-[15%] -right-[10%] w-[55%] h-[55%] rounded-full opacity-15 animate-pulse" style={{ background: "radial-gradient(circle, #1d4ed8, transparent 70%)", filter: "blur(90px)" }} />
 
