@@ -12,22 +12,13 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.execute("""
-    DO $$
-    BEGIN
-        IF NOT EXISTS (
-            SELECT 1 FROM pg_enum e
-            JOIN pg_type t ON e.enumtypid = t.oid
-            WHERE t.typname = 'facility_status_enum' AND e.enumlabel = 'RESERVED'
-        ) THEN
-            ALTER TYPE facility_status_enum ADD VALUE 'RESERVED';
-        END IF;
-    END $$;
-    """)
+    op.execute("ALTER TYPE facility_status_enum ADD VALUE IF NOT EXISTS 'RESERVED'")
 
     op.execute("ALTER TABLE facilities ADD COLUMN IF NOT EXISTS image VARCHAR(500)")
 
-    status_type = PG_ENUM('PENDING', 'APPROVED', 'REJECTED', name='reservation_status_enum', create_type=False)
+    reservation_status_enum = PG_ENUM('PENDING', 'APPROVED', 'REJECTED', name='reservation_status_enum', create_type=True)
+    reservation_status_enum.create(op.get_bind(), checkfirst=True)
+
     op.execute("""
     CREATE TABLE IF NOT EXISTS venue_reservation_requests (
         id UUID NOT NULL,
