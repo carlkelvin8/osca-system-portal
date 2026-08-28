@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
@@ -7,7 +7,7 @@ import Image from "next/image";
 import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { UserPlus, Calendar, Trophy, Building2, Palette, Users, ExternalLink, ArrowRight, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { UserPlus, Calendar, Trophy, Building2, Palette, Users, ExternalLink, ArrowRight, X, ChevronLeft, ChevronRight, Swords, Target, Flame, Medal, Circle, Shield, Volleyball, Music, MicVocal, Guitar } from "lucide-react";
 import { announcementsApi } from "@/lib/api";
 import type { Announcement, PaginatedResponse } from "@/types";
 
@@ -54,6 +54,7 @@ export default function WelcomeClient() {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [lightbox, setLightbox] = useState<{ images: string[]; index: number } | null>(null);
+  const [teamModal, setTeamModal] = useState<"sports" | "culture" | null>(null);
   const [winW, setWinW] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -139,6 +140,261 @@ export default function WelcomeClient() {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [isPaused, goNext]);
+
+  const announcementsBlock = <AnnouncementsCarousel items={carouselItems} />;
+
+  const openTryoutsBlock = (
+    <div style={{ borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+      <div style={{ borderTop: "3px solid #C9A84C", padding: 20, background: "#fff" }}>
+        <h3 style={{ fontSize: 14, fontWeight: 800, color: "#0d1f3c", marginBottom: 8 }}>Open for Tryouts</h3>
+        <p style={{ fontSize: 12, color: "#5b6472", lineHeight: 1.6, marginBottom: 16 }}>
+          Showcase your talent and represent NAAP in various sports and cultural events.
+        </p>
+        <Link href="/register"
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 20px", fontSize: 11, fontWeight: 700, color: "#0d1f3c", background: "#C9A84C", borderRadius: 6, textDecoration: "none", textTransform: "uppercase" }}>
+          Sign Up Now <ArrowRight size={13} />
+        </Link>
+      </div>
+    </div>
+  );
+
+  const artistGroupsBlock = (
+    <div style={{ borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+      <div style={{ background: "#0d1f3c", padding: "14px 20px" }}>
+        <h3 style={{ fontSize: 12, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: "0.08em" }}>Follow Our Artist Groups</h3>
+      </div>
+      <div style={{ padding: "12px 0", background: "#fff", display: "flex", flexDirection: "column" }}>
+        {[
+          { name: "Hataw Himpapawid Dance Group", img: "/logo/HHDC.png", url: "https://www.facebook.com/HHDCOfficial" },
+          { name: "Himig Himpapawid Chorale", img: "/logo/HH.png", url: "https://www.facebook.com/profile.php?id=61584638812694" },
+          { name: "Musikang Himpapawid Live Band", img: "/logo/MH.png", url: "https://www.facebook.com/MHLBphilscavab" },
+        ].map((org, i) => (
+          <a
+            key={i}
+            href={org.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`Visit ${org.name} on Facebook`}
+            style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 20px", textDecoration: "none", color: "inherit", transition: "background 0.2s, box-shadow 0.2s" }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "#f8f9fb"; e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.06)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.boxShadow = "none"; }}
+          >
+            <div style={{ width: 42, height: 42, borderRadius: "50%", overflow: "hidden", flexShrink: 0, border: "2px solid #e7eaf0", background: "#f0f0f0" }}>
+              <img src={org.img} alt={org.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontSize: 12, fontWeight: 700, color: "#0d1f3c", lineHeight: 1.3, margin: 0 }}>{org.name}</p>
+              <p style={{ fontSize: 10, color: "#8a8f98", marginTop: 2, margin: "2px 0 0" }}>Official Facebook Page</p>
+            </div>
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="#1877F2" style={{ flexShrink: 0, transition: "fill 0.2s" }} onMouseEnter={(e) => { (e.currentTarget as SVGSVGElement).style.fill = "#1565C0"; }} onMouseLeave={(e) => { (e.currentTarget as SVGSVGElement).style.fill = "#1877F2"; }}>
+              <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+            </svg>
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+
+  const quickLinksBlock = (
+    <div style={{ borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+      <div style={{ background: "#0d1f3c", padding: "14px 20px" }}>
+        <h3 style={{ fontSize: 12, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: "0.08em" }}>Quick Links</h3>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, padding: 16, background: "#fff" }}>
+        {[
+          { label: "Player Registration", icon: UserPlus, href: "/register" },
+          { label: "Event Calendar", icon: Calendar, href: "#" },
+          { label: "Results & Standings", icon: Trophy, href: "#" },
+          { label: "Facility Booking", icon: Building2, href: "#" },
+          { label: "Cultural Programs", icon: Palette, href: "#" },
+          { label: "Membership Portal", icon: Users, href: "#" },
+        ].map((link, i) => {
+          const Icon = link.icon;
+          return (
+            <a key={i} href={link.href}
+              style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "14px 8px", borderRadius: 10, background: "#fafafa", border: "1px solid transparent", textDecoration: "none", color: "#0d1f3c", transition: "all 0.2s", cursor: "pointer" }}
+              onMouseEnter={(e) => { const el = e.currentTarget; el.style.borderColor = "#C9A84C"; el.style.background = "rgba(201,168,76,0.08)"; }}
+              onMouseLeave={(e) => { const el = e.currentTarget; el.style.borderColor = "transparent"; el.style.background = "#fafafa"; }}
+            >
+              <Icon size={20} style={{ color: "#C9A84C" }} />
+              <span style={{ fontSize: 10, fontWeight: 700, textAlign: "center", textTransform: "uppercase", letterSpacing: "0.03em", lineHeight: 1.3 }}>{link.label}</span>
+            </a>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  const welcomeBlock = (
+    <div style={{ borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+      <div style={{ position: "relative", height: 180, overflow: "hidden", background: "#e7eaf0" }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/osca_pics/osca_pic2.jpg" alt="OSCA" loading="eager" decoding="async" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "50%", background: "linear-gradient(transparent, rgba(13,31,60,0.7))" }} />
+        <div style={{ position: "absolute", bottom: 12, left: 12, display: "inline-block", padding: "5px 14px", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#0d1f3c", background: "#C9A84C", borderRadius: 50 }}>
+          Message
+        </div>
+      </div>
+      <div style={{ padding: "14px 20px 20px", background: "#fff" }}>
+        <p style={{ fontSize: 12, color: "#5b6472", lineHeight: 1.7, fontStyle: "italic" }}>
+          "Welcome to the OSCA Management System — your gateway to sports and cultural excellence at NAAP."
+        </p>
+      </div>
+    </div>
+  );
+
+  const followUsBlock = (
+    <div style={{ borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+      <div style={{ background: "#0d1f3c", padding: "14px 20px" }}>
+        <h3 style={{ fontSize: 12, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: "0.08em" }}>Follow Us</h3>
+      </div>
+      <div style={{ padding: 20, background: "#fff", display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div style={{ width: 56, height: 56, borderRadius: "50%", border: "2px solid #C9A84C", overflow: "hidden", background: "#132a4d", flexShrink: 0 }}>
+            <Image src="/logo/osca-logo.png" alt="OSCA" width={56} height={56} style={{ objectFit: "cover", width: "100%", height: "100%" }} />
+          </div>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
+            <p style={{ fontSize: 10, fontWeight: 600, color: "#0d1f3c", lineHeight: 1.3 }}>NAAP- Office of Sports and Cultural Affairs</p>
+          </div>
+        </div>
+        <a href="https://www.facebook.com/profile.php?id=61555726719574" target="_blank" rel="noopener noreferrer"
+          style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "9px 22px", fontSize: 11, fontWeight: 700, color: "#fff", background: "#1877F2", borderRadius: 6, textDecoration: "none", textTransform: "uppercase" }}>
+          <ExternalLink size={13} /> Facebook Page
+        </a>
+        <p style={{ fontSize: 11, color: "#5b6472", textAlign: "center", fontWeight: 600 }}>FIND US ON FACEBOOK</p>
+      </div>
+    </div>
+  );
+
+  const findTeamBlock = (
+    <div style={{ borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+      <div style={{ background: "#0d1f3c", padding: "14px 20px" }}>
+        <h3 style={{ fontSize: 12, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: "0.08em" }}>Find Your Team</h3>
+      </div>
+      <div style={{ padding: 20, background: "#fff" }}>
+        <p style={{ fontSize: 12, color: "#5b6472", lineHeight: 1.7, marginBottom: 16 }}>
+          Choose your track and become part of a team that matches your passion.
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <button
+            onClick={() => setTeamModal("sports")}
+            style={{ padding: "10px", fontSize: 11, fontWeight: 700, color: "#0d1f3c", background: "#C9A84C", borderRadius: 6, border: "none", textTransform: "uppercase", textAlign: "center", cursor: "pointer", width: "100%" }}
+          >
+            Sports Track
+          </button>
+          <button
+            onClick={() => setTeamModal("culture")}
+            style={{ padding: "10px", fontSize: 11, fontWeight: 700, color: "#fff", background: "#0d1f3c", borderRadius: 6, border: "none", textTransform: "uppercase", textAlign: "center", cursor: "pointer", width: "100%" }}
+          >
+            Cultural Track
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  const excellenceBlock = (
+    <div style={{ padding: "28px 20px", borderRadius: 12, background: "linear-gradient(135deg, #1d4ed8, #0d1f3c)", textAlign: "center" }}>
+      <p style={{ fontSize: 16, fontWeight: 900, color: "#fff", lineHeight: 1.4, letterSpacing: "0.02em" }}>
+        EXCELLENCE<br />HAS NO LIMITS
+      </p>
+    </div>
+  );
+
+  const newsSection = (
+    <section id="news" style={{ padding: winW < 480 ? "36px 16px" : "60px 24px", width: "94%", maxWidth: 1600, margin: "0 auto", overflowX: "hidden" }}>
+      <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} style={{ textAlign: "center", marginBottom: 40 }}>
+        <span style={{ display: "inline-block", padding: "5px 16px", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#0d1f3c", background: "rgba(201,168,76,0.15)", borderRadius: 50, marginBottom: 14 }}>Latest News</span>
+        <h2 style={{ fontSize: "clamp(22px, 3.5vw, 32px)", fontWeight: 800, color: "#0d1f3c" }}>News &amp; Announcements</h2>
+      </motion.div>
+
+      {newsItems.length === 0 ? (
+        <p style={{ textAlign: "center", fontSize: 14, color: "#5b6472", padding: "40px 0" }}>No announcements available.</p>
+      ) : (
+        <>
+          <NewsCarousel items={newsItems} onOpenLightbox={(images) => setLightbox({ images, index: 0 })} />
+
+          <motion.div initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} style={{ textAlign: "center", marginTop: 32 }}>
+            <Link href="/login" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "12px 28px", fontSize: 12, fontWeight: 700, color: "#fff", background: "#1d4ed8", borderRadius: 6, textDecoration: "none", textTransform: "uppercase" }}>
+              View Announcements <ArrowRight size={14} />
+            </Link>
+          </motion.div>
+        </>
+      )}
+    </section>
+  );
+
+  const aboutSection = (
+    <section id="about" style={{ padding: winW < 480 ? "36px 16px" : "60px 24px", width: "94%", maxWidth: 1600, margin: "0 auto" }}>
+      <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} style={{ textAlign: "center", marginBottom: 40 }}>
+        <span style={{ display: "inline-block", padding: "5px 16px", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#0d1f3c", background: "rgba(201,168,76,0.15)", borderRadius: 50, marginBottom: 14 }}>About OSCA</span>
+        <h2 style={{ fontSize: "clamp(22px, 3.5vw, 32px)", fontWeight: 800, color: "#0d1f3c" }}>Who We Are</h2>
+      </motion.div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 20 }}>
+        {[
+          { title: "Vision", icon: "🌟", text: "To empower students to reach their full potential in sports and arts, fostering excellence, discipline, and creativity." },
+          { title: "Mission", icon: "🏆", text: "To promote, facilitate and develop holistic student athletes and artists at all levels of competition and performance." },
+          { title: "About", icon: "🏛️", text: "The Office of Sports and Cultural Affairs is committed to providing access to quality sports and cultural trainings, practices, and opportunities." },
+        ].map((card, i) => (
+          <motion.div
+            key={i} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.1 }}
+            style={{ padding: "28px 22px", borderRadius: 10, background: "#fff", border: "1px solid #e7eaf0", borderTop: "3px solid #C9A84C", textAlign: "center" }}
+          >
+            <span style={{ fontSize: 32, display: "block", marginBottom: 14 }}>{card.icon}</span>
+            <h3 style={{ fontSize: 16, fontWeight: 800, color: "#0d1f3c", marginBottom: 8 }}>{card.title}</h3>
+            <p style={{ fontSize: 13, color: "#5b6472", lineHeight: 1.7 }}>{card.text}</p>
+          </motion.div>
+        ))}
+      </div>
+    </section>
+  );
+
+  const mobileCardsWrap = (blocks: React.ReactNode[]) => (
+    <div style={{ display: "flex", flexDirection: "column", gap: winW < 480 ? 16 : 22, width: "94%", maxWidth: 1600, margin: "0 auto", padding: winW < 480 ? "16px 12px 0" : "16px 24px 0" }}>
+      {blocks}
+    </div>
+  );
+
+  const desktopContent = (
+    <>
+      <section style={{ width: "94%", maxWidth: 1600, margin: "0 auto", padding: winW < 480 ? "8px 12px 0" : "8px 24px 0" }}>
+        <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+          style={{ display: "grid", gridTemplateColumns: "260px 1fr 260px", gap: winW < 480 ? 16 : 22, alignItems: "start" }}>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: winW < 480 ? 16 : 22 }}>
+            {announcementsBlock}
+            {openTryoutsBlock}
+            {artistGroupsBlock}
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: winW < 480 ? 16 : 22 }}>
+            {quickLinksBlock}
+            {welcomeBlock}
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: winW < 480 ? 16 : 22 }}>
+            {followUsBlock}
+            {findTeamBlock}
+            {excellenceBlock}
+          </div>
+
+        </motion.div>
+      </section>
+
+      {newsSection}
+      {aboutSection}
+    </>
+  );
+
+  const mobileContent = (
+    <>
+      {mobileCardsWrap([announcementsBlock, openTryoutsBlock])}
+      {newsSection}
+      {mobileCardsWrap([quickLinksBlock, welcomeBlock, findTeamBlock, excellenceBlock, followUsBlock, artistGroupsBlock])}
+      {aboutSection}
+    </>
+  );
 
   return (
     <div style={{ fontFamily: "'Inter', system-ui, sans-serif", background: "#ffffff", color: "#0f1b2d", minHeight: "100vh" }}>
@@ -345,204 +601,7 @@ export default function WelcomeClient() {
         </div>
       </section>
 
-      <section style={{ width: "94%", maxWidth: 1600, margin: "0 auto", padding: winW < 480 ? "8px 12px 0" : "8px 24px 0" }}>
-        <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
-          style={{ display: "grid", gridTemplateColumns: winW < 768 ? "1fr" : "260px 1fr 260px", gap: winW < 480 ? 16 : 22, alignItems: "start" }}>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: winW < 480 ? 16 : 22 }}>
-
-            <AnnouncementsCarousel items={carouselItems} />
-
-            <div style={{ borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-              <div style={{ borderTop: "3px solid #C9A84C", padding: 20, background: "#fff" }}>
-                <h3 style={{ fontSize: 14, fontWeight: 800, color: "#0d1f3c", marginBottom: 8 }}>Open for Tryouts</h3>
-                <p style={{ fontSize: 12, color: "#5b6472", lineHeight: 1.6, marginBottom: 16 }}>
-                  Showcase your talent and represent NAAP in various sports and cultural events.
-                </p>
-                <Link href="/register"
-                  style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 20px", fontSize: 11, fontWeight: 700, color: "#0d1f3c", background: "#C9A84C", borderRadius: 6, textDecoration: "none", textTransform: "uppercase" }}>
-                  Sign Up Now <ArrowRight size={13} />
-                </Link>
-              </div>
-            </div>
-
-            <div style={{ borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-              <div style={{ background: "#0d1f3c", padding: "14px 20px" }}>
-                <h3 style={{ fontSize: 12, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: "0.08em" }}>Follow Our Artist Groups</h3>
-              </div>
-              <div style={{ padding: "12px 0", background: "#fff", display: "flex", flexDirection: "column" }}>
-                {[
-                  { name: "Hataw Himpapawid Dance Group", img: "/logo/HHDC.png", url: "https://www.facebook.com/HHDCOfficial" },
-                  { name: "Himig Himpapawid Chorale", img: "/logo/HH.png", url: "https://www.facebook.com/profile.php?id=61584638812694" },
-                  { name: "Musikang Himpapawid Live Band", img: "/logo/MH.png", url: "https://www.facebook.com/MHLBphilscavab" },
-                ].map((org, i) => (
-                  <a
-                    key={i}
-                    href={org.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={`Visit ${org.name} on Facebook`}
-                    style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 20px", textDecoration: "none", color: "inherit", transition: "background 0.2s, box-shadow 0.2s" }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = "#f8f9fb"; e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.06)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.boxShadow = "none"; }}
-                  >
-                    <div style={{ width: 42, height: 42, borderRadius: "50%", overflow: "hidden", flexShrink: 0, border: "2px solid #e7eaf0", background: "#f0f0f0" }}>
-                      <img src={org.img} alt={org.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: 12, fontWeight: 700, color: "#0d1f3c", lineHeight: 1.3, margin: 0 }}>{org.name}</p>
-                      <p style={{ fontSize: 10, color: "#8a8f98", marginTop: 2, margin: "2px 0 0" }}>Official Facebook Page</p>
-                    </div>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="#1877F2" style={{ flexShrink: 0, transition: "fill 0.2s" }} onMouseEnter={(e) => { (e.currentTarget as SVGSVGElement).style.fill = "#1565C0"; }} onMouseLeave={(e) => { (e.currentTarget as SVGSVGElement).style.fill = "#1877F2"; }}>
-                      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-                    </svg>
-                  </a>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: winW < 480 ? 16 : 22 }}>
-            <div style={{ borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-              <div style={{ background: "#0d1f3c", padding: "14px 20px" }}>
-                <h3 style={{ fontSize: 12, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: "0.08em" }}>Quick Links</h3>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, padding: 16, background: "#fff" }}>
-                {[
-                  { label: "Player Registration", icon: UserPlus, href: "/register" },
-                  { label: "Event Calendar", icon: Calendar, href: "#" },
-                  { label: "Results & Standings", icon: Trophy, href: "#" },
-                  { label: "Facility Booking", icon: Building2, href: "#" },
-                  { label: "Cultural Programs", icon: Palette, href: "#" },
-                  { label: "Membership Portal", icon: Users, href: "#" },
-                ].map((link, i) => {
-                  const Icon = link.icon;
-                  return (
-                    <a key={i} href={link.href}
-                      style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "14px 8px", borderRadius: 10, background: "#fafafa", border: "1px solid transparent", textDecoration: "none", color: "#0d1f3c", transition: "all 0.2s", cursor: "pointer" }}
-                      onMouseEnter={(e) => { const el = e.currentTarget; el.style.borderColor = "#C9A84C"; el.style.background = "rgba(201,168,76,0.08)"; }}
-                      onMouseLeave={(e) => { const el = e.currentTarget; el.style.borderColor = "transparent"; el.style.background = "#fafafa"; }}
-                    >
-                      <Icon size={20} style={{ color: "#C9A84C" }} />
-                      <span style={{ fontSize: 10, fontWeight: 700, textAlign: "center", textTransform: "uppercase", letterSpacing: "0.03em", lineHeight: 1.3 }}>{link.label}</span>
-                    </a>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div style={{ borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-              <div style={{ position: "relative", height: 180, overflow: "hidden", background: "#e7eaf0" }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/osca_pics/osca_pic2.jpg" alt="OSCA" loading="eager" decoding="async" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
-                <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "50%", background: "linear-gradient(transparent, rgba(13,31,60,0.7))" }} />
-                <div style={{ position: "absolute", bottom: 12, left: 12, display: "inline-block", padding: "5px 14px", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#0d1f3c", background: "#C9A84C", borderRadius: 50 }}>
-                  Message
-                </div>
-              </div>
-              <div style={{ padding: "14px 20px 20px", background: "#fff" }}>
-                <p style={{ fontSize: 12, color: "#5b6472", lineHeight: 1.7, fontStyle: "italic" }}>
-                  "Welcome to the OSCA Management System — your gateway to sports and cultural excellence at NAAP."
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: winW < 480 ? 16 : 22 }}>
-            <div style={{ borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-              <div style={{ background: "#0d1f3c", padding: "14px 20px" }}>
-                <h3 style={{ fontSize: 12, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: "0.08em" }}>Follow Us</h3>
-              </div>
-              <div style={{ padding: 20, background: "#fff", display: "flex", flexDirection: "column", gap: 12 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                  <div style={{ width: 56, height: 56, borderRadius: "50%", border: "2px solid #C9A84C", overflow: "hidden", background: "#132a4d", flexShrink: 0 }}>
-                    <Image src="/logo/osca-logo.png" alt="OSCA" width={56} height={56} style={{ objectFit: "cover", width: "100%", height: "100%" }} />
-                  </div>
-                  <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
-                    <p style={{ fontSize: 10, fontWeight: 600, color: "#0d1f3c", lineHeight: 1.3 }}>NAAP- Office of Sports and Cultural Affairs</p>
-                  </div>
-                </div>
-                <a href="https://www.facebook.com/profile.php?id=61555726719574" target="_blank" rel="noopener noreferrer"
-                  style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "9px 22px", fontSize: 11, fontWeight: 700, color: "#fff", background: "#1877F2", borderRadius: 6, textDecoration: "none", textTransform: "uppercase" }}>
-                  <ExternalLink size={13} /> Facebook Page
-                </a>
-                <p style={{ fontSize: 11, color: "#5b6472", textAlign: "center", fontWeight: 600 }}>FIND US ON FACEBOOK</p>
-              </div>
-            </div>
-
-            <div style={{ borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-              <div style={{ background: "#0d1f3c", padding: "14px 20px" }}>
-                <h3 style={{ fontSize: 12, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: "0.08em" }}>Find Your Team</h3>
-              </div>
-              <div style={{ padding: 20, background: "#fff" }}>
-                <p style={{ fontSize: 12, color: "#5b6472", lineHeight: 1.7, marginBottom: 16 }}>
-                  Choose your track and become part of a team that matches your passion.
-                </p>
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  <a href="/register?track=sports" style={{ padding: "10px", fontSize: 11, fontWeight: 700, color: "#0d1f3c", background: "#C9A84C", borderRadius: 6, textDecoration: "none", textTransform: "uppercase", textAlign: "center" }}>
-                    Sports Track
-                  </a>
-                  <a href="/register?track=culture" style={{ padding: "10px", fontSize: 11, fontWeight: 700, color: "#fff", background: "#0d1f3c", borderRadius: 6, textDecoration: "none", textTransform: "uppercase", textAlign: "center" }}>
-                    Cultural Track
-                  </a>
-                </div>
-              </div>
-            </div>
-
-            <div style={{ padding: "28px 20px", borderRadius: 12, background: "linear-gradient(135deg, #1d4ed8, #0d1f3c)", textAlign: "center" }}>
-              <p style={{ fontSize: 16, fontWeight: 900, color: "#fff", lineHeight: 1.4, letterSpacing: "0.02em" }}>
-                EXCELLENCE<br />HAS NO LIMITS
-              </p>
-            </div>
-          </div>
-
-        </motion.div>
-      </section>
-
-      <section id="news" style={{ padding: winW < 480 ? "36px 16px" : "60px 24px", width: "94%", maxWidth: 1600, margin: "0 auto" }}>
-        <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} style={{ textAlign: "center", marginBottom: 40 }}>
-          <span style={{ display: "inline-block", padding: "5px 16px", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#0d1f3c", background: "rgba(201,168,76,0.15)", borderRadius: 50, marginBottom: 14 }}>Latest News</span>
-          <h2 style={{ fontSize: "clamp(22px, 3.5vw, 32px)", fontWeight: 800, color: "#0d1f3c" }}>News & Announcements</h2>
-        </motion.div>
-
-        {newsItems.length === 0 ? (
-          <p style={{ textAlign: "center", fontSize: 14, color: "#5b6472", padding: "40px 0" }}>No announcements available.</p>
-        ) : (
-          <>
-            <NewsCarousel items={newsItems} onOpenLightbox={(images) => setLightbox({ images, index: 0 })} />
-
-            <motion.div initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} style={{ textAlign: "center", marginTop: 32 }}>
-              <Link href="/login" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "12px 28px", fontSize: 12, fontWeight: 700, color: "#fff", background: "#1d4ed8", borderRadius: 6, textDecoration: "none", textTransform: "uppercase" }}>
-                View Announcements <ArrowRight size={14} />
-              </Link>
-            </motion.div>
-          </>
-        )}
-      </section>
-
-      <section id="about" style={{ padding: winW < 480 ? "36px 16px" : "60px 24px", width: "94%", maxWidth: 1600, margin: "0 auto" }}>
-        <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} style={{ textAlign: "center", marginBottom: 40 }}>
-          <span style={{ display: "inline-block", padding: "5px 16px", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#0d1f3c", background: "rgba(201,168,76,0.15)", borderRadius: 50, marginBottom: 14 }}>About OSCA</span>
-          <h2 style={{ fontSize: "clamp(22px, 3.5vw, 32px)", fontWeight: 800, color: "#0d1f3c" }}>Who We Are</h2>
-        </motion.div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 20 }}>
-          {[
-            { title: "Vision", icon: "🌟", text: "To empower students to reach their full potential in sports and arts, fostering excellence, discipline, and creativity." },
-            { title: "Mission", icon: "🏆", text: "To promote, facilitate and develop holistic student athletes and artists at all levels of competition and performance." },
-            { title: "About", icon: "🏛️", text: "The Office of Sports and Cultural Affairs is committed to providing access to quality sports and cultural trainings, practices, and opportunities." },
-          ].map((card, i) => (
-            <motion.div
-              key={i} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.1 }}
-              style={{ padding: "28px 22px", borderRadius: 10, background: "#fff", border: "1px solid #e7eaf0", borderTop: "3px solid #C9A84C", textAlign: "center" }}
-            >
-              <span style={{ fontSize: 32, display: "block", marginBottom: 14 }}>{card.icon}</span>
-              <h3 style={{ fontSize: 16, fontWeight: 800, color: "#0d1f3c", marginBottom: 8 }}>{card.title}</h3>
-              <p style={{ fontSize: 13, color: "#5b6472", lineHeight: 1.7 }}>{card.text}</p>
-            </motion.div>
-          ))}
-        </div>
-      </section>
+{winW > 768 ? desktopContent : mobileContent}
 
       <section id="sports" style={{ padding: winW < 480 ? "36px 16px" : "60px 24px", width: "94%", maxWidth: 1600, margin: "0 auto", background: "#fafafa" }}>
         <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} style={{ textAlign: "center", marginBottom: 40 }}>
@@ -643,6 +702,10 @@ export default function WelcomeClient() {
 
       {lightbox && (
         <PublicImageViewer images={lightbox.images} initialIndex={lightbox.index} onClose={() => setLightbox(null)} />
+      )}
+
+      {teamModal && (
+        <FindYourTeamModal track={teamModal} onClose={() => setTeamModal(null)} />
       )}
     </div>
   );
@@ -849,6 +912,190 @@ function CarouselCard({ item, onOpenLightbox }: { item: NewsItem; onOpenLightbox
         <div style={{ display: "flex", flexDirection: "column", flexGrow: 1, padding: "16px 18px 18px" }}>{body}</div>
       )}
     </div>
+  );
+}
+
+function FindYourTeamModal({ track, onClose }: { track: "sports" | "culture"; onClose: () => void }) {
+  const isSports = track === "sports";
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [onClose]);
+
+  const [modalWinW, setModalWinW] = useState(0);
+  useEffect(() => {
+    const update = () => setModalWinW(window.innerWidth);
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+
+  const renderContent = () => {
+    if (isSports) {
+      const sports = [
+        { name: "ARNIS", icon: Swords },
+        { name: "BADMINTON", icon: Target },
+        { name: "BASKETBALL", icon: Flame },
+        { name: "SEPAK TAKRAW", icon: Medal },
+        { name: "TABLE TENNIS", icon: Circle },
+        { name: "TAEKWONDO", icon: Shield },
+        { name: "VOLLEYBALL MEN", icon: Volleyball },
+        { name: "VOLLEYBALL WOMEN", icon: Volleyball },
+      ];
+      return (
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10, paddingRight: 32 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 46, height: 46, borderRadius: 12, background: "#0d1f3c", color: "#C9A84C", flexShrink: 0 }}>
+              <Trophy size={24} />
+            </div>
+            <h3 style={{ fontSize: 24, fontWeight: 800, color: "#0d1f3c", textTransform: "uppercase", margin: 0, letterSpacing: "0.02em" }}>SPORTS</h3>
+          </div>
+          <p style={{ fontSize: 13, color: "#5b6472", lineHeight: 1.6, margin: "0 0 22px" }}>
+            Discover the various sport tracks and groups. Select a card to learn more and connect.
+          </p>
+
+          <div style={{ display: "grid", gridTemplateColumns: modalWinW <= 640 ? "1fr" : modalWinW <= 1024 ? "repeat(2, minmax(0, 1fr))" : "repeat(4, minmax(0, 1fr))", gap: 20 }}>
+            {sports.map((s) => {
+              const Icon = s.icon;
+              return (
+                <button
+                  key={s.name}
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    position: "relative",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 14,
+                    minHeight: 190,
+                    padding: "24px 16px",
+                    background: "#fff",
+                    border: "1px solid #e7eaf0",
+                    borderRadius: 14,
+                    boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
+                    cursor: "pointer",
+                    transition: "border-color 0.2s, box-shadow 0.2s, transform 0.2s",
+                    fontFamily: "inherit",
+                  }}
+                  onMouseEnter={(e) => { const el = e.currentTarget; el.style.borderColor = "#C9A84C"; el.style.boxShadow = "0 8px 24px rgba(0,0,0,0.1)"; el.style.transform = "translateY(-3px)"; }}
+                  onMouseLeave={(e) => { const el = e.currentTarget; el.style.borderColor = "#e7eaf0"; el.style.boxShadow = "0 2px 10px rgba(0,0,0,0.05)"; el.style.transform = "translateY(0)"; }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 64, height: 64, borderRadius: "50%", background: "#f2f5f9", color: "#0d1f3c" }}>
+                    <Icon size={30} style={{ color: "#C9A84C" }} />
+                  </div>
+                  <div style={{ textAlign: "center", width: "100%" }}>
+                    <span style={{ display: "block", fontSize: 13, fontWeight: 800, color: "#0d1f3c", letterSpacing: "0.03em", lineHeight: 1.3 }}>{s.name}</span>
+                    <span style={{ display: "block", width: 28, height: 3, margin: "8px auto 0", borderRadius: 2, background: "#C9A84C" }} />
+                  </div>
+                  <span style={{ position: "absolute", right: 12, bottom: 12, color: "#C9A84C" }}>
+                    <ChevronRight size={18} />
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10, paddingRight: 32 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 46, height: 46, borderRadius: 12, background: "#0d1f3c", color: "#C9A84C", flexShrink: 0 }}>
+            <Palette size={24} />
+          </div>
+          <h3 style={{ fontSize: 22, fontWeight: 800, color: "#0d1f3c", textTransform: "uppercase", margin: 0, letterSpacing: "0.02em" }}>CULTURAL AFFAIRS</h3>
+        </div>
+        <p style={{ fontSize: 13, color: "#5b6472", lineHeight: 1.6, margin: "0 0 22px" }}>
+          Explore creative and cultural activities where you can showcase your talents.
+        </p>
+
+        <div style={{ display: "grid", gridTemplateColumns: modalWinW <= 640 ? "1fr" : modalWinW <= 1024 ? "repeat(2, minmax(0, 1fr))" : "repeat(3, minmax(0, 1fr))", gap: 20 }}>
+          {[
+            { name: "HATAW HIMPAPAWID DANCE GROUP", icon: Music },
+            { name: "HIMIG HIMPAPAWID CHORALE", icon: MicVocal },
+            { name: "MUSIKANG HIMPAPAWID LIVE BAND", icon: Guitar },
+          ].map((g) => {
+            const Icon = g.icon;
+            const short = g.name.replace(" HIMPAPAWID", "").replace(" LIVE BAND", " BAND");
+            return (
+              <button
+                key={g.name}
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  position: "relative",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 14,
+                  minHeight: 190,
+                  padding: "24px 18px",
+                  background: "#fff",
+                  border: "1px solid #e7eaf0",
+                  borderRadius: 14,
+                  boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
+                  cursor: "pointer",
+                  transition: "border-color 0.2s, box-shadow 0.2s, transform 0.2s",
+                  fontFamily: "inherit",
+                }}
+                onMouseEnter={(e) => { const el = e.currentTarget; el.style.borderColor = "#C9A84C"; el.style.boxShadow = "0 8px 24px rgba(0,0,0,0.1)"; el.style.transform = "translateY(-3px)"; }}
+                onMouseLeave={(e) => { const el = e.currentTarget; el.style.borderColor = "#e7eaf0"; el.style.boxShadow = "0 2px 10px rgba(0,0,0,0.05)"; el.style.transform = "translateY(0)"; }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 64, height: 64, borderRadius: "50%", background: "#f2f5f9" }}>
+                  <Icon size={30} style={{ color: "#C9A84C" }} />
+                </div>
+                <div style={{ textAlign: "center", width: "100%" }}>
+                  <span style={{ display: "block", fontSize: 13, fontWeight: 800, color: "#0d1f3c", letterSpacing: "0.03em", lineHeight: 1.3 }}>{short}</span>
+                  <span style={{ display: "block", width: 28, height: 3, margin: "8px auto 0", borderRadius: 2, background: "#C9A84C" }} />
+                </div>
+                <span style={{ position: "absolute", right: 12, bottom: 12, color: "#C9A84C" }}>
+                  <ChevronRight size={18} />
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  return createPortal(
+    <div
+      style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label={isSports ? "SPORTS" : "CULTURAL AFFAIRS"}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{ position: "relative", width: "100%", maxWidth: "min(1050px, calc(100vw - 48px))", maxHeight: "90vh", overflowY: "auto", borderRadius: 16, background: "#ffffff", boxShadow: "0 24px 70px rgba(0,0,0,0.35)", padding: "36px 40px 40px" }}
+      >
+        <button
+          onClick={onClose}
+          aria-label="Close"
+          style={{ position: "absolute", top: 14, right: 14, display: "flex", alignItems: "center", justifyContent: "center", width: 36, height: 36, border: "none", borderRadius: "50%", background: "#eef0f4", color: "#0d1f3c", cursor: "pointer", transition: "background 0.2s", zIndex: 2 }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "#dde1e8"; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "#eef0f4"; }}
+        >
+          <X size={18} />
+        </button>
+
+        {renderContent()}
+      </div>
+    </div>,
+    document.body
   );
 }
 
