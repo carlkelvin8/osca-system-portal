@@ -60,13 +60,7 @@ COPY --chown=appuser:appuser . .
 
 EXPOSE 8000
 
-# Production: Gunicorn with a single Uvicorn worker + threads (insightface is memory-heavy)
-CMD ["gunicorn", "app.main:app", \
-     "--worker-class", "uvicorn.workers.UvicornWorker", \
-     "--workers", "1", \
-     "--threads", "4", \
-     "--bind", "0.0.0.0:8000", \
-     "--timeout", "180", \
-     "--keep-alive", "5", \
-     "--access-logfile", "-", \
-     "--error-logfile", "-"]
+# Production entrypoint is mode-aware:
+#   SERVICE_MODE=celery  -> background worker (face enrollment, reports, housekeeping)
+#   (default)            -> API server (single Uvicorn worker + threads; insightface is memory-heavy)
+CMD ["sh", "-c", "if [ \"$SERVICE_MODE\" = \"celery\" ]; then exec celery -A app.workers.celery_app worker --loglevel=info --concurrency=1; else exec gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --workers 1 --threads 4 --bind 0.0.0.0:8000 --timeout 180 --keep-alive 5 --access-logfile - --error-logfile -; fi"]

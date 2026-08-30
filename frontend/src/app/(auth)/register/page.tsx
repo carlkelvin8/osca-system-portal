@@ -447,7 +447,6 @@ export default function RegisterPage() {
 
       const response = await usersApi.create(createPayload) as { data?: { id?: string; is_face_enrolled?: boolean } };
       const userId = response?.data?.id;
-      const enrolled = response?.data?.is_face_enrolled;
 
       if (!userId) {
         setApiError("Registration failed. Please try again.");
@@ -456,16 +455,9 @@ export default function RegisterPage() {
       }
 
       setCreatedUserId(userId);
-
-      if (enrolled) {
-        setFaceEnrolled(true);
-        stopCamera();
-        setStep(4);
-      } else {
-        setApiError(
-          "Facial recognition enrollment failed. Your account has been created, but you will need to complete face enrollment after logging in. Please contact the OSCA administrator for assistance."
-        );
-      }
+      setFaceEnrolled(true);
+      stopCamera();
+      setStep(4);
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??

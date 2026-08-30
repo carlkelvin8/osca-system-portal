@@ -69,7 +69,7 @@ class FacialRecognitionService:
             name="buffalo_l",
             allowed_modules=["detection", "recognition"],
         )
-        self._app.prepare(ctx_id=ctx_id, det_size=(640, 640))
+        self._app.prepare(ctx_id=ctx_id, det_size=(512, 512))
 
         if settings.FR_LIVENESS_ENABLED:
             try:

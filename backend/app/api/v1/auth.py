@@ -209,6 +209,7 @@ async def me(
 
 @router.put("/me/password", response_model=MessageResponse, summary="Change own password")
 async def change_password(
+    request: Request,
     body: PasswordChangeRequest,
     current_user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],

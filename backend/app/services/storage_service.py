@@ -95,9 +95,14 @@ class StorageService:
                 ExpiresIn=expires_in,
             )
 
+        if "://" in public_ep:
+            endpoint_url = public_ep
+        else:
+            endpoint_url = f"{self._scheme}://{public_ep}"
+
         public_client = boto3.client(
             "s3",
-            endpoint_url=f"{self._scheme}://{public_ep}",
+            endpoint_url=endpoint_url,
             aws_access_key_id=settings.MINIO_ACCESS_KEY,
             aws_secret_access_key=settings.MINIO_SECRET_KEY,
             config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),

@@ -177,6 +177,61 @@ def generate_report_async(
 
 
 @celery_app.task(
+    name="app.workers.tasks.enroll_face_background",
+    bind=True,
+    max_retries=2,
+    default_retry_delay=60,
+)
+def enroll_face_background(self, user_id: str, images_b64: list[str]):
+    async def _run():
+        import base64
+        from sqlalchemy import select
+        from app.database import AsyncSessionLocal
+        from app.models.attendance import FaceEmbedding
+        from app.models.user import User
+        from app.services.facial_recognition import FacialRecognitionService
+
+        images_bytes = []
+        for img_b64 in images_b64:
+            images_bytes.append(base64.b64decode(img_b64))
+
+        fr_svc = FacialRecognitionService()
+        embedding, model_used, minio_keys = await fr_svc.enroll_face(
+            user_id=user_id,
+            images_bytes=images_bytes,
+        )
+
+        async with AsyncSessionLocal() as db:
+            user = await db.get(User, user_id)
+            if not user:
+                logger.warning("face_enroll_user_missing", user_id=user_id)
+                return
+
+            face_emb = FaceEmbedding(
+                user_id=user.id,
+                embedding=embedding,
+                model_used=model_used,
+                images_used=len(images_bytes),
+                minio_image_keys=",".join(minio_keys),
+            )
+            db.add(face_emb)
+            user.is_face_enrolled = True
+            await db.commit()
+            logger.info(
+                "face_enrolled_background",
+                user_id=user_id,
+                model=model_used,
+                images=len(images_bytes),
+            )
+
+    try:
+        return _run_async(_run())
+    except Exception as exc:
+        logger.error("face_enroll_background_failed", user_id=user_id, error=str(exc))
+        raise self.retry(exc=exc)
+
+
+@celery_app.task(
     name="app.workers.tasks.release_expired_reservations",
     bind=True,
 )

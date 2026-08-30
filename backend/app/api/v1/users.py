@@ -1,4 +1,3 @@
-import base64
 import uuid
 from datetime import UTC, datetime
 from typing import Annotated
@@ -12,7 +11,6 @@ from sqlalchemy.orm import selectinload
 from app.core.dependencies import AdminOnly, CurrentUser, OptionalUser, get_db, get_redis
 from app.core.exceptions import ConflictError, NotFoundError
 from app.core.security import hash_password
-from app.models.attendance import FaceEmbedding
 from app.models.inventory import BorrowingID, BorrowTransaction, EquipmentRequest
 from app.models.user import User, UserRole
 from app.schemas.common import MessageResponse, PaginatedResponse
@@ -20,7 +18,6 @@ from app.schemas.user import UserCreate, UserRead, UserSummary, UserUpdate
 from app.services.audit_service import audit_log
 from app.services.barcode_service import BarcodeService
 from app.services.storage_service import StorageService
-from app.services.facial_recognition import FacialRecognitionService
 
 router = APIRouter()
 logger = structlog.get_logger(__name__)
@@ -120,44 +117,18 @@ async def create_user(
             await db.commit()
             await db.refresh(user)
 
-    if body.face_images_base64 and len(body.face_images_base64) >= 5 and request is not None:
-        fr_svc = getattr(request.app.state, "fr_service", None)
-        if fr_svc is not None:
-            try:
-                images_bytes = []
-                for img_b64 in body.face_images_base64:
-                    images_bytes.append(base64.b64decode(img_b64))
+    if body.face_images_base64 and len(body.face_images_base64) >= 5:
+        from app.workers.tasks import enroll_face_background
 
-                embedding, model_used, minio_keys = await fr_svc.enroll_face(
-                    user_id=str(user.id),
-                    images_bytes=images_bytes,
-                )
-
-                face_emb = FaceEmbedding(
-                    user_id=user.id,
-                    embedding=embedding,
-                    model_used=model_used,
-                    images_used=len(images_bytes),
-                    minio_image_keys=",".join(minio_keys),
-                )
-                db.add(face_emb)
-                user.is_face_enrolled = True
-                await audit_log(
-                    db=db,
-                    action="FACE_ENROLLED",
-                    module="User Management",
-                    description=f"Face biometrics enrolled for {user.full_name}",
-                    resource_type="FaceEmbedding",
-                    resource_id=str(user.id),
-                    details={"model": model_used, "images_count": len(images_bytes)},
-                    current_user=current_user,
-                    request=request,
-                )
-                await db.commit()
-                await db.refresh(user)
-                logger.info("face_enrolled_during_registration", user_id=str(user.id), model=model_used)
-            except Exception as e:
-                logger.warning("face_enrollment_failed_during_registration", user_id=str(user.id), error=str(e))
+        try:
+            enroll_face_background.delay(str(user.id), body.face_images_base64)
+            logger.info(
+                "face_enroll_queued_background",
+                user_id=str(user.id),
+                images=len(body.face_images_base64),
+            )
+        except Exception as e:
+            logger.warning("face_enroll_queuing_failed", user_id=str(user.id), error=str(e))
 
     return UserRead.model_validate(user)
 
