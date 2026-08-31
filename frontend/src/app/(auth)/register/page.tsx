@@ -518,13 +518,22 @@ export default function RegisterPage() {
 
   const startCamera = async () => {
     try {
+      console.log("[face-capture] Requesting camera stream...");
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 640, height: 480, facingMode: "user" },
+        video: { width: { ideal: 640, max: 1280 }, height: { ideal: 480, max: 720 }, facingMode: "user" },
       });
+      const track = stream.getVideoTracks()[0];
+      console.log(
+        "[face-capture] Camera ready. label:",
+        track?.label,
+        "settings:",
+        track?.getSettings ? track.getSettings() : "n/a"
+      );
       streamRef.current = stream;
       setCameraActive(true);
       setApiError(null);
-    } catch {
+    } catch (err) {
+      console.error("[face-capture] Camera access denied:", err);
       setApiError("Camera access denied. Please allow camera permissions and try again.");
     }
   };
@@ -542,8 +551,20 @@ export default function RegisterPage() {
     const video = videoRef.current;
     const canvas = canvasRef.current;
 
-    if (!video.videoWidth || !video.videoHeight) {
-      setApiError("Camera is not ready. Please wait a moment and try again.");
+    if (
+      video.readyState < 2 ||
+      !video.videoWidth ||
+      !video.videoHeight
+    ) {
+      console.warn(
+        "[face-capture] Video not ready. readyState:",
+        video.readyState,
+        "videoWidth:",
+        video.videoWidth,
+        "videoHeight:",
+        video.videoHeight
+      );
+      setApiError("Camera is not ready yet. Please wait a moment and try again.");
       return;
     }
 
@@ -560,9 +581,6 @@ export default function RegisterPage() {
     const px = imageData.data;
 
     let totalBrightness = 0;
-    let minB = 255;
-    let maxB = 0;
-    let skinPixels = 0;
     let sampledPixels = 0;
     const pxStep = Math.max(4, Math.floor(px.length / 4 / 2000)) * 4;
 
@@ -570,29 +588,14 @@ export default function RegisterPage() {
       const r = px[i];
       const g = px[i + 1];
       const b = px[i + 2];
-      const brightness = (r + g + b) / 3;
-      totalBrightness += brightness;
-      if (brightness < minB) minB = brightness;
-      if (brightness > maxB) maxB = brightness;
+      totalBrightness += (r + g + b) / 3;
       sampledPixels++;
     }
 
     const avgBrightness = totalBrightness / sampledPixels;
-    const contrastRange = maxB - minB;
-    const skinRatio = skinPixels / sampledPixels;
 
     if (avgBrightness < 25) {
       setApiError("The image is too dark. Please ensure good lighting and try again.");
-      return;
-    }
-    if (contrastRange < 12) {
-      setApiError("No face detected. Please face the camera directly and try again.");
-      return;
-    }
-    if (skinRatio < 0.04) {
-      setApiError(
-        "No face detected. Please position your face in the center of the frame with good lighting."
-      );
       return;
     }
 
