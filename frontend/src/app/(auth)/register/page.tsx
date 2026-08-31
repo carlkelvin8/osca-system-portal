@@ -403,69 +403,82 @@ export default function RegisterPage() {
   };
 
   const submitFaceEnrollment = async () => {
-    if (faceImages.length < 5) {
-      setApiError("Please capture 5 face images before submitting.");
-      return;
-    }
     setApiError(null);
     setFaceEnrollLoading(true);
-
-    const valid = await trigger();
-    if (!valid) {
-      setFaceEnrollLoading(false);
-      return;
-    }
-
-    const data = watch();
-
     try {
-      const createPayload: Record<string, unknown> = {
-        email: data.email,
-        password: data.password,
-        first_name: data.first_name,
-        last_name: data.last_name,
-        middle_name: data.middle_name || undefined,
-        role: data.role === "student_athlete" || data.role === "student_artist" ? "student" : data.role,
-        sport_or_art: data.sport_or_art,
-        medical_info: data.medical_info || undefined,
-        emergency_contact_name: data.emergency_contact_name,
-        emergency_contact_number: data.emergency_contact_number,
-        biometric_consent: true,
-        contact_number: data.contact_number || undefined,
-        face_images_base64: faceImages,
-      };
-
-      if (data.role === "student_athlete" || data.role === "student_artist") {
-        createPayload.student_id = data.student_id;
-        createPayload.course = data.course;
-        createPayload.year_level = data.year_level;
-      }
-
-      if (data.role === "coach" || data.role === "pe_instructor") {
-        createPayload.assigned_sport = data.assigned_sport || data.sport_or_art;
-      }
-
-      const response = await usersApi.create(createPayload) as { data?: { id?: string; is_face_enrolled?: boolean } };
-      const userId = response?.data?.id;
-
-      if (!userId) {
-        setApiError("Registration failed. Please try again.");
-        setFaceEnrollLoading(false);
+      if (faceImages.length < 5) {
+        setApiError("Please capture 5 face images before submitting.");
         return;
       }
 
-      setCreatedUserId(userId);
-      setFaceEnrolled(true);
-      stopCamera();
-      setStep(4);
+      const valid = await trigger();
+      if (!valid) {
+        setApiError("Please complete all missing required fields before submitting.");
+        return;
+      }
+
+      await Promise.race([
+        performEnrollment(),
+        new Promise((_, reject) =>
+          setTimeout(() => {
+            const e = new Error("timeout");
+            e.name = "TimeoutError";
+            reject(e);
+          }, 25000),
+        ),
+      ]);
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
-        "Registration failed. Please try again.";
+      const isTimeout = err instanceof Error && err.name === "TimeoutError";
+      const msg = isTimeout
+        ? "The request timed out. Please check your connection and try again."
+        : (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
+          (err instanceof Error ? err.message : "Registration failed. Please try again.");
       setApiError(msg);
     } finally {
       setFaceEnrollLoading(false);
     }
+  };
+
+  const performEnrollment = async () => {
+    const data = watch();
+
+    const createPayload: Record<string, unknown> = {
+      email: data.email,
+      password: data.password,
+      first_name: data.first_name,
+      last_name: data.last_name,
+      middle_name: data.middle_name || undefined,
+      role: data.role === "student_athlete" || data.role === "student_artist" ? "student" : data.role,
+      sport_or_art: data.sport_or_art,
+      medical_info: data.medical_info || undefined,
+      emergency_contact_name: data.emergency_contact_name,
+      emergency_contact_number: data.emergency_contact_number,
+      biometric_consent: true,
+      contact_number: data.contact_number || undefined,
+      face_images_base64: faceImages,
+    };
+
+    if (data.role === "student_athlete" || data.role === "student_artist") {
+      createPayload.student_id = data.student_id;
+      createPayload.course = data.course;
+      createPayload.year_level = data.year_level;
+    }
+
+    if (data.role === "coach" || data.role === "pe_instructor") {
+      createPayload.assigned_sport = data.assigned_sport || data.sport_or_art;
+    }
+
+    const response = await usersApi.create(createPayload) as { data?: { id?: string; is_face_enrolled?: boolean } };
+    const userId = response?.data?.id;
+
+    if (!userId) {
+      throw new Error("Registration failed. Please try again.");
+    }
+
+    setCreatedUserId(userId);
+    setFaceEnrolled(true);
+    stopCamera();
+    setStep(4);
   };
 
   const onSubmit = async (data: RegisterForm) => {
@@ -562,29 +575,21 @@ export default function RegisterPage() {
       if (brightness < minB) minB = brightness;
       if (brightness > maxB) maxB = brightness;
       sampledPixels++;
-
-      if (
-        r > 95 && g > 40 && b > 20 &&
-        r - g > 15 && r - b > 15 &&
-        (Math.max(r, g, b) - Math.min(r, g, b)) > 15
-      ) {
-        skinPixels++;
-      }
     }
 
     const avgBrightness = totalBrightness / sampledPixels;
     const contrastRange = maxB - minB;
     const skinRatio = skinPixels / sampledPixels;
 
-    if (avgBrightness < 30) {
+    if (avgBrightness < 25) {
       setApiError("The image is too dark. Please ensure good lighting and try again.");
       return;
     }
-    if (contrastRange < 20) {
+    if (contrastRange < 12) {
       setApiError("No face detected. Please face the camera directly and try again.");
       return;
     }
-    if (skinRatio < 0.08) {
+    if (skinRatio < 0.04) {
       setApiError(
         "No face detected. Please position your face in the center of the frame with good lighting."
       );
